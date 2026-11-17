@@ -16,3 +16,14 @@ jobs:
           node-version: '20'
       - name: Run Round-Trip & Runtime Test Suite
         run: node test/test_roundtrip.js
+
+  notify_failure:
+    name: Notify Info on failure
+    if: failure()
+    needs: [test]
+    uses: Figarist/figarist.github.io/.github/workflows/notify-telegram.yml@main
+    with:
+      title: "pyScratch CI failed on ${{ github.ref_name }}"
+      status: "error"
+      details: "Commit ${{ github.sha }}"
+    secrets: inherit
