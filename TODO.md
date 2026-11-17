@@ -233,14 +233,8 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 
 ---
 
-## 12. Multi-Agent Execution Progress (Stage 2)
+## 12. Open Parity Items (Stage 2)
 
-- **Wave 1 (Completed — Agents 4, 5 & 6)**:
-  - **Compiler & Decompiler (`js/compiler.js`, `js/decompiler.js`)**: Implemented `self.var` & `local_list_*` scoping, `@warp`, `@when_greater_than`, `glide_to`, `switch_backdrop_and_wait`, `go_to_layer`, `change_layer`, `set_sound_effect`/`change_sound_effect`/`clear_sound_effects`, `attribute_of`, `touching_color`, `color_is_touching_color`, `set_drag_mode`, `current_time`, `days_since_2000`, `username`, `loudness`, `list_index_of`, `show_variable`/`hide_variable`/`show_list`/`hide_list`, `len`/`exp`/`pow10`/`tan`/`asin`/`acos`/`atan`/`ln`/`log`, dynamic menu reporter inputs (`compileMenuOrExpr`), and full `formatBlockUk` statement/hat labels.
-  - **Stage Runtime (`js/preview.js`)**: Implemented per-actor `localVars`/`localLists` + clone deep-copy inheritance, 300-clone cap, scoped `stop("other scripts in sprite")`, loop counter `i` binding in `localScope`, synchronous `@warp`, `RETURN_SCRIPT` propagation, `layerOrder` sorting, Canvas 2D effects (`color`, `ghost`, `brightness`, `pixelate`, `mosaic`), Web Audio `.wav`/`.mp3` decoding (`GainNode`, `StereoPannerNode`, `playbackRate`, `onended`, `_stopAllSounds`), Pen HSV/alpha simulation, broadcast restart semantics, live stage dragging, and pixel-color sensing.
-  - **Web IDE & Bridge (`js/sb3Bridge.js`, `index.html`, `style.css`, `js/app.js`)**: Implemented `renameSprite`, `deleteSprite`, `updateSpriteProps`, `addCostumeAsset`, `addSoundAsset`, interactive Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, `?embed=1`/`?snippet=`/`?code=`/`?autorun=1` URL parameters, Share (`#btn-share`) button, and `sivochka.com` / GitHub header links.
-- **Wave 2 (Completed — Agent 3)**:
-  - Added **Suite 9: Full 1:1 Scratch 3.0 Parity & End-to-End Integration** in [`test/test_roundtrip.js`](test/test_roundtrip.js), updated [`README.md`](README.md), [`docs/DSL_REFERENCE.md`](docs/DSL_REFERENCE.md), and [`TODO.md`](TODO.md), pushed to `main`, and enabled GitHub Pages.
 - **Remaining Open Parity Items**:
   - `projectJson.monitors` serialization & live Canvas monitor/slider overlay, `target.comments` <-> `#` round-trip, unrecognized `.sb3` block preservation, `control_repeat` counter blocks in `.sb3` output, `%b` boolean procedure parameters, Pythonic `list[i]`/`in`/`len(list)` sugar, float `random()`, `fisheye`/`whirl` shaders, `bitmapResolution` scaling, rotated bounding-box `if_on_edge_bounce()`, stage fencing, pixel costume hit-testing, live mic `loudness()`, per-asset delete/reorder UI, `og:image`/JSON-LD SEO tags, and `sivochka.com` Part B landing page.
 
@@ -261,3 +255,16 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 - [ ] **Interactive embedded `pyScratch` live demo** showing side-by-side Python code, Scratch 3.0 blocks, and 480×360 stage execution
 - [ ] **"Upload your child's `.sb3` project and see it in Python"** interactive hook on the landing page
 - [ ] **Authority & trust block** highlighting the open-source `pyScratch` platform on GitHub + direct CTA to book a Scratch / Python tutoring session on `sivochka.com`
+
+---
+
+## History
+
+### Stage 2 multi-agent waves (completed, historical)
+
+- **Wave 1 (Completed — Agents 4, 5 & 6)**:
+  - **Compiler & Decompiler (`js/compiler.js`, `js/decompiler.js`)**: Implemented `self.var` & `local_list_*` scoping, `@warp`, `@when_greater_than`, `glide_to`, `switch_backdrop_and_wait`, `go_to_layer`, `change_layer`, `set_sound_effect`/`change_sound_effect`/`clear_sound_effects`, `attribute_of`, `touching_color`, `color_is_touching_color`, `set_drag_mode`, `current_time`, `days_since_2000`, `username`, `loudness`, `list_index_of`, `show_variable`/`hide_variable`/`show_list`/`hide_list`, `len`/`exp`/`pow10`/`tan`/`asin`/`acos`/`atan`/`ln`/`log`, dynamic menu reporter inputs (`compileMenuOrExpr`), and full `formatBlockUk` statement/hat labels.
+  - **Stage Runtime (`js/preview.js`)**: Implemented per-actor `localVars`/`localLists` + clone deep-copy inheritance, 300-clone cap, scoped `stop("other scripts in sprite")`, loop counter `i` binding in `localScope`, synchronous `@warp`, `RETURN_SCRIPT` propagation, `layerOrder` sorting, Canvas 2D effects (`color`, `ghost`, `brightness`, `pixelate`, `mosaic`), Web Audio `.wav`/`.mp3` decoding (`GainNode`, `StereoPannerNode`, `playbackRate`, `onended`, `_stopAllSounds`), Pen HSV/alpha simulation, broadcast restart semantics, live stage dragging, and pixel-color sensing.
+  - **Web IDE & Bridge (`js/sb3Bridge.js`, `index.html`, `style.css`, `js/app.js`)**: Implemented `renameSprite`, `deleteSprite`, `updateSpriteProps`, `addCostumeAsset`, `addSoundAsset`, interactive Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, `?embed=1`/`?snippet=`/`?code=`/`?autorun=1` URL parameters, Share (`#btn-share`) button, and `sivochka.com` / GitHub header links.
+- **Wave 2 (Completed — Agent 3)**:
+  - Added **Suite 9: Full 1:1 Scratch 3.0 Parity & End-to-End Integration** in [`test/test_roundtrip.js`](test/test_roundtrip.js), updated [`README.md`](README.md), [`docs/DSL_REFERENCE.md`](docs/DSL_REFERENCE.md), and [`TODO.md`](TODO.md), pushed to `main`, and enabled GitHub Pages.

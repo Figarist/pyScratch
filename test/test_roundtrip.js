@@ -518,7 +518,7 @@ def on_timer_gt():
   assert(pUnpacked.assetsMap.has(addedSound.md5ext), 'Custom WAV sound must survive .sb3 round-trip');
   assert.strictEqual(
     decompileTarget(uHero, uStage),
-    pDec1.replace('# === СКРИПТ ГРАВЦЯ (Sprite1) ===', '# === СКРИПТ ГРАВЦЯ (Hero) ==='),
+    pDec1.replace('# === СКРИПТ ГРАВЦЯ (Sprite1) ===', '# === СКРИПТ ГРАВЦЯ (Hero) ===').replace('attribute_of("x position", "Sprite1")', 'attribute_of("x position", "Hero")'),
     'Unpacked Hero sprite must decompile identically with updated sprite name header'
   );
 
@@ -913,7 +913,7 @@ def stopper():
   upperZip.file('TESTASSET.SVG', '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
   const upperBuf = await upperZip.generateAsync({ type: 'uint8array' });
   const upperLoaded = await loadSb3(upperBuf);
-  assert.strictEqual(typeof upperLoaded.assetsMap.get('TESTASSET.SVG'), 'string', 'Uppercase .SVG must load as string');
+  assert(upperLoaded.assetsMap.get('TESTASSET.SVG') instanceof Uint8Array, 'Uppercase .SVG must load as bytes');
 
   console.log('--- 12. Testing Reliability Audit Round 2 Fixes (N-01..N-11) ---');
   // N-02 & N-10: Custom procedure parameter sanitization in body & non-numeric shadow type 4..8
@@ -1047,7 +1047,236 @@ def cancel_other():
   const i18nMsg = I18n.t('insp_clean_done', { count: 2, size: '$& $$ 10 KB' });
   assert(i18nMsg.includes('$& $$ 10 KB'), 'i18n.t must preserve literal $ sequences in params');
 
-  console.log('ALL 12 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 13. Testing Audit 2026-11 Fixes (raw scripts, for-counter, monitors, whitelists, DSL syntax) ---');
+  {
+    const mk = () => {
+      const proj = createDefaultProject();
+      return { json: proj.projectJson, stage: proj.projectJson.targets[0], sprite: proj.projectJson.targets[1] };
+    };
+    const compileErr = (src, onStage = false) => {
+      const c = mk();
+      try {
+        compileToScratch(src, onStage ? c.stage : c.sprite, c.stage, c.json);
+      } catch (e) {
+        return e;
+      }
+      return null;
+    };
+    const ops = (t) => Object.values(t.blocks).map((b) => b.opcode);
+
+    // 0.1 Unsupported scripts survive recompilation of an imported project
+    {
+      const c = mk();
+      c.sprite.blocks = {
+        b_1: { opcode: 'event_whenflagclicked', next: 'b_2', parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 10, y: 10 },
+        b_2: { opcode: 'motion_movesteps', next: null, parent: 'b_1', inputs: { STEPS: [1, [4, '10']] }, fields: {}, shadow: false, topLevel: false },
+        b_3: { opcode: 'event_whentouchingobject', next: 'b_4', parent: null, inputs: { TOUCHINGOBJECTMENU: [1, 'b_5'] }, fields: {}, shadow: false, topLevel: true, x: 300, y: 300 },
+        b_4: { opcode: 'music_playNoteForBeats', next: null, parent: 'b_3', inputs: { NOTE: [1, [4, '60']], BEATS: [1, [4, '0.25']] }, fields: {}, shadow: false, topLevel: false },
+        b_5: { opcode: 'event_touchingobjectmenu', next: null, parent: 'b_3', inputs: {}, fields: { TOUCHINGOBJECTMENU: ['_mouse_', null] }, shadow: true, topLevel: false }
+      };
+      c.sprite.comments = {
+        cm_dead: { blockId: 'b_2', x: 0, y: 0, width: 100, height: 100, minimized: false, text: 'gone' },
+        cm_raw: { blockId: 'b_4', x: 0, y: 0, width: 100, height: 100, minimized: false, text: 'kept' },
+        cm_ws: { blockId: null, x: 0, y: 0, width: 100, height: 100, minimized: false, text: 'workspace' }
+      };
+      const code = decompileTarget(c.sprite, c.stage);
+      assert(code.includes('@when_flag_clicked') && code.includes('move(10)'), 'supported script still decompiles');
+      assert(code.includes('event_whentouchingobject'), 'unsupported script must be mentioned in a comment');
+      assert(!code.includes('невідомий блок'), 'unsupported script must not be half-rendered');
+      for (let round = 0; round < 3; round++) {
+        compileToScratch(code, c.sprite, c.stage, c.json);
+        const o = ops(c.sprite);
+        assert.strictEqual(o.filter((x) => x === 'music_playNoteForBeats').length, 1, 'raw script kept exactly once (round ' + round + ')');
+        assert.strictEqual(o.filter((x) => x === 'event_whentouchingobject').length, 1, 'raw hat kept exactly once');
+        assert.strictEqual(o.filter((x) => x === 'motion_movesteps').length, 1, 'compiled script not duplicated');
+      }
+      const rawHatId = Object.keys(c.sprite.blocks).find((k) => c.sprite.blocks[k].opcode === 'event_whentouchingobject');
+      const rawHat = c.sprite.blocks[rawHatId];
+      assert.notStrictEqual(c.sprite.blocks[rawHat.next].opcode, undefined, 'raw next link resolves');
+      assert.strictEqual(c.sprite.blocks[rawHat.next].parent, rawHatId, 'raw parent link follows the id remap');
+      assert.strictEqual(c.sprite.blocks[rawHat.inputs.TOUCHINGOBJECTMENU[1]].opcode, 'event_touchingobjectmenu', 'raw shadow input follows id remap');
+      const flagHat = Object.values(c.sprite.blocks).find((b) => b.opcode === 'event_whenflagclicked');
+      assert(flagHat && flagHat.next && c.sprite.blocks[flagHat.next].opcode === 'motion_movesteps', 'compiled script intact next to raw');
+      const commentTexts = Object.values(c.sprite.comments).map((cm) => cm.text).sort();
+      assert.deepStrictEqual(commentTexts, ['kept', 'workspace'], 'comments of regenerated blocks are dropped, raw/workspace comments kept');
+      const keptCm = Object.values(c.sprite.comments).find((cm) => cm.text === 'kept');
+      assert(c.sprite.blocks[keptCm.blockId], 'kept comment points at an existing block');
+    }
+
+    // 0.1b Raw custom block definitions stay callable from DSL code
+    {
+      const c = mk();
+      c.sprite.blocks = {
+        d1: { opcode: 'procedures_definition', next: 'd2', parent: null, inputs: { custom_block: [1, 'p1'] }, fields: {}, shadow: false, topLevel: true, x: 0, y: 0 },
+        p1: { opcode: 'procedures_prototype', next: null, parent: 'd1', inputs: {}, fields: {}, shadow: true, topLevel: false,
+          mutation: { tagName: 'mutation', children: [], proccode: 'jingle %s', argumentids: '["a1"]', argumentnames: '["n"]', argumentdefaults: '[""]', warp: 'false' } },
+        d2: { opcode: 'music_setTempo', next: null, parent: 'd1', inputs: { TEMPO: [1, [4, '90']] }, fields: {}, shadow: false, topLevel: false }
+      };
+      compileToScratch('@when_flag_clicked\ndef main():\n    jingle(3)\n', c.sprite, c.stage, c.json);
+      assert(ops(c.sprite).includes('music_setTempo'), 'raw procedure body preserved');
+      const call = Object.values(c.sprite.blocks).find((b) => b.opcode === 'procedures_call');
+      assert(call && call.mutation.proccode === 'jingle %s', 'call to a raw custom block compiles');
+      assert(compileErr('def jingle(n):\n    move(n)\n') === null, 'sanity: plain def compiles on a fresh sprite');
+    }
+
+    // 0.3 for-loop counter
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef main():\n    t = 0\n    for i in range(3):\n        t += i\n    say(t)\n', c.sprite, c.stage, c.json);
+      const bl = c.sprite.blocks;
+      const rep = Object.values(bl).find((b) => b.opcode === 'control_repeat');
+      const init = bl[rep.parent];
+      assert.strictEqual(init.opcode, 'data_setvariableto', 'set i to 0 precedes repeat');
+      assert.strictEqual(init.fields.VARIABLE[0], 'i');
+      assert.strictEqual(init.next, Object.keys(bl).find((k) => bl[k] === rep), 'init links to repeat');
+      let last = bl[rep.inputs.SUBSTACK[1]];
+      while (last.next) last = bl[last.next];
+      assert.strictEqual(last.opcode, 'data_changevariableby', 'change i by 1 ends the body');
+      assert.strictEqual(last.inputs.VALUE[1][1], '1');
+      const afterId = rep.next;
+      assert(afterId && bl[afterId].opcode === 'looks_say', 'statement after the loop chains to the repeat block');
+      const dec = decompileTarget(c.sprite, c.stage);
+      assert(/for i in range\(3\):/.test(dec) && !/\bi = 0\b/.test(dec) && !/i \+= 1/.test(dec), 'decompiler folds the counter back into for i in range');
+      const before = ops(c.sprite).sort().join();
+      compileToScratch(dec, c.sprite, c.stage, c.json);
+      assert.strictEqual(ops(c.sprite).sort().join(), before, 'for-loop round trip is stable');
+      // unused loop variable adds no blocks
+      const c2 = mk();
+      compileToScratch('@when_flag_clicked\ndef main():\n    for i in range(3):\n        move(1)\n', c2.sprite, c2.stage, c2.json);
+      assert(!ops(c2.sprite).includes('data_setvariableto') && !ops(c2.sprite).includes('data_changevariableby'), 'unused loop var: no counter blocks');
+    }
+
+    // 0.5 monitors of removed variables / lists are dropped
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef main():\n    score = 1\n    list_add("items", 1)\n', c.sprite, c.stage, c.json);
+      const sid = Object.keys(c.stage.variables).find((k) => c.stage.variables[k][0] === 'score');
+      const lid = Object.keys(c.stage.lists).find((k) => c.stage.lists[k][0] === 'items');
+      c.json.monitors = [{ id: sid, mode: 'default' }, { id: lid, mode: 'list' }, { id: 'keep_me', mode: 'default' }];
+      compileToScratch('@when_flag_clicked\ndef main():\n    move(1)\n', c.sprite, c.stage, c.json);
+      assert.deepStrictEqual(c.json.monitors.map((m) => m.id), ['keep_me'], 'monitors of deleted var/list removed, others kept');
+    }
+
+    // Stage 1: whitelists
+    for (const [src, needle] of [
+      ['@when_flag_clicked\ndef m():\n    set_effect("sparkle", 5)\n', 'sparkle'],
+      ['@when_flag_clicked\ndef m():\n    set_sound_effect("bass", 5)\n', 'bass'],
+      ['@when_flag_clicked\ndef m():\n    set_rotation_style("spin")\n', 'spin'],
+      ['@when_flag_clicked\ndef m():\n    set_drag_mode("yes")\n', 'yes'],
+      ['@when_flag_clicked\ndef m():\n    stop("everything")\n', 'everything'],
+      ['@when_flag_clicked\ndef m():\n    x = key_pressed("spacebar")\n', 'spacebar'],
+      ['@when_key_pressed("F13")\ndef m():\n    move(1)\n', 'F13'],
+      ['@when_flag_clicked\ndef m():\n    x = math_op("cube", 3)\n', 'cube'],
+      ['@when_flag_clicked\ndef m():\n    x = current_time("week")\n', 'WEEK'],
+      ['@when_flag_clicked\ndef m():\n    x = attribute_of("X position", "Stage")\n', 'x position']
+    ]) {
+      const e = compileErr(src);
+      assert(e instanceof CompileError && /Недопустим/.test(e.message) && e.line >= 1, 'whitelist error for ' + needle + ': ' + (e && e.message));
+    }
+    assert.strictEqual(compileErr('@when_flag_clicked\ndef m():\n    set_effect("ghost", 5)\n    set_sound_effect("pan", 5)\n    set_rotation_style("left-right")\n    stop("this script")\n    x = math_op("e ^", 1)\n    y = current_time("hour")\n    z = attribute_of("my var", "Stage")\n'), null, 'valid values still compile');
+
+    // Stage 1: sprite-only blocks on Stage
+    for (const src of ['@when_flag_clicked\ndef m():\n    move(10)\n', '@when_flag_clicked\ndef m():\n    show()\n', '@when_flag_clicked\ndef m():\n    x = x_position()\n', '@when_cloned\ndef m():\n    wait(1)\n']) {
+      const e = compileErr(src, true);
+      assert(e instanceof CompileError && /лише спрайтам/.test(e.message), 'stage rejects sprite-only: ' + src.split('\n')[2] + ' -> ' + (e && e.message));
+    }
+    assert.strictEqual(compileErr('@when_flag_clicked\ndef m():\n    switch_backdrop("a")\n    next_backdrop()\n    wait(1)\n', true), null, 'stage-compatible blocks compile on Stage');
+
+    // Stage 1: global / local name conflict
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef m():\n    hp = 1\n', c.stage, c.stage, c.json);
+      assert.throws(
+        () => compileToScratch('@when_flag_clicked\ndef m():\n    self.hp = 5\n', c.sprite, c.stage, c.json),
+        (e) => e instanceof CompileError && /конфліктує з глобальною/.test(e.message) && e.line === 3
+      );
+    }
+
+    // Stage 1: custom block argument count
+    {
+      const e = compileErr('def f(a, b):\n    move(a)\n\n@when_flag_clicked\ndef m():\n    f(1)\n');
+      assert(e instanceof CompileError && e.line === 6 && /очікує/.test(e.message), 'wrong custom block arg count: ' + (e && e.message));
+      assert.strictEqual(compileErr('def f(a, b):\n    move(a)\n\n@when_flag_clicked\ndef m():\n    f(1, 2)\n'), null);
+    }
+
+    // Stage 1: colour shadow 9 only for COLOR inputs
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef m():\n    say("#ff0000")\n    set_pen_color("#ff0000")\n    x = touching_color("#00ff00")\n', c.sprite, c.stage, c.json);
+      const bl = Object.values(c.sprite.blocks);
+      assert.strictEqual(bl.find((b) => b.opcode === 'looks_say').inputs.MESSAGE[1][0], 10, 'say("#ff0000") stays a string');
+      assert.strictEqual(bl.find((b) => b.opcode === 'pen_setPenColorToColor').inputs.COLOR[1][0], 9, 'pen colour input is a colour');
+      assert.strictEqual(bl.find((b) => b.opcode === 'sensing_touchingcolor').inputs.COLOR[1][0], 9);
+    }
+
+    // Stage 2: line continuation
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef m():\n    goto(\n        10,  # x\n        20\n    )\n    say(join("a",\n        "b"))\n    move(1 + \\\n        2)\n', c.sprite, c.stage, c.json);
+      const o = ops(c.sprite);
+      assert(o.includes('motion_gotoxy') && o.includes('operator_join') && o.includes('operator_add'), 'continuation inside () and after backslash');
+      let e = compileErr('@when_flag_clicked\ndef m():\n    move(10\n    turn_right(5)\n');
+      assert(e instanceof CompileError && e.line === 3 && /дужку/.test(e.message), 'unclosed bracket reports the opening line: ' + (e && e.message));
+      e = compileErr('@when_flag_clicked\ndef m():\n    move(10))\n');
+      assert(e instanceof CompileError && e.line === 3 && /Зайва/.test(e.message));
+      e = compileErr('@when_flag_clicked\ndef m():\n    move(1) \\ x\n');
+      assert(e instanceof CompileError && /\\/.test(e.message));
+    }
+
+    // Stage 2: friendly errors for Python constructs
+    for (const [body, needle] of [
+      ['    return 5', 'return'],
+      ['    break', 'break'],
+      ['    continue', 'continue'],
+      ['    import math', 'import'],
+      ['    x = lambda: 1', 'lambda'],
+      ['    x = 2 ** 3', '**'],
+      ['    say(f"hi {x}")', 'f-рядки'],
+      ['    x = 1 if y else 2', 'Тернарний']
+    ]) {
+      const e = compileErr('@when_flag_clicked\ndef m():\n' + body + '\n');
+      assert(e instanceof CompileError && e.message.includes(needle) && e.line === 3, 'friendly error for ' + needle + ': ' + (e && e.message));
+    }
+    {
+      const e = compileErr('class A:\n    pass\n');
+      assert(e instanceof CompileError && /class/.test(e.message) && e.line === 1, 'class at top level: ' + (e && e.message));
+    }
+
+    // Stage 2: columns on tokens and errors
+    {
+      const toks = tokenize('@when_flag_clicked\ndef m():\n    move(10)\n');
+      const mv = toks.find((t) => t.value === 'move');
+      assert.strictEqual(mv.line, 3);
+      assert.strictEqual(mv.col, 5, 'token col is 1-based');
+      const e = compileErr('@when_flag_clicked\ndef m():\n    say("a" $)\n');
+      assert(e instanceof CompileError && e.line === 3 && e.col === 13, 'CompileError carries col: ' + (e && e.col));
+    }
+
+    // Stage 2: string escapes
+    {
+      const str = (lit) => tokenize('x = ' + lit + '\n').find((t) => t.type === 'STRING').value;
+      assert.strictEqual(str('"a\\rb\\\\c\\\'d\\"e"'), 'a\rb\\c\'d"e');
+      assert.strictEqual(str('"\\x41\\u0416\\n\\t"'), 'A\u0416\n\t');
+      for (const bad of ['"\\q"', '"\\x4"', '"\\u12"']) {
+        assert.throws(() => tokenize('x = ' + bad + '\n'), (e) => e instanceof CompileError && /escape/.test(e.message), 'bad escape ' + bad);
+      }
+      // JSON.stringify output from the decompiler must always be readable again
+      const nasty = 'a"b\\c\nd\te\u0001f\u2028';
+      assert.strictEqual(str(JSON.stringify(nasty)), nasty);
+    }
+
+    // Stage 2: Unicode identifiers and indentation message
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef m():\n    zähler = 1\n    变量 = 2\n    état += 1\n', c.sprite, c.stage, c.json);
+      const names = Object.values(c.stage.variables).map((v) => v[0]);
+      assert(names.includes('zähler') && names.includes('变量') && names.includes('état'), 'Unicode letters allowed in identifiers');
+      const e = compileErr('@when_flag_clicked\ndef main():\n        move(1)\n    move(2)\n');
+      assert(e instanceof CompileError && e.line === 4 && !/кратні 4/.test(e.message) && /відступ/.test(e.message), 'indent message matches the real rule: ' + (e && e.message));
+    }
+  }
+
+  console.log('ALL 13 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {

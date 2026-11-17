@@ -27,7 +27,7 @@
     return sanitizeIdent(base, 'custom_block');
   }
 
-  function createBlockReader(blocks, target = null, stageTarget = null) {
+  function createBlockReader(blocks, target = null, stageTarget = null, onUnknown = null) {
     function isLocalVar(varName, varId) {
       if (!target || target.isStage || !target.variables) return false;
       if (varId && target.variables[varId]) return true;
@@ -274,6 +274,7 @@
           return `${fn}(${JSON.stringify(listName)}, ${readInput(b, 'ITEM')})`;
         }
         default:
+          if (onUnknown && !b.shadow) onUnknown(b.opcode);
           return `0`;
         }
       } finally {
@@ -293,8 +294,23 @@
     };
   }
 
-  function decompileTarget(target, stageTarget = null) {
+  /**
+   * @param {object} target
+   * @param {object|null} stageTarget
+   * @param {{unsupported?: Map<string, string[]>}} [report] optional out-parameter: filled with
+   *   top-level script id -> opcodes that the DSL cannot express. Such scripts are NOT rendered as code
+   *   (the compiler keeps them verbatim when the project is recompiled).
+   */
+  function decompileTarget(target, stageTarget = null, report = null) {
     const blocks = target.blocks || {};
+    const unsupportedByRoot = new Map();
+    let currentRoot = null;
+    const markUnknown = (opcode) => {
+      if (currentRoot === null) return;
+      if (!unsupportedByRoot.has(currentRoot)) unsupportedByRoot.set(currentRoot, []);
+      const list = unsupportedByRoot.get(currentRoot);
+      if (!list.includes(opcode)) list.push(opcode);
+    };
     const topBlocks = Object.entries(blocks)
       .filter(([, b]) => b && b.topLevel && !b.shadow)
       .sort((a, b) => (a[1].y || 0) - (b[1].y || 0));
@@ -311,7 +327,7 @@
       isLocalVar,
       isLocalList,
       formatVarName
-    } = createBlockReader(blocks, target, stageTarget);
+    } = createBlockReader(blocks, target, stageTarget, markUnknown);
 
     const listBlockOps = new Set([
       'data_addtolist',
@@ -653,9 +669,25 @@
           }
 
           case 'control_repeat': {
-            lines.push(`${pad}for i in range(${readInput(b, 'TIMES')}):`);
+            const times = readInput(b, 'TIMES');
             const sub = b.inputs && b.inputs.SUBSTACK ? b.inputs.SUBSTACK[1] : null;
-            lines.push(...(sub ? decompileChain(sub, indent + 1, visited) : [`${pad}    pass`]));
+            const bodyLines = sub ? decompileChain(sub, indent + 1, visited) : [`${pad}    pass`];
+            // Recognise the counter pattern the compiler emits for "for i in range(n)":
+            //   set i to 0 / repeat n { ...; change i by 1 }  ->  for i in range(n): ...
+            const initLine = `${pad}i = 0`;
+            const incLine = `${pad}    i += 1`;
+            if (
+              lines.length > 0 &&
+              lines[lines.length - 1] === initLine &&
+              bodyLines.length > 1 &&
+              bodyLines[bodyLines.length - 1] === incLine &&
+              bodyLines.slice(0, -1).some((ln) => /(^|[^\w.])i(?!\w)/.test(ln.replace(/"(?:[^"\\]|\\.)*"/g, '""')))
+            ) {
+              lines.pop();
+              bodyLines.pop();
+            }
+            lines.push(`${pad}for i in range(${times}):`);
+            lines.push(...bodyLines);
             break;
           }
           case 'control_forever': {
@@ -676,6 +708,7 @@
             break;
 
           default:
+            markUnknown(b.opcode);
             lines.push(`${pad}# невідомий блок: ${b.opcode}`);
         }
         currId = b.next;
@@ -694,7 +727,22 @@
       return candidate;
     };
 
-    for (const [, hat] of topBlocks) {
+    for (const [rootId, hat] of topBlocks) {
+      currentRoot = rootId;
+      const partsMark = parts.length;
+      emitScript(hat);
+      if (unsupportedByRoot.has(rootId)) {
+        parts.length = partsMark;
+        parts.push(
+          `# [збережено без змін] скрипт із блоками, яких немає в DSL: ${unsupportedByRoot.get(rootId).join(', ')}.\n# Він не показується тут, але залишається в проєкті й потрапить у .sb3.\n`
+        );
+      }
+      currentRoot = null;
+    }
+    if (report) report.unsupported = unsupportedByRoot;
+    return parts.join('\n');
+
+    function emitScript(hat) {
       if (hat.opcode === 'procedures_definition') {
         const protoId = hat.inputs && hat.inputs.custom_block ? hat.inputs.custom_block[1] : null;
         const proto = protoId ? blocks[protoId] : null;
@@ -712,7 +760,7 @@
         );
         const bodyLines = hat.next ? decompileChain(hat.next, 1) : ['    pass'];
         parts.push(bodyLines.join('\n') + '\n');
-        continue;
+        return;
       }
 
       let dec = '@when_flag_clicked';
@@ -746,7 +794,9 @@
         dec = '@when_cloned';
         fnName = `on_clone_${handlerIndex}`;
       } else {
-        continue;
+        // Not a hat the DSL knows (unknown event hat or a loose block stack): keep it verbatim on recompile
+        markUnknown(hat.opcode);
+        return;
       }
 
       handlerIndex++;
@@ -755,8 +805,6 @@
       const bodyLines = hat.next ? decompileChain(hat.next, 1) : ['    pass'];
       parts.push(bodyLines.join('\n') + '\n');
     }
-
-    return parts.join('\n');
   }
 
   // Human-readable Ukrainian label for each Scratch block (for educational block tree inspection)
@@ -1055,7 +1103,7 @@
     return { label, opcode: b.opcode, category, line: b._line || null };
   }
 
-  const api = { decompileTarget, formatBlockUk };
+  const api = { decompileTarget, formatBlockUk, extractProcName };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {

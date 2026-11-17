@@ -191,6 +191,7 @@ def start_pong():
             else:
                 say(join("Гру завершено! Рахунок: ", score), 2)
                 goto(0, 120)
+                point_in_direction(135)
                 score = 0
 `,
     maze: `# === ЛАБІРИНТ (СТРІЛКИ + ТОРКАННЯ КОЛЬОРУ) ===
@@ -255,7 +256,7 @@ def start_clicker():
     score = 0
     show_variable("score")
     reset_timer()
-    goto(0, 0)
+    hide()
     while timer() < 15:
         create_clone("myself")
         wait(0.8)
@@ -265,6 +266,7 @@ def start_clicker():
 @when_cloned
 def clone_target():
     goto(random(-180, 180), random(-120, 120))
+    show()
     wait(1.6)
     delete_this_clone()
 
@@ -277,55 +279,55 @@ def catch_target():
   };
 
   const API_DOCS = [
-    ['Події', '@when_flag_clicked', 'Старт при натисканні зеленого прапорця'],
-    ['Події', '@when_key_pressed("space")', 'Реакція на клавішу (space, up arrow, a..z)'],
-    ['Події', '@when_this_sprite_clicked', 'Клік мишкою по спрайту'],
-    ['Події', '@when_backdrop_switches("level_2")', 'Коли змінюється фон сцени'],
-    ['Події', '@when_message_received("msg")', 'Отримання повідомлення broadcast("msg")'],
-    ['Події', '@when_greater_than("timer", 5)', 'Коли таймер або гучність перевищує поріг'],
-    ['Події', '@when_cloned', 'Скрипт для новоствореного клону'],
-    ['Функції', 'def my_block(x, y):', 'Створює рожевий «Мій блок» у Scratch'],
-    ['Функції', '@warp', 'Декоратор перед def для миттєвого виконання без оновлення екрана'],
-    ['Рух', 'move(80) / turn_right(90) / turn_left(90)', 'Кроки вперед та повороти у градусах'],
-    ['Рух', 'goto(x, y) / glide(sec, x, y)', 'Миттєвий перехід або плавне ковзання'],
-    ['Рух', 'glide_to(1, "mouse")', 'Плавне ковзання до курсора, випадкового місця або спрайта'],
-    ['Рух', 'goto_random() / goto_mouse()', 'Перехід у випадкове місце або до курсора'],
-    ['Рух', 'point_in_direction(90) / point_towards("mouse")', 'Напрямок руху або поворот до цілі'],
-    ['Рух', 'set_x(0), change_x(10), set_y(0), change_y(10)', 'Зміна координат X та Y'],
-    ['Рух', 'if_on_edge_bounce()', 'Відбивання від краю сцени'],
-    ['Вигляд', 'say("Текст", 2) / think("Думка", 2)', 'Мовна або думкова бульбашка'],
-    ['Вигляд', 'switch_costume("costume1") / next_costume()', 'Зміна костюма спрайта'],
-    ['Вигляд', 'switch_backdrop("space_bg") / next_backdrop()', 'Зміна фону сцени'],
-    ['Вигляд', 'switch_backdrop_and_wait("level_2")', 'Змінити тло сцени та чекати завершення скриптів'],
-    ['Вигляд', 'go_to_layer("front") / change_layer("forward", 1)', 'Перемістити спрайт на передній/задній шар або на N шарів'],
-    ['Вигляд', 'set_size(100) / change_size(10) / show() / hide()', 'Масштаб та видимість'],
-    ['Вигляд', 'set_effect("color", 25) / clear_effects()', 'Графічні ефекти'],
-    ['Олівець', 'pen_down() / pen_up() / pen_clear() / pen_stamp()', 'Малювання ліній та штампування'],
-    ['Олівець', 'set_pen_color("#00ffcc") / set_pen_size(3)', 'Колір (#hex) і товщина олівця'],
-    ['Звук', 'play_sound("pop") / play_sound_until_done("laser")', 'Відтворення звуків зі списку асетів'],
-    ['Звук', 'set_sound_effect("pitch", 50) / change_sound_effect("pan", 25)', 'Звукові ефекти висоти (pitch) та панорами (pan)'],
-    ['Звук', 'clear_sound_effects()', 'Скинути всі звукові ефекти'],
-    ['Керування', 'for i in range(6): / while True: / while not cond:', 'Цикли repeat, forever, repeat until'],
-    ['Керування', 'if cond: / elif cond2: / else:', 'Умовні розгалуження (підтримує ==, !=, <=, >=)'],
-    ['Керування', 'wait(0.5) / wait_until(cond) / stop("all")', 'Затримки та зупинка'],
-    ['Керування', 'create_clone("myself") / delete_this_clone()', 'Клонування спрайтів'],
-    ['Датчики', 'ask("Питання") / answer()', 'Інтерактивне опитування гравця'],
-    ['Датчики', 'key_pressed("space") / touching("edge")', 'Перевірка клавіш та зіткнень'],
-    ['Датчики', 'touching_color("#00ffcc") / color_is_touching_color("#f00", "#0f0")', 'Перевірка торкання кольору або кольору до іншого кольору'],
-    ['Датчики', 'attribute_of("x position", "Sprite1")', 'Атрибут або локальна змінна іншого спрайта чи Сцени'],
-    ['Датчики', 'set_drag_mode("draggable")', 'Режим перетягування спрайта мишкою (draggable / not draggable)'],
-    ['Датчики', 'mouse_x(), mouse_y(), mouse_down(), timer()', 'Координати миші та таймер'],
-    ['Датчики', 'current_time("hour") / days_since_2000()', 'Поточний час (year..second) та дні від 2000 року'],
-    ['Датчики', 'username() / loudness()', 'Ім’я користувача та рівень гучності мікрофона'],
-    ['Оператори', 'asin(0.5) / acos(0.5) / atan(1)', 'Тригонометричні функції (у градусах)'],
-    ['Оператори', 'ln(10) / log(100) / exp(1) / pow10(2)', 'Логарифми та показникова функція e^x, 10^x'],
-    ['Оператори', 'len("hello") / len("bag")', 'Довжина рядка або списку'],
-    ['Змінні', 'self.hp = 100', 'Локальна змінна ("Тільки для цього спрайта")'],
-    ['Змінні', 'show_variable("score") / hide_variable("score")', 'Показати або сховати змінну на сцені'],
-    ['Списки', 'local_list("items")', 'Оголосити локальний список для цього спрайта'],
-    ['Списки', 'list_add("bag", "ключ"), list_item("bag", 1)', 'Робота зі списками Scratch'],
-    ['Списки', 'list_index_of("bag", "ключ")', 'Індекс (1..N) елемента у списку або 0'],
-    ['Списки', 'show_list("bag") / hide_list("bag")', 'Показати або сховати список на сцені']
+    ['cat_events', '@when_flag_clicked', 'doc_01'],
+    ['cat_events', '@when_key_pressed("space")', 'doc_02'],
+    ['cat_events', '@when_this_sprite_clicked', 'doc_03'],
+    ['cat_events', '@when_backdrop_switches("level_2")', 'doc_04'],
+    ['cat_events', '@when_message_received("msg")', 'doc_05'],
+    ['cat_events', '@when_greater_than("timer", 5)', 'doc_06'],
+    ['cat_events', '@when_cloned', 'doc_07'],
+    ['cat_functions', 'def my_block(x, y):', 'doc_08'],
+    ['cat_functions', '@warp', 'doc_09'],
+    ['cat_motion', 'move(80) / turn_right(90) / turn_left(90)', 'doc_10'],
+    ['cat_motion', 'goto(x, y) / glide(sec, x, y)', 'doc_11'],
+    ['cat_motion', 'glide_to(1, "mouse")', 'doc_12'],
+    ['cat_motion', 'goto_random() / goto_mouse()', 'doc_13'],
+    ['cat_motion', 'point_in_direction(90) / point_towards("mouse")', 'doc_14'],
+    ['cat_motion', 'set_x(0), change_x(10), set_y(0), change_y(10)', 'doc_15'],
+    ['cat_motion', 'if_on_edge_bounce()', 'doc_16'],
+    ['cat_looks', 'say("Текст", 2) / think("Думка", 2)', 'doc_17'],
+    ['cat_looks', 'switch_costume("costume1") / next_costume()', 'doc_18'],
+    ['cat_looks', 'switch_backdrop("space_bg") / next_backdrop()', 'doc_19'],
+    ['cat_looks', 'switch_backdrop_and_wait("level_2")', 'doc_20'],
+    ['cat_looks', 'go_to_layer("front") / change_layer("forward", 1)', 'doc_21'],
+    ['cat_looks', 'set_size(100) / change_size(10) / show() / hide()', 'doc_22'],
+    ['cat_looks', 'set_effect("color", 25) / clear_effects()', 'doc_23'],
+    ['cat_pen', 'pen_down() / pen_up() / pen_clear() / pen_stamp()', 'doc_24'],
+    ['cat_pen', 'set_pen_color("#00ffcc") / set_pen_size(3)', 'doc_25'],
+    ['cat_sound', 'play_sound("pop") / play_sound_until_done("laser")', 'doc_26'],
+    ['cat_sound', 'set_sound_effect("pitch", 50) / change_sound_effect("pan", 25)', 'doc_27'],
+    ['cat_sound', 'clear_sound_effects()', 'doc_28'],
+    ['cat_control', 'for i in range(6): / while True: / while not cond:', 'doc_29'],
+    ['cat_control', 'if cond: / elif cond2: / else:', 'doc_30'],
+    ['cat_control', 'wait(0.5) / wait_until(cond) / stop("all")', 'doc_31'],
+    ['cat_control', 'create_clone("myself") / delete_this_clone()', 'doc_32'],
+    ['cat_sensing', 'ask("Питання") / answer()', 'doc_33'],
+    ['cat_sensing', 'key_pressed("space") / touching("edge")', 'doc_34'],
+    ['cat_sensing', 'touching_color("#00ffcc") / color_is_touching_color("#f00", "#0f0")', 'doc_35'],
+    ['cat_sensing', 'attribute_of("x position", "Sprite1")', 'doc_36'],
+    ['cat_sensing', 'set_drag_mode("draggable")', 'doc_37'],
+    ['cat_sensing', 'mouse_x(), mouse_y(), mouse_down(), timer()', 'doc_38'],
+    ['cat_sensing', 'current_time("hour") / days_since_2000()', 'doc_39'],
+    ['cat_sensing', 'username() / loudness()', 'doc_40'],
+    ['cat_operators', 'asin(0.5) / acos(0.5) / atan(1)', 'doc_41'],
+    ['cat_operators', 'ln(10) / log(100) / exp(1) / pow10(2)', 'doc_42'],
+    ['cat_operators', 'len("hello") / len("bag")', 'doc_43'],
+    ['cat_variables', 'self.hp = 100', 'doc_44'],
+    ['cat_variables', 'show_variable("score") / hide_variable("score")', 'doc_45'],
+    ['cat_lists', 'local_list("items")', 'doc_46'],
+    ['cat_lists', 'list_add("bag", "ключ"), list_item("bag", 1)', 'doc_47'],
+    ['cat_lists', 'list_index_of("bag", "ключ")', 'doc_48'],
+    ['cat_lists', 'show_list("bag") / hide_list("bag")', 'doc_49']
   ];
 
   const state = {
@@ -338,6 +340,7 @@ def catch_target():
   };
 
   const editor = document.getElementById('code-editor');
+  let projectDirty = false;
   const codeHighlight = document.getElementById('code-highlight');
   const lineNumbers = document.getElementById('line-numbers');
   const statusBanner = document.getElementById('status-banner');
@@ -377,7 +380,7 @@ def catch_target():
     typeof StagePreview !== 'undefined' && stageCanvas
       ? new StagePreview(stageCanvas, {
           onBackdropChange: (bg) => {
-            if (backdropIndicator) backdropIndicator.textContent = `Тло: ${bg}`;
+            if (backdropIndicator) backdropIndicator.textContent = i18nT('backdrop_label', { name: bg });
           },
           onTelemetry: (t) => {
             if (teleX) teleX.textContent = t.x;
@@ -463,7 +466,7 @@ def catch_target():
       localListEntries.length === 0
     ) {
       varsWatch.innerHTML =
-        '<span style="color: var(--wp-dim); font-size: 11px;">Змінні та списки з\'являться тут під час виконання.</span>';
+        `<span style="color: var(--wp-dim); font-size: 11px;">${escapeHtml(i18nT('vars_empty'))}</span>`;
       return;
     }
 
@@ -473,7 +476,7 @@ def catch_target():
     }
     for (const [label, v] of localVarEntries) {
       pills.push(
-        `<span class="var-pill var-pill-local" title="Локальна змінна спрайта">${escapeHtml(label)} = <b>${escapeHtml(
+        `<span class="var-pill var-pill-local" title="${escapeHtml(i18nT('vars_local_title'))}">${escapeHtml(label)} = <b>${escapeHtml(
           String(v)
         )}</b></span>`
       );
@@ -489,7 +492,7 @@ def catch_target():
     for (const [label, arr] of localListEntries) {
       const safeArr = Array.isArray(arr) ? arr : [];
       pills.push(
-        `<span class="var-pill var-pill-local-list" title="Локальний список спрайта">${escapeHtml(label)} [${safeArr.length}]: ${escapeHtml(
+        `<span class="var-pill var-pill-local-list" title="${escapeHtml(i18nT('lists_local_title'))}">${escapeHtml(label)} [${safeArr.length}]: ${escapeHtml(
           safeArr.slice(0, 5).join(', ')
         )}</span>`
       );
@@ -600,7 +603,7 @@ def catch_target():
     const upToCursor = editor.value.slice(0, pos).split('\n');
     const ln = upToCursor.length;
     const col = upToCursor[upToCursor.length - 1].length + 1;
-    cursorPos.textContent = `Ряд ${ln}, Стовп ${col}`;
+    cursorPos.textContent = i18nT('cursor_pos', { ln, col });
   }
 
   function insertAtCursor(snippetText) {
@@ -631,11 +634,15 @@ def catch_target():
 
   function renderTargetTabs() {
     if (!targetTabs || !state.projectJson) return;
+    if (typeof PyScratchLayout !== 'undefined' && PyScratchLayout.renderTargets) {
+      PyScratchLayout.renderTargets(state.projectJson, state.assetsMap, state.activeTargetIdx, selectTarget);
+      return;
+    }
     targetTabs.innerHTML = '';
     state.projectJson.targets.forEach((t, idx) => {
       const btn = document.createElement('button');
       btn.className = 'tab-btn' + (idx === state.activeTargetIdx ? ' active' : '');
-      btn.textContent = t.isStage ? `Сцена (${t.name})` : t.name;
+      btn.textContent = t.isStage ? i18nT('stage_tab', { name: t.name }) : t.name;
       btn.onclick = () => selectTarget(idx);
       targetTabs.appendChild(btn);
     });
@@ -710,7 +717,7 @@ def catch_target():
     if (!file || !state.projectJson) return;
     const fmt = detectAssetFormat(file, ['svg', 'png', 'jpg']);
     if (!fmt) {
-      setStatus('Підтримуються лише зображення .svg, .png або .jpg.', true);
+      setStatus(i18nT('err_image_type'), true);
       return;
     }
     try {
@@ -737,11 +744,11 @@ def catch_target():
       renderTargetTabs();
       setStatus(
         isBackdrop
-          ? `Тло "${added.name}" (.${added.dataFormat}) додано до Сцени.`
-          : `Костюм "${added.name}" (.${added.dataFormat}) додано до ${target ? target.name : 'спрайта'}.`
+          ? i18nT('added_backdrop', { name: added.name, fmt: added.dataFormat })
+          : i18nT('added_costume', { name: added.name, fmt: added.dataFormat, target: target ? target.name : i18nT('fallback_sprite') })
       );
     } catch (err) {
-      setStatus('Помилка додавання зображення: ' + (err && err.message ? err.message : String(err)), true);
+      setStatus(i18nT('err_image_add', { msg: err && err.message ? err.message : String(err) }), true);
     }
   }
 
@@ -749,7 +756,7 @@ def catch_target():
     if (!file || !state.projectJson) return;
     const fmt = detectAssetFormat(file, ['wav', 'mp3']);
     if (!fmt) {
-      setStatus('Підтримуються лише аудіофайли .wav або .mp3.', true);
+      setStatus(i18nT('err_audio_type'), true);
       return;
     }
     try {
@@ -762,9 +769,9 @@ def catch_target():
       }
       renderAssetsView();
       renderTargetTabs();
-      setStatus(`Звук "${added.name}" (.${added.dataFormat}) додано до ${target ? target.name : 'об’єкта'}.`);
+      setStatus(i18nT('added_sound', { name: added.name, fmt: added.dataFormat, target: target ? target.name : i18nT('fallback_object') }));
     } catch (err) {
-      setStatus('Помилка додавання звуку: ' + (err && err.message ? err.message : String(err)), true);
+      setStatus(i18nT('err_sound_add', { msg: err && err.message ? err.message : String(err) }), true);
     }
   }
 
@@ -820,16 +827,16 @@ def catch_target():
 
       chunks.push(`<div class="assets-section active-sprite-section">
         <div class="assets-header">
-          <h4>Активний спрайт: ${escapeHtml(activeTarget.name)}</h4>
+          <h4>${escapeHtml(i18nT('sp_active', { name: activeTarget.name }))}</h4>
           ${
             spritesCount > 1
-              ? `<button id="btn-delete-sprite" class="danger asset-upload-btn" title="Видалити цей спрайт">Видалити спрайт</button>`
+              ? `<button id="btn-delete-sprite" class="danger asset-upload-btn" title="${escapeHtml(i18nT('sp_delete_title'))}">${escapeHtml(i18nT('sp_delete'))}</button>`
               : ''
           }
         </div>
         <div class="sprite-rename-row">
-          <input type="text" id="sprite-prop-name" value="${escapeHtml(activeTarget.name)}" aria-label="Назва спрайта" />
-          <button id="btn-rename-sprite" class="asset-upload-btn">Перейменувати</button>
+          <input type="text" id="sprite-prop-name" value="${escapeHtml(activeTarget.name)}" aria-label="${escapeHtml(i18nT('sp_name_aria'))}" />
+          <button id="btn-rename-sprite" class="asset-upload-btn">${escapeHtml(i18nT('sp_rename'))}</button>
         </div>
         <div class="sprite-props-grid">
           <div class="prop-field">
@@ -841,30 +848,30 @@ def catch_target():
             <input type="number" id="sprite-prop-y" value="${Number(activeTarget.y) || 0}" step="1" />
           </div>
           <div class="prop-field">
-            <label for="sprite-prop-size">Розмір %</label>
+            <label for="sprite-prop-size">${escapeHtml(i18nT('sp_size'))}</label>
             <input type="number" id="sprite-prop-size" value="${activeTarget.size !== undefined ? Number(activeTarget.size) : 100}" min="5" max="500" step="1" />
           </div>
           <div class="prop-field">
-            <label for="sprite-prop-dir">Напрям °</label>
+            <label for="sprite-prop-dir">${escapeHtml(i18nT('sp_dir'))}</label>
             <input type="number" id="sprite-prop-dir" value="${activeTarget.direction !== undefined ? Number(activeTarget.direction) : 90}" step="1" />
           </div>
           <div class="prop-field">
-            <label for="sprite-prop-rot">Обертання</label>
+            <label for="sprite-prop-rot">${escapeHtml(i18nT('sp_rot'))}</label>
             <select id="sprite-prop-rot">
-              <option value="all around"${rotStyle === 'all around' ? ' selected' : ''}>Навколо</option>
-              <option value="left-right"${rotStyle === 'left-right' ? ' selected' : ''}>Зліва-направо</option>
-              <option value="don't rotate"${rotStyle === "don't rotate" ? ' selected' : ''}>Не обертати</option>
+              <option value="all around"${rotStyle === 'all around' ? ' selected' : ''}>${escapeHtml(i18nT('rot_all'))}</option>
+              <option value="left-right"${rotStyle === 'left-right' ? ' selected' : ''}>${escapeHtml(i18nT('rot_lr'))}</option>
+              <option value="don't rotate"${rotStyle === "don't rotate" ? ' selected' : ''}>${escapeHtml(i18nT('rot_none'))}</option>
             </select>
           </div>
         </div>
         <div class="sprite-toggles-row">
-          <label class="prop-check"><input type="checkbox" id="sprite-prop-visible"${isVisible ? ' checked' : ''} /> Показаний</label>
-          <label class="prop-check"><input type="checkbox" id="sprite-prop-draggable"${isDraggable ? ' checked' : ''} /> Перетягується мишкою</label>
+          <label class="prop-check"><input type="checkbox" id="sprite-prop-visible"${isVisible ? ' checked' : ''} /> ${escapeHtml(i18nT('sp_visible'))}</label>
+          <label class="prop-check"><input type="checkbox" id="sprite-prop-draggable"${isDraggable ? ' checked' : ''} /> ${escapeHtml(i18nT('sp_draggable'))}</label>
         </div>
         <div class="assets-subblock">
           <div class="assets-subhead">
-            <span>Костюми (клік для switch_costume):</span>
-            <button id="btn-upload-costume" class="asset-upload-btn">+ Костюм (.svg/.png)</button>
+            <span>${escapeHtml(i18nT('sp_costumes_hint'))}</span>
+            <button id="btn-upload-costume" class="asset-upload-btn">${escapeHtml(i18nT('sp_upload_costume'))}</button>
           </div>
           ${
             activeCostumes
@@ -874,13 +881,13 @@ def catch_target():
                     `switch_costume(${JSON.stringify(c.name)})`
                   )}">${escapeHtml(c.name)}</span>`
               )
-              .join('') || '<span class="assets-hint">Немає</span>'
+              .join('') || `<span class="assets-hint">${escapeHtml(i18nT('none'))}</span>`
           }
         </div>
         <div class="assets-subblock">
           <div class="assets-subhead">
-            <span>Звуки (клік для play_sound):</span>
-            <button id="btn-upload-sound" class="asset-upload-btn">+ Звук (.wav/.mp3)</button>
+            <span>${escapeHtml(i18nT('sp_sounds_hint'))}</span>
+            <button id="btn-upload-sound" class="asset-upload-btn">${escapeHtml(i18nT('sp_upload_sound'))}</button>
           </div>
           ${
             activeSounds
@@ -890,7 +897,7 @@ def catch_target():
                     `play_sound(${JSON.stringify(snd.name)})`
                   )}">${escapeHtml(snd.name)}</span>`
               )
-              .join('') || '<span class="assets-hint">Немає</span>'
+              .join('') || `<span class="assets-hint">${escapeHtml(i18nT('none'))}</span>`
           }
         </div>
       </div>`);
@@ -898,8 +905,8 @@ def catch_target():
 
     chunks.push(`<div class="assets-section">
       <div class="assets-header">
-        <h4>Тло сцени (Backdrops) — клікніть для вставки</h4>
-        <button id="btn-upload-backdrop" class="asset-upload-btn">+ Тло (.svg/.png)</button>
+        <h4>${escapeHtml(i18nT('backdrops_title'))}</h4>
+        <button id="btn-upload-backdrop" class="asset-upload-btn">${escapeHtml(i18nT('sp_upload_backdrop'))}</button>
       </div>
       ${
         assets.backdrops
@@ -909,14 +916,14 @@ def catch_target():
                 `switch_backdrop(${JSON.stringify(b.name)})`
               )}">${escapeHtml(b.name)}</span>`
           )
-          .join('') || '<span class="assets-hint">Немає</span>'
+          .join('') || `<span class="assets-hint">${escapeHtml(i18nT('none'))}</span>`
       }
       ${
         activeTarget && activeTarget.isStage
           ? `<div class="assets-subblock">
               <div class="assets-subhead">
-                <span>Звуки Сцени (клік для play_sound):</span>
-                <button id="btn-upload-sound" class="asset-upload-btn">+ Звук (.wav/.mp3)</button>
+                <span>${escapeHtml(i18nT('stage_sounds_hint'))}</span>
+                <button id="btn-upload-sound" class="asset-upload-btn">${escapeHtml(i18nT('sp_upload_sound'))}</button>
               </div>
               ${
                 (assets.stageSounds || [])
@@ -926,10 +933,10 @@ def catch_target():
                         `play_sound(${JSON.stringify(snd)})`
                       )}">${escapeHtml(snd)}</span>`
                   )
-                  .join('') || '<span class="assets-hint">Немає</span>'
+                  .join('') || `<span class="assets-hint">${escapeHtml(i18nT('none'))}</span>`
               }
             </div>
-            <p class="assets-hint" style="margin-top:8px;">Підказка: виберіть вкладку спрайта, щоб змінювати його координати, назву чи костюми.</p>`
+            <p class="assets-hint" style="margin-top:8px;">${escapeHtml(i18nT('stage_hint'))}</p>`
           : ''
       }
     </div>`);
@@ -938,10 +945,10 @@ def catch_target():
       if (s.targetIdx === state.activeTargetIdx) continue;
       chunks.push(`<div class="assets-section">
         <div class="assets-header">
-          <h4>Спрайт: ${escapeHtml(s.name)} (x:${s.x}, y:${s.y})</h4>
-          <button class="asset-upload-btn" data-select-target="${s.targetIdx}">Обрати</button>
+          <h4>${escapeHtml(i18nT('sp_label', { name: s.name, x: s.x, y: s.y }))}</h4>
+          <button class="asset-upload-btn" data-select-target="${s.targetIdx}">${escapeHtml(i18nT('sp_select'))}</button>
         </div>
-        <div style="margin-bottom:6px; color:var(--wp-muted);">Костюми (клік для switch_costume):</div>
+        <div style="margin-bottom:6px; color:var(--wp-muted);">${escapeHtml(i18nT('sp_costumes_hint'))}</div>
         ${
           s.costumes
             .map(
@@ -950,11 +957,11 @@ def catch_target():
                   `switch_costume(${JSON.stringify(c.name)})`
                 )}">${escapeHtml(c.name)}</span>`
             )
-            .join('') || '<span class="assets-hint">Немає</span>'
+            .join('') || `<span class="assets-hint">${escapeHtml(i18nT('none'))}</span>`
         }
         ${
           s.sounds && s.sounds.length > 0
-            ? `<div style="margin:8px 0 6px; color:var(--wp-muted);">Звуки (клік для play_sound):</div>` +
+            ? `<div style="margin:8px 0 6px; color:var(--wp-muted);">${escapeHtml(i18nT('sp_sounds_hint'))}</div>` +
               s.sounds
                 .map(
                   (snd) =>
@@ -969,7 +976,7 @@ def catch_target():
     }
 
     chunks.push(
-      `<p class="assets-hint">Порада: можна перетягнути будь-який файл <code>.sb3</code> прямо на вікно браузера.</p>`
+      `<p class="assets-hint">${i18nT('assets_tip')}</p>`
     );
 
     viewAssets.innerHTML = chunks.join('');
@@ -1023,9 +1030,9 @@ def catch_target():
           preview.syncProjectAssets(state.projectJson, state.assetsMap);
           preview.render();
         }
-        setStatus(`Спрайт перейменовано на "${updated.name}".`);
+        setStatus(i18nT('rename_ok', { name: updated.name }));
       } catch (err) {
-        setStatus(err && err.message ? err.message : 'Не вдалося перейменувати спрайт.', true);
+        setStatus(err && err.message ? err.message : i18nT('rename_fail'), true);
         nameInput.value = oldName;
       }
     };
@@ -1069,9 +1076,9 @@ def catch_target():
             preview.reset();
           }
           compileCurrent(false);
-          setStatus(`Спрайт "${removed.name}" видалено.`);
+          setStatus(i18nT('delete_ok', { name: removed.name }));
         } catch (err) {
-          setStatus(err && err.message ? err.message : 'Не вдалося видалити спрайт.', true);
+          setStatus(err && err.message ? err.message : i18nT('delete_fail'), true);
         }
       };
     }
@@ -1098,9 +1105,9 @@ def catch_target():
         });
         if (propSize) propSize.value = updated.size;
         syncActorPropsInPreview(updated);
-        setStatus(`Оновлено параметри спрайта "${updated.name}".`);
+        setStatus(i18nT('props_ok', { name: updated.name }));
       } catch (err) {
-        setStatus(err && err.message ? err.message : 'Помилка оновлення параметрів.', true);
+        setStatus(err && err.message ? err.message : i18nT('props_fail'), true);
       }
     };
 
@@ -1176,6 +1183,17 @@ def catch_target():
           outFmt
         );
         savedBytes += Math.max(0, replaced.oldBytes - replaced.newBytes);
+        if (scale !== 1) {
+          // Keep rotation centers and apparent size consistent with the downscaled bitmap.
+          for (const tgt of state.projectJson.targets || []) {
+            for (const c of tgt.costumes || []) {
+              if (c.md5ext !== replaced.newMd5ext) continue;
+              c.rotationCenterX = (Number(c.rotationCenterX) || 0) * (w / img.width);
+              c.rotationCenterY = (Number(c.rotationCenterY) || 0) * (h / img.height);
+              c.bitmapResolution = Math.max(1, (Number(c.bitmapResolution) || 1) * scale);
+            }
+          }
+        }
         count += 1;
       } finally {
         URL.revokeObjectURL(url);
@@ -1304,9 +1322,9 @@ def catch_target():
       i18nT('docs_col_cmd')
     )}</th><th>${escapeHtml(i18nT('docs_col_block'))}</th></tr></thead><tbody>`;
     for (const [cat, cmd, desc] of API_DOCS) {
-      html += `<tr><td>${escapeHtml(cat)}</td><td><code data-doc-insert='${escapeHtml(cmd)}'>${escapeHtml(
+      html += `<tr><td>${escapeHtml(i18nT(cat))}</td><td><code data-doc-insert='${escapeHtml(cmd)}'>${escapeHtml(
         cmd
-      )}</code></td><td>${escapeHtml(desc)}</td></tr>`;
+      )}</code></td><td>${escapeHtml(i18nT(desc))}</td></tr>`;
     }
     html += `</tbody></table></div>`;
     viewDocs.innerHTML = html;
@@ -1340,7 +1358,7 @@ def catch_target():
 
     if (tops.length === 0) {
       viewBlocks.innerHTML =
-        '<p style="color: var(--wp-muted); font-size: 12px;">У цій вкладці ще немає блоків. Додайте @when_flag_clicked у редакторі.</p>';
+        `<p style="color: var(--wp-muted); font-size: 12px;">${escapeHtml(i18nT('blocks_empty'))}</p>`;
       return;
     }
 
@@ -1348,7 +1366,7 @@ def catch_target():
       const info = PyScratchDecompiler.formatBlockUk(id, blocks);
       const el = document.createElement('div');
       el.className = isHat ? 'scratch-hat' : `scratch-block ${info.category}`;
-      const lineBadge = info.line ? `ряд ${info.line} · ${info.opcode}` : info.opcode;
+      const lineBadge = info.line ? i18nT('line_badge', { line: info.line, opcode: info.opcode }) : info.opcode;
       el.innerHTML = `<span>${escapeHtml(info.label)}</span><span class="block-meta">${escapeHtml(lineBadge)}</span>`;
       if (info.line) {
         el.onclick = (e) => {
@@ -1376,7 +1394,7 @@ def catch_target():
         if (b.inputs && b.inputs.SUBSTACK2 && b.inputs.SUBSTACK2[1]) {
           const elseLbl = document.createElement('div');
           elseLbl.className = 'scratch-block control';
-          elseLbl.innerHTML = '<span>Інакше</span>';
+          elseLbl.innerHTML = `<span>${escapeHtml(i18nT('else_lbl'))}</span>`;
           container.appendChild(elseLbl);
 
           const nest2 = document.createElement('div');
@@ -1412,15 +1430,15 @@ def catch_target():
       if (showSuccess) {
         const count = Object.keys(res.blocks).length;
         setStatus(
-          `Скомпільовано (${target.name}): ${count} блоків${res.usesPen ? ' + розширення Pen' : ''}.`,
+          i18nT('compiled', { name: target.name, count, pen: res.usesPen ? i18nT('compiled_pen') : '' }),
           false
         );
       } else if (state.errorLine !== null) {
-        setStatus('Синтаксис коректний.', false);
+        setStatus(i18nT('syntax_ok'), false);
       }
       return res;
     } catch (err) {
-      setStatus(err.message || 'Помилка компіляції', true, err.line || null);
+      setStatus(err.message || i18nT('compile_err'), true, err.line || null);
       return null;
     }
   }
@@ -1503,9 +1521,12 @@ def catch_target():
     return '';
   }
 
+  // Max length of the base64url payload in ?code= (keeps share links within URL limits).
+  const MAX_SHARE_CODE_LEN = 6000;
+
   function decodeBase64Url(b64url) {
     if (typeof atob !== 'function') {
-      throw new Error('atob недоступний у цьому середовищі');
+      throw new Error(i18nT('atob_missing'));
     }
     let b64 = String(b64url).replace(/-/g, '+').replace(/_/g, '/');
     while (b64.length % 4) b64 += '=';
@@ -1568,10 +1589,11 @@ def catch_target():
     const codeParam = urlParams.get('code');
     if (codeParam !== null && codeParam !== '') {
       try {
+        if (codeParam.length > MAX_SHARE_CODE_LEN) throw new Error('code param too long');
         startupCode = decodeBase64Url(codeParam);
         loadedFromCodeParam = true;
       } catch (_) {
-        codeDecodeError = 'Не вдалося розшифрувати код із URL (?code=). Завантажено стандартний шаблон.';
+        codeDecodeError = i18nT('code_decode_fail');
       }
     }
   }
@@ -1587,12 +1609,13 @@ def catch_target():
   if (codeDecodeError) {
     setStatus(codeDecodeError, true);
   } else if (loadedFromCodeParam && state.errorLine === null) {
-    setStatus('Код завантажено за посиланням.');
+    setStatus(i18nT('code_loaded'));
   }
 
   // Editor events
   if (editor) {
     editor.addEventListener('input', () => {
+      projectDirty = true;
       state.highlightedLine = null;
       updateEditorDecorations();
       updateCursorTelemetry();
@@ -1662,28 +1685,21 @@ def catch_target():
     };
   });
 
-  // Right panel tabs
-  document.querySelectorAll('[data-view]').forEach((btn) => {
-    btn.onclick = () => {
-      document.querySelectorAll('[data-view]').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      const v = btn.getAttribute('data-view');
-      if (viewPreview) viewPreview.classList.toggle('hidden', v !== 'preview');
-      if (viewBlocks) viewBlocks.classList.toggle('hidden', v !== 'blocks');
-      if (viewAssets) viewAssets.classList.toggle('hidden', v !== 'assets');
-      if (viewInspector) {
-        viewInspector.classList.toggle('hidden', v !== 'inspector');
-        if (v === 'inspector') renderInspectorView();
-      }
-      if (viewDocs) viewDocs.classList.toggle('hidden', v !== 'docs');
-    };
+  // Editor tabs (Код / Образи / Звуки / Блоки / Інспектор / Довідник) are switched by js/layout.js;
+  // it announces the active tab so lazily rendered views can refresh.
+  document.addEventListener('pyscratch:tab', (e) => {
+    const tab = e && e.detail ? e.detail.tab : '';
+    if (tab === 'inspector') renderInspectorView();
   });
 
   // Language switcher (UA | EN | RU)
   document.querySelectorAll('.lang-btn[data-lang]').forEach((btn) => {
     btn.onclick = () => {
       if (typeof PyScratchI18n === 'undefined') return;
-      PyScratchI18n.setLang(btn.getAttribute('data-lang'));
+      const targetLang = btn.getAttribute('data-lang');
+      if (projectDirty && typeof confirm === 'function' && !confirm(i18nT('lang_switch_unsaved'))) return;
+      if (typeof PyScratchI18n.navigateToLang === 'function' && PyScratchI18n.navigateToLang(targetLang)) return;
+      PyScratchI18n.setLang(targetLang);
       renderDocsView();
       renderInspectorView();
       if (btnMute && preview) {
@@ -1723,7 +1739,7 @@ def catch_target():
       const astByTargetIdx = compileAllTargets();
       if (!astByTargetIdx) return;
       if (preview) preview.runProject(astByTargetIdx, state.projectJson, state.assetsMap);
-      setStatus('Симуляцію запущено на сцені Canvas 2D.');
+      setStatus(i18nT('sim_started'));
     };
   }
 
@@ -1731,7 +1747,7 @@ def catch_target():
   if (btnStop) {
     btnStop.onclick = () => {
       if (preview) preview.reset();
-      setStatus('Виконання зупинено.');
+      setStatus(i18nT('sim_stopped'));
     };
   }
 
@@ -1783,16 +1799,16 @@ def catch_target():
   async function openSb3File(file) {
     if (!file) return;
     if (!String(file.name || '').toLowerCase().endsWith('.sb3')) {
-      setStatus('Підтримуються лише файли Scratch 3.0 (.sb3).', true);
+      setStatus(i18nT('only_sb3'), true);
       return;
     }
     try {
       const buf = await file.arrayBuffer();
       const { projectJson, assetsMap } = await Sb3Bridge.loadSb3(buf);
       loadProject(projectJson, assetsMap);
-      setStatus(`Завантажено "${file.name}" (${projectJson.targets.length} об'єктів).`);
+      setStatus(i18nT('loaded_file', { name: file.name, count: projectJson.targets.length }));
     } catch (err) {
-      setStatus('Помилка відкриття .sb3: ' + (err && err.message ? err.message : String(err)), true);
+      setStatus(i18nT('err_open', { msg: err && err.message ? err.message : String(err) }), true);
     }
   }
 
@@ -1858,7 +1874,7 @@ def catch_target():
     btnTemplate.onclick = () => {
       const d = Sb3Bridge.createDefaultProject();
       loadProject(d.projectJson, d.assetsMap, SNIPPETS.hexagon);
-      setStatus('Створено чистий шаблон проєкту.');
+      setStatus(i18nT('template_reset'));
     };
   }
 
@@ -1875,9 +1891,9 @@ def catch_target():
         a.download = 'pyscratch_project.sb3';
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setStatus('Файл pyscratch_project.sb3 збережено (усі спрайти та асети упаковано).');
+        setStatus(i18nT('saved_sb3'));
       } catch (err) {
-        setStatus('Помилка збереження .sb3: ' + (err && err.message ? err.message : String(err)), true);
+        setStatus(i18nT('err_save', { msg: err && err.message ? err.message : String(err) }), true);
       }
     };
   }
@@ -1888,6 +1904,10 @@ def catch_target():
       try {
         const code = editor ? editor.value : '';
         const encoded = encodeBase64Url(code);
+        if (encoded.length > MAX_SHARE_CODE_LEN) {
+          setStatus(i18nT('share_too_long', { max: MAX_SHARE_CODE_LEN }), true);
+          return;
+        }
         let shareUrl;
         try {
           const u = new URL(window.location.href);
@@ -1907,12 +1927,12 @@ def catch_target():
 
         const copied = await copyTextToClipboard(shareUrl);
         if (copied) {
-          setStatus('Посилання на код скопійовано! Можете надіслати його учню або другу.');
+          setStatus(i18nT('share_copied'));
         } else {
-          setStatus('Посилання оновлено в адресному рядку (доступ до буфера обмежено).');
+          setStatus(i18nT('share_updated'));
         }
       } catch (err) {
-        setStatus('Помилка створення посилання: ' + (err && err.message ? err.message : String(err)), true);
+        setStatus(i18nT('err_share', { msg: err && err.message ? err.message : String(err) }), true);
       }
     };
   }

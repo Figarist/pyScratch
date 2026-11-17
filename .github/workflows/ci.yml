@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,6 +17,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate JS syntax, sitemap.xml and JSON files
+        run: |
+          for f in js/*.js; do node --check "$f"; done
+          node -e "const x=require('fs').readFileSync('sitemap.xml','utf8');const o=(x.match(/<url>/g)||[]).length,c=(x.match(/<\/url>/g)||[]).length;if(!o||o!==c)throw new Error('sitemap.xml: unbalanced <url> entries');console.log('sitemap.xml: '+o+' URLs')"
+          for f in package.json site.webmanifest; do node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$f"; done
       - name: Run Round-Trip & Runtime Test Suite
         run: node test/test_roundtrip.js
 
@@ -26,4 +34,6 @@ jobs:
       title: "pyScratch CI failed on ${{ github.ref_name }}"
       status: "error"
       details: "Commit ${{ github.sha }}"
-    secrets: inherit
+    secrets:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

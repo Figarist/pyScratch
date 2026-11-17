@@ -83,7 +83,7 @@ node test/test_roundtrip.js
 | [`js/inspector.js`](js/inspector.js) | `.sb3` project analyzer and optimizer (5 MB `project.json` / 10 MB asset limits, unused asset cleanup, and raster optimization). |
 | [`js/i18n.js`](js/i18n.js) | Multi-language UI localization (`uk`, `en`, `ru`) with `?lang=` query parameter and `localStorage` persistence. |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip v3.10.1 library enabling offline ZIP compression/decompression in both browser and Node.js tests. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | 12-part Node.js verification suite covering MD5, assets, compilation, idempotent round-trips, `formatBlockUk`, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, Scratch 3.0 parity, and reliability regressions. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Node.js verification suite with 13 test sections covering MD5, assets, compilation, idempotent round-trips, `formatBlockUk`, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, Scratch 3.0 parity, and reliability regressions. |
 
 ## Documentation & Versioning
 

@@ -477,6 +477,23 @@
     return projectJson.targets[targetIdx];
   }
 
+  const SPRITE_MENU_OPCODES = new Set([
+    'sensing_touchingobjectmenu', 'motion_goto_menu', 'motion_glideto_menu',
+    'motion_pointtowards_menu', 'sensing_distancetomenu', 'sensing_of_object_menu',
+    'control_create_clone_of_menu'
+  ]);
+
+  function forEachSpriteMenuField(projectJson, fn) {
+    for (const t of projectJson.targets || []) {
+      for (const b of Object.values(t.blocks || {})) {
+        if (!b || Array.isArray(b) || !SPRITE_MENU_OPCODES.has(b.opcode) || !b.fields) continue;
+        for (const field of Object.values(b.fields)) {
+          if (Array.isArray(field)) fn(field);
+        }
+      }
+    }
+  }
+
   function renameSprite(projectJson, targetIdx, newName) {
     const target = validateTargetIndex(projectJson, targetIdx);
     if (target.isStage) {
@@ -495,6 +512,9 @@
     }
     const oldName = target.name;
     target.name = trimmed;
+    forEachSpriteMenuField(projectJson, (field) => {
+      if (field[0] === oldName) field[0] = trimmed;
+    });
     if (Array.isArray(projectJson.monitors)) {
       for (const m of projectJson.monitors) {
         if (m && m.spriteName === oldName) {
@@ -515,6 +535,11 @@
       throw new Error('Неможливо видалити останній спрайт у проєкті.');
     }
     const [removed] = projectJson.targets.splice(targetIdx, 1);
+    if (removed && removed.name) {
+      forEachSpriteMenuField(projectJson, (field) => {
+        if (field[0] === removed.name) field[0] = '_mouse_';
+      });
+    }
     if (Array.isArray(projectJson.monitors) && removed && removed.name) {
       projectJson.monitors = projectJson.monitors.filter((m) => !m || m.spriteName !== removed.name);
     }
@@ -572,11 +597,13 @@
     let storedContent;
     let dims = null;
     if (fmt === 'svg') {
-      storedContent = typeof content === 'string' ? content : utf8BytesToString(toUint8Array(content));
-      if (!storedContent.trim()) {
+      const svgText = typeof content === 'string' ? content : utf8BytesToString(toUint8Array(content));
+      if (!svgText.trim()) {
         throw new Error('SVG-файл порожній.');
       }
-      dims = parseSvgDimensions(storedContent);
+      dims = parseSvgDimensions(svgText);
+      // Keep raw bytes so the md5 always matches the stored file.
+      storedContent = typeof content === 'string' ? stringToUtf8Bytes(content) : toUint8Array(content);
     } else {
       storedContent = toUint8Array(content);
       if (storedContent.length === 0) {
@@ -611,6 +638,25 @@
 
     target.costumes.push(costumeObj);
     return costumeObj;
+  }
+
+  async function decodeAudioMetadata(bytes) {
+    const fallback = { rate: 44100, sampleCount: 0 };
+    try {
+      const Ctx = typeof AudioContext !== 'undefined' ? AudioContext
+        : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+      if (!Ctx) return fallback;
+      const ctx = new Ctx();
+      try {
+        const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        const buf = await ctx.decodeAudioData(copy);
+        return { rate: Math.round(buf.sampleRate) || 44100, sampleCount: buf.length || 0 };
+      } finally {
+        if (ctx.close) ctx.close().catch(() => {});
+      }
+    } catch (_) {
+      return fallback;
+    }
   }
 
   function addSoundAsset(projectJson, assetsMap, targetIdx, name, dataFormat, uint8Bytes) {
@@ -649,6 +695,16 @@
     };
 
     target.sounds.push(soundObj);
+    if (fmt === 'mp3') {
+      // Real rate/sampleCount are filled in asynchronously (the object is mutated in place).
+      soundObj.metadataReady = decodeAudioMetadata(bytes).then((m) => {
+        if (m.sampleCount > 0) {
+          soundObj.rate = m.rate;
+          soundObj.sampleCount = m.sampleCount;
+        }
+      });
+      Object.defineProperty(soundObj, 'metadataReady', { enumerable: false });
+    }
     return soundObj;
   }
 
@@ -671,13 +727,8 @@
     const entries = Object.keys(zip.files);
     for (const filename of entries) {
       if (filename === 'project.json' || zip.files[filename].dir) continue;
-      if (filename.toLowerCase().endsWith('.svg')) {
-        const svgText = await zip.files[filename].async('string');
-        assetsMap.set(filename, svgText);
-      } else {
-        const data = await zip.files[filename].async('uint8array');
-        assetsMap.set(filename, data);
-      }
+      const data = await zip.files[filename].async('uint8array');
+      assetsMap.set(filename, data);
     }
 
     return { projectJson, assetsMap };
@@ -700,6 +751,15 @@
     return await zip.generateAsync({ type: outputType, compression: 'DEFLATE' });
   }
 
+  function svgPreviewText(assetsMap, md5ext) {
+    const v = assetsMap ? assetsMap.get(md5ext) : null;
+    if (typeof v === 'string') return v;
+    if (v && typeof v.byteLength === 'number' && String(md5ext).toLowerCase().endsWith('.svg')) {
+      return utf8BytesToString(toUint8Array(v));
+    }
+    return null;
+  }
+
   function getTargetAssets(projectJson, assetsMap) {
     const stageIdx = projectJson.targets.findIndex((t) => t.isStage);
     const stage = stageIdx >= 0 ? projectJson.targets[stageIdx] : null;
@@ -712,7 +772,7 @@
             name: c.name,
             md5ext: c.md5ext,
             dataFormat: c.dataFormat,
-            svg: assetsMap && typeof assetsMap.get(c.md5ext) === 'string' ? assetsMap.get(c.md5ext) : null
+            svg: svgPreviewText(assetsMap, c.md5ext)
           }))
         : [],
       stageSounds: stage ? (stage.sounds || []).map((snd) => snd.name) : [],
@@ -730,7 +790,7 @@
           name: c.name,
           md5ext: c.md5ext,
           dataFormat: c.dataFormat,
-          svg: assetsMap && typeof assetsMap.get(c.md5ext) === 'string' ? assetsMap.get(c.md5ext) : null
+          svg: svgPreviewText(assetsMap, c.md5ext)
         })),
         sounds: (s.sounds || []).map((snd) => snd.name)
       }))

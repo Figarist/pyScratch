@@ -12,11 +12,11 @@ Every update to the repository must bump the version in `package.json` and `js/s
 - **Decompiler (`js/decompiler.js`, `js/app.js`)**: Sanitized custom procedure argument reporters to match `def` parameters (`step size` -> `step_size`); added cycle protection in `decompileChain`, `decompileReporter`, and `renderBlocksTree`; quoted non-numeric values in type `4..8` shadows.
 - **StagePreview Runtime (`js/preview.js`)**: Fixed `show_variable(self.var)` / `hide_variable(self.var)` monitor name resolution; added `NaN`/non-numeric guards in `moveActorTo`, `_glideToCoords`, turns, and direction updates; closed active `ask()` prompts when `stop("other scripts in sprite")` cancels the asking script.
 - **Bridge & i18n (`js/sb3Bridge.js`, `js/i18n.js`)**: Validated non-empty `targets` in `loadSb3`, prevented `assetsMap` from overwriting `project.json` in `saveSb3`, and avoided `$` replacement-pattern corruption in `i18n.t()`.
-- **Previous Audit Batch (`d8c4444`)**: Compiler orphan cleanup (`_pyCompiledOwned`), `while !=` simplification, `when_key_pressed` repeat guard, `stop("all")` `ask()` cleanup, `clearRect`, Scratch-compatible comparisons, WAV chunk `0` handling, and CI Node 22 alignment.
+- **Previous Audit Batch (`d8c4f44`)**: Compiler orphan cleanup (`_pyCompiledOwned`), `while !=` simplification, `when_key_pressed` repeat guard, `stop("all")` `ask()` cleanup, `clearRect`, Scratch-compatible comparisons, WAV chunk `0` handling, and CI Node 22 alignment.
 
 ### Added
 - **Versioning Policy**: Added mandatory SemVer versioning workflow (`package.json`, `js/sb3Bridge.js`, `CHANGELOG.md`, `CONTRIBUTING.md`, `README.md`).
-- **Regression Tests (`test/test_roundtrip.js`)**: Added Suite 11 and Suite 12 covering all reliability audit fixes.
+- **Regression Tests (`test/test_roundtrip.js`)**: Added Suite 11 and Suite 12 covering all reliability audit fixes. The file now has 13 test sections in total.
 
 ## [1.0.0] - 2026-11-16
 

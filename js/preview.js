@@ -387,10 +387,15 @@
         for (const [md5ext, content] of assetsMap.entries()) {
           if (this.imageCache.has(md5ext)) continue;
           const lowerName = String(md5ext).toLowerCase();
-          if (lowerName.endsWith('.svg') && typeof content === 'string') {
+          if (lowerName.endsWith('.svg') && (typeof content === 'string' || content instanceof Uint8Array)) {
+            const svgText = typeof content === 'string'
+              ? content
+              : (typeof Sb3Bridge !== 'undefined' && Sb3Bridge.utf8BytesToString
+                ? Sb3Bridge.utf8BytesToString(content)
+                : new TextDecoder('utf-8').decode(content));
             const img = new Image();
             img.onload = () => this.render();
-            img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(content);
+            img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgText);
             this.imageCache.set(md5ext, img);
           } else if (
             (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) &&

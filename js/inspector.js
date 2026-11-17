@@ -13,9 +13,17 @@
     'event_whenbackdropswitchesto',
     'event_whengreaterthan',
     'event_whenbroadcastreceived',
+    'event_whentouchingobject',
+    'event_whenstageclicked',
     'control_start_as_clone',
     'procedures_definition'
   ]);
+
+  const TOTAL_SB3_WARN_BYTES = 50 * 1024 * 1024;
+
+  function isHatOpcode(op) {
+    return typeof op === 'string' && (HAT_OPCODES.has(op) || op.includes('_when'));
+  }
 
   function getByteLength(data) {
     if (data == null) return 0;
@@ -100,7 +108,11 @@
         if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
         if (!block.shadow) {
           totalBlocks += 1;
-          if (block.topLevel && !HAT_OPCODES.has(block.opcode)) {
+          // Lone top-level reporters (value blocks) are harmless; only stack blocks count.
+          const isReporter = block.next == null && !block.parent &&
+            /^(operator_|data_(itemoflist|lengthoflist|listcontents|itemnumoflist|listcontainsitem)|sensing_|motion_(xposition|yposition|direction)|looks_(size|costumenumbername|backdropnumbername)|argument_reporter)/.test(block.opcode || '') &&
+            !/^(sensing_(resettimer|askandwait|setdragmode|setdragmode))$/.test(block.opcode || '');
+          if (block.topLevel && !isHatOpcode(block.opcode) && !isReporter) {
             orphanScripts += 1;
           }
         }
@@ -146,11 +158,18 @@
       }
     }
 
+    const referencedKeys = collectReferencedAssets(projectJson);
+    const missingAssets = Array.from(referencedKeys).filter((k) => !map.has(k));
     const projectJsonBytes = getByteLength(JSON.stringify(projectJson || {}));
     const totalAssetsBytes = assets.reduce((acc, a) => acc + a.bytes, 0) +
       unusedAssets.reduce((acc, u) => acc + u.bytes, 0);
 
+    const totalSb3Bytes = projectJsonBytes + totalAssetsBytes;
     return {
+      missingAssets,
+      totalSb3Bytes,
+      totalSb3WarnBytes: TOTAL_SB3_WARN_BYTES,
+      isTotalSizeLarge: totalSb3Bytes > TOTAL_SB3_WARN_BYTES,
       spritesCount,
       backdropsCount,
       costumesCount,

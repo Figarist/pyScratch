@@ -20,7 +20,7 @@ We welcome pull requests of all sizes—from implementing missing Scratch 3.0 bl
 | [`js/i18n.js`](js/i18n.js) | Handles UK/EN/RU UI localization with `?lang=` and `localStorage` persistence. |
 | [`js/app.js`](js/app.js) | Browser IDE controller wiring target tabs, syntax highlighting, error/cursor telemetry, templates (`SNIPPETS`), API reference (`API_DOCS`), block tree navigation, and `.sb3` file I/O (with [`index.html`](index.html) and [`style.css`](style.css)). |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip (`v3.10.1`) providing offline `.sb3` compression/decompression in both the browser and Node.js. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 12-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, `formatBlockUk`, `.sb3` ZIP I/O, headless `StagePreview` execution, error diagnostics, and reliability regressions. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 13-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, `formatBlockUk`, `.sb3` ZIP I/O, headless `StagePreview` execution, error diagnostics, and reliability regressions. |
 
 ---
 

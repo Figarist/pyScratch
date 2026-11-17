@@ -14,14 +14,17 @@ Every top-level construct in a target script (Stage or Sprite) **must** be one o
 Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 0` outside a `def`) are rejected with a `CompileError`.
 
 ### Indentation, Comments, & Identifiers
-- **4-space indentation**: Blocks require consistent 4-space indentation. Tab characters (`\t`) are normalized to 4 spaces during tokenization (`tokenize`). Misaligned dedents throw a `CompileError` pointing to the offending line.
-- **Comments**: `#` begins a single-line comment. Empty lines and comments are ignored by the tokenizer.
-- **Identifiers**: Supports ASCII `[a-zA-Z0-9_]` and Cyrillic Unicode `[\u0400-\u04FF]` characters (identifiers cannot start with a digit).
+- **Indentation**: 4 spaces per level is recommended. Tab characters (`\t`) count as 4 spaces. The tokenizer only checks consistency: a dedent must return to a previously used indentation level, otherwise a `CompileError` ("не збігається з жодним попереднім рівнем відступу") points to the offending line. It does not require multiples of 4.
+- **Line continuation**: inside `()` and `[]` a statement may span several lines (blank lines and `#` comments are allowed in between), and a trailing backslash `\` continues the line explicitly. An unclosed bracket is reported at the line where it was opened; a stray or mismatched closing bracket is reported at its own position.
+- **Comments**: `#` begins a single-line comment. Empty lines and comments are ignored by the tokenizer and are **not** stored in `target.comments` (comment round-tripping is not implemented).
+- **Identifiers**: any Unicode letter (`\p{L}`) or `_` to start, then letters, digits and combining marks (identifiers cannot start with a digit).
+- **Error positions**: tokens and `CompileError` carry a 1-based `line` and `col` (`col` may be `null` for errors that are only known per line).
+- **Unsupported Python constructs** produce a dedicated Ukrainian hint instead of a generic syntax error: `return`, `break`, `continue`, `class`, `import` / `from`, `lambda`, `try`/`except`, `with`, `global`, f-strings (and `r`/`b`/`u` string prefixes), `**` and the ternary `a if cond else b`.
 - **Reserved keywords**: `def`, `for`, `in`, `while`, `if`, `elif`, `else`, `pass`, `and`, `or`, `not`, `True`, `False`.
 
 ### Literals & Negative Literal Folding
 - **Numbers**: Integer and floating-point literals (e.g., `10`, `0.25`). Unary `-` applied to a numeric literal (e.g., `-150`) is **constant-folded** at parse time into a negative number AST node (`[1, [4, "-150"]]`) rather than emitting `operator_subtract(0, 150)`. Unary `+` is ignored.
-- **Strings**: Single-quoted (`'...'`) or double-quoted (`"..."`), supporting `\n`, `\t`, and escaped quotes/backslashes. Strings matching `/^#[0-9a-fA-F]{6}$/` compile as Scratch color picker inputs (shadow type `9`); all other strings compile as text inputs (shadow type `10`).
+- **Strings**: Single-quoted (`'...'`) or double-quoted (`"..."`), supporting the escapes `\n \t \r \b \f \v \0 \\ \' \" \xNN \uNNNN`. Any other backslash sequence (e.g. `"\d"`) is a `CompileError`; write `\\` for a literal backslash. Strings are single-line. A string matching `/^#[0-9a-fA-F]{6}$/` compiles as a Scratch color picker input (shadow type `9`) **only in colour slots** (`set_pen_color`, `touching_color`, `color_is_touching_color`); everywhere else (e.g. `say("#ff0000")`) it is ordinary text (type `10`).
 - **Booleans**: `True` and `False`. In value slots they serialize as `"true"` / `"false"` (type `10`); in boolean condition slots they compile to `operator_equals("1", "1")` and `operator_equals("1", "0")`.
 
 ### Variable, List & Parameter Scoping
@@ -30,7 +33,26 @@ Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 
 - **Sprite-Local Lists (`local_list` & `local_list_*`)**: Calling `local_list("inv")` or any `local_list_*` helper (`local_list_add`, `local_list_item`, `local_list_length`, `local_list_contains`, `local_list_index_of`, `local_list_insert`, `local_list_replace`, `local_list_delete`, `local_list_clear`) registers the list on `target.lists` ("For this sprite only"). Once `local_list("inv")` is declared in a sprite script, subsequent `list_*("inv", ...)` calls in that sprite also bind to the local list. `StagePreview` deep-copies `actor.localLists` onto each clone.
 - **Procedure Parameters**: Inside a `def proc(a, b):` body, reading `a` or `b` compiles to `argument_reporter_string_number` instead of a global variable. In `StagePreview`, procedure arguments live in a per-call `localScope` dictionary, while assignments (`x = ...`, `x += ...`) mutate `this.vars` (or `actor.localVars` when using `self.x`).
 - **Dynamic Reporter Inputs in Menu Slots**: Single-argument menu blocks (`goto`, `glide_to`, `point_towards`, `switch_costume`, `switch_backdrop`, `switch_backdrop_and_wait`, `play_sound`, `play_sound_until_done`, `touching`, `distance_to`, `key_pressed`, `attribute_of`, `create_clone`, `broadcast`, `broadcast_and_wait`, `set_pen_param`, `change_pen_param`) accept either string literals or dynamic variable/reporter expressions (`compileMenuOrExpr` / `compileBroadcastInput`).
+- **Name conflicts**: a sprite-local variable (`self.x`) may not share a name with a global (Stage) variable `x`; the compiler raises a `CompileError` ("конфліктує з глобальною змінною") instead of silently shadowing.
+- **`for` loop variable**: `for i in range(n)` is a normal Scratch variable named `i` in the generated project. When the body reads `i`, the compiler emits `set i to 0` before the `repeat` and `change i by 1` as the last body block, so the `.sb3` behaves like the preview (`i = 0 … n-1`; after the loop `i == n`). The decompiler folds that pattern back into `for i in range(n)`; a body that already ends with `i += 1` is left as is. If the body never reads `i`, no counter blocks are emitted. Loop-variable names that are parameters of the enclosing `def` are not touched.
+- **Differences from Python**: `//` is `floor(a / b)` (so `-7 // 2 == -4`, as in Python) but the division is Scratch's: dividing by zero never raises, `x / 0` is `Infinity`/`-Infinity` and `0 / 0` is `NaN` (same for `//`), `%` takes the sign of the divisor like Python and `x % 0` is `NaN`. All numbers are IEEE-754 doubles, so integers are exact only up to 2^53 (no arbitrary-precision `int`). `and`/`or` always evaluate both sides and return booleans, not operands. Strings and numbers are compared Scratch-style (case-insensitive, numeric when both look numeric). Variables are not block-scoped: a bare name is always a global variable (never local to `def` or `if`), only `self.name`, `local_list(...)` and procedure parameters are local. There is no `None`, tuple, dict, slicing or `in` operator for values (use `contains()` / `list_contains()`).
 - **1-Based Indexing**: `list_item`, `list_index_of`, `list_delete`, `list_insert`, `list_replace`, their `local_list_*` counterparts, and `letter_of` use **1-based indexing**, matching Scratch 3.0.
+
+---
+
+### Validation of Field Values & Blocks per Target
+The compiler rejects values Scratch would silently ignore, with a Ukrainian `CompileError` listing the allowed values:
+- `set_effect` / `change_effect`: `COLOR FISHEYE WHIRL PIXELATE MOSAIC BRIGHTNESS GHOST` (case-insensitive); `set_sound_effect` / `change_sound_effect`: `PITCH PAN`.
+- `set_rotation_style`: `"left-right"`, `"don't rotate"`, `"all around"`; `set_drag_mode`: `"draggable"`, `"not draggable"`; `stop`: `"all"`, `"this script"`, `"other scripts in sprite"`.
+- Keys of `@when_key_pressed` / `key_pressed`: `space`, the four `… arrow`, `enter`, `any`, `a`–`z`, `0`–`9` (checked only for string literals).
+- `math_op` operator (`abs floor ceiling sqrt sin cos tan asin acos atan ln log "e ^" "10 ^"`), `current_time` unit (`YEAR MONTH DATE DAYOFWEEK HOUR MINUTE SECOND`), `@when_greater_than` sensor (`LOUDNESS`, `TIMER`).
+- `attribute_of` property: the known names (`"x position"`, `"costume #"`, …) must be spelled exactly (a wrong-case spelling is an error); any other string is treated as the name of a variable of the other object and is not validated.
+- Field arguments must be string literals, not expressions.
+- **Stage vs. sprite**: motion blocks, `say`/`think`, `show`/`hide`, size and costume blocks, `touching*`, `distance_to`, `set_drag_mode`, `delete_this_clone` and the position/direction/size/costume reporters are sprite-only and raise a `CompileError` in a Stage script; `@when_cloned` is also sprite-only. There are currently no DSL blocks that are Stage-only (`switch_backdrop_and_wait` is hidden from the sprite palette in Scratch but runs fine on sprites, so it stays allowed).
+- Calling a custom block with the wrong number of arguments is a `CompileError`.
+
+### Imported Projects: Scripts the DSL Cannot Express
+When an imported `.sb3` contains top-level scripts with opcodes the decompiler does not know (unknown hats, extension blocks such as `music_*`, loose block stacks, …), `decompileTarget` does not render them; it prints a `# [збережено без змін] …` comment instead. On every recompile `compileToScratch` keeps those scripts verbatim: their blocks are merged back into `target.blocks` (ids that collide with generated ids are renamed to `raw_<id>`, with `parent`/`next`/inputs/comment links rewritten), their variables/lists/broadcasts are protected from orphan cleanup, and custom blocks defined inside such scripts remain callable from DSL code. They cannot be edited or deleted from the code editor. Comments attached to regenerated blocks are dropped (workspace comments and comments on preserved scripts are kept), and monitors of variables/lists removed by the cleanup are removed from `project.monitors`.
 
 ---
 
@@ -102,7 +124,7 @@ def main():
 
 | Python DSL | Scratch 3.0 Opcode | Inputs / Fields / Mutations | Notes |
 | --- | --- | --- | --- |
-| `for i in range(n):` | `control_repeat` | `TIMES` (`n`), `SUBSTACK` | Accepts a single count expression `n`. In `StagePreview`, `i` is bound in `localScope` (`0..n-1`); in `.sb3` compilation, `ensureVar` registers `i` if referenced, and decompiles as `for i in range(...):`. |
+| `for i in range(n):` | `control_repeat` | `TIMES` (`n`), `SUBSTACK` | Accepts a single count expression `n`. In `StagePreview`, `i` is bound in `localScope` (`0..n-1`); in `.sb3` compilation, if the body reads `i` the compiler registers a variable `i` and emits `set i to 0` before the loop plus `change i by 1` at the end of the body (see §1 *`for` loop variable*); it decompiles back to `for i in range(...):`. |
 | `while True:` | `control_forever` | `SUBSTACK` | Infinite loop until stopped or clone deleted. |
 | `while not cond:` | `control_repeat_until` | `CONDITION` (`cond`), `SUBSTACK` | Maps directly to Scratch's `repeat until`. |
 | `while cond:` | `control_repeat_until` | `CONDITION` (`operator_not(cond)`), `SUBSTACK` | Compiles by wrapping `cond` in `operator_not`. |
@@ -393,8 +415,8 @@ def inventory_demo():
 | `a - b` | `operator_subtract` | Subtraction (`NUM1`, `NUM2`). |
 | `-expr` | Negative literal or `operator_subtract(0, expr)` | Numeric literals fold directly (e.g., `-5`); non-literal expressions compile to `0 - expr` and decompile back to `-expr`. |
 | `a * b` | `operator_multiply` | Multiplication (`NUM1`, `NUM2`). |
-| `a / b` | `operator_divide` | Division (`NUM1`, `NUM2`). |
-| `a // b` | `operator_mathop` (`floor`) + `operator_divide` | Desugared at parse time to `floor(a / b)`. |
+| `a / b` | `operator_divide` | Division (`NUM1`, `NUM2`). Always true division; division by zero yields `Infinity`/`NaN` and never an error. |
+| `a // b` | `operator_mathop` (`floor`) + `operator_divide` | Desugared at parse time to `floor(a / b)`; division by zero gives `Infinity`/`NaN` (Python would raise). |
 | `a % b` | `operator_mod` | Modulo (`NUM1`, `NUM2`). |
 | `a == b` | `operator_equals` | Equality (`OPERAND1`, `OPERAND2`). |
 | `a < b` | `operator_lt` | Less than (`OPERAND1`, `OPERAND2`). |

@@ -8,10 +8,11 @@
   'use strict';
 
   class CompileError extends Error {
-    constructor(message, line) {
+    constructor(message, line, col) {
       super(message);
       this.name = 'CompileError';
       this.line = line;
+      this.col = col === undefined ? null : col;
     }
   }
 
@@ -38,18 +39,63 @@
     pow10: '10 ^'
   };
 
+  // --- Whitelists of Scratch field values (checked at compile time) ---
+  const KEY_OPTIONS = new Set([
+    'space', 'up arrow', 'down arrow', 'left arrow', 'right arrow', 'enter', 'any',
+    ...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')
+  ]);
+  const FIELD_WHITELISTS = {
+    looksEffect: { label: 'графічного ефекту', values: ['COLOR', 'FISHEYE', 'WHIRL', 'PIXELATE', 'MOSAIC', 'BRIGHTNESS', 'GHOST'] },
+    soundEffect: { label: 'ефекту звуку', values: ['PITCH', 'PAN'] },
+    rotationStyle: { label: 'стилю обертання', values: ['left-right', "don't rotate", 'all around'] },
+    dragMode: { label: 'режиму перетягування', values: ['draggable', 'not draggable'] },
+    stopOption: { label: 'параметра stop()', values: ['all', 'this script', 'other scripts in sprite'] },
+    mathOp: {
+      label: 'математичної операції',
+      values: ['abs', 'floor', 'ceiling', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log', 'e ^', '10 ^']
+    },
+    currentMenu: { label: 'одиниці часу', values: ['YEAR', 'MONTH', 'DATE', 'DAYOFWEEK', 'HOUR', 'MINUTE', 'SECOND'] },
+    greaterThan: { label: 'датчика', values: ['LOUDNESS', 'TIMER'] }
+  };
+  const SENSING_OF_PROPERTIES = [
+    'x position', 'y position', 'direction', 'costume #', 'costume name', 'size', 'volume',
+    'backdrop #', 'backdrop name'
+  ];
+
+  // Blocks that exist only for sprites / only for the Stage
+  const SPRITE_ONLY_CALLS = new Set([
+    'move', 'turn_right', 'turn_left', 'set_x', 'set_y', 'change_x', 'change_y', 'point_in_direction',
+    'goto', 'goto_random', 'goto_mouse', 'glide', 'glide_to', 'point_towards', 'if_on_edge_bounce',
+    'set_rotation_style', 'say', 'think', 'show', 'hide', 'set_size', 'change_size', 'switch_costume',
+    'next_costume', 'go_to_layer', 'change_layer', 'delete_this_clone', 'set_drag_mode',
+    'x_position', 'y_position', 'direction', 'size', 'costume_number', 'costume_name',
+    'touching', 'touching_color', 'color_is_touching_color', 'distance_to'
+  ]);
+  // Note: switch_backdrop_and_wait is hidden from the sprite palette in Scratch but the VM runs it on sprites,
+  // and the editor snippets use it, so it is intentionally not listed here.
+  const STAGE_ONLY_CALLS = new Set([]);
+
   // --- 1. TOKENIZER ---
+  const IDENT_START_RE = /[\p{L}_]/u;
+  const IDENT_RE = /[\p{L}_][\p{L}\p{N}\p{M}_]*/uy;
+  const OPEN_BRACKETS = { '(': ')', '[': ']' };
+  const CLOSE_BRACKETS = { ')': '(', ']': '[' };
+
   function tokenize(source) {
-    const lines = String(source || '').replace(/\r\n/g, '\n').split('\n');
+    const lines = String(source || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
     const tokens = [];
     const indentStack = [0];
+    const bracketStack = []; // open brackets: { ch, line, col }
+    let backslashContinued = false;
 
     for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
       const rawLine = lines[lineIdx];
       const lineNum = lineIdx + 1;
+      const continuing = bracketStack.length > 0 || backslashContinued;
+      backslashContinued = false;
 
       const trimmed = rawLine.trim();
-      if (trimmed === '' || trimmed.startsWith('#')) {
+      if (!continuing && (trimmed === '' || trimmed.startsWith('#'))) {
         continue;
       }
 
@@ -67,31 +113,50 @@
         }
       }
 
-      const currentIndent = indentStack[indentStack.length - 1];
-      if (indent > currentIndent) {
-        indentStack.push(indent);
-        tokens.push({ type: 'INDENT', value: indent, line: lineNum });
-      } else if (indent < currentIndent) {
-        while (indentStack.length > 1 && indentStack[indentStack.length - 1] > indent) {
-          indentStack.pop();
-          tokens.push({ type: 'DEDENT', value: indent, line: lineNum });
-        }
-        if (indentStack[indentStack.length - 1] !== indent) {
-          throw new CompileError(
-            `Неправильний відступ у рядку ${lineNum}. Використовуйте кратні 4 пробіли.`,
-            lineNum
-          );
+      // Indentation is only meaningful at the start of a logical line (not inside () / [] or after a trailing "\").
+      if (!continuing) {
+        const currentIndent = indentStack[indentStack.length - 1];
+        if (indent > currentIndent) {
+          indentStack.push(indent);
+          tokens.push({ type: 'INDENT', value: indent, line: lineNum, col: 1 });
+        } else if (indent < currentIndent) {
+          while (indentStack.length > 1 && indentStack[indentStack.length - 1] > indent) {
+            indentStack.pop();
+            tokens.push({ type: 'DEDENT', value: indent, line: lineNum, col: 1 });
+          }
+          if (indentStack[indentStack.length - 1] !== indent) {
+            throw new CompileError(
+              `Неправильний відступ у рядку ${lineNum}: він не збігається з жодним попереднім рівнем відступу. Використовуйте однакову кількість пробілів (рекомендовано 4) для рядків одного блоку.`,
+              lineNum,
+              1
+            );
+          }
         }
       }
 
       while (pos < rawLine.length) {
         const ch = rawLine[pos];
+        const col = pos + 1;
         if (ch === ' ' || ch === '\t') {
           pos++;
           continue;
         }
         if (ch === '#') {
           break;
+        }
+
+        // Explicit line continuation: a backslash as the last character of the line
+        if (ch === '\\') {
+          if (rawLine.slice(pos + 1).trim() === '') {
+            backslashContinued = true;
+            pos = rawLine.length;
+            break;
+          }
+          throw new CompileError(
+            `Символ "\\" у рядку ${lineNum} дозволений лише в кінці рядка (для продовження коду на наступному рядку).`,
+            lineNum,
+            col
+          );
         }
 
         // Strings
@@ -101,12 +166,34 @@
           let str = '';
           let closed = false;
           while (pos < rawLine.length) {
-            if (rawLine[pos] === '\\' && pos + 1 < rawLine.length) {
+            if (rawLine[pos] === '\\') {
+              if (pos + 1 >= rawLine.length) {
+                throw new CompileError(`Незакритий лапками рядок (${quote}) у рядку ${lineNum}.`, lineNum, col);
+              }
               const esc = rawLine[pos + 1];
-              if (esc === 'n') str += '\n';
-              else if (esc === 't') str += '\t';
-              else str += esc;
-              pos += 2;
+              const simple = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', '0': '\0', '\\': '\\', "'": "'", '"': '"' };
+              if (Object.prototype.hasOwnProperty.call(simple, esc)) {
+                str += simple[esc];
+                pos += 2;
+              } else if (esc === 'x' || esc === 'u') {
+                const len = esc === 'x' ? 2 : 4;
+                const hex = rawLine.slice(pos + 2, pos + 2 + len);
+                if (hex.length !== len || !/^[0-9a-fA-F]+$/.test(hex)) {
+                  throw new CompileError(
+                    `Некоректна escape-послідовність "\\${esc}" у рядку ${lineNum}: після неї потрібно рівно ${len} шістнадцяткових цифр.`,
+                    lineNum,
+                    pos + 1
+                  );
+                }
+                str += String.fromCharCode(parseInt(hex, 16));
+                pos += 2 + len;
+              } else {
+                throw new CompileError(
+                  `Невідома escape-послідовність "\\${esc}" у рядку ${lineNum}. Підтримуються: \\n \\t \\r \\\\ \\' \\" \\xNN \\uNNNN. Щоб написати зворотну скісну риску, подвойте її: \\\\.`,
+                  lineNum,
+                  pos + 1
+                );
+              }
             } else if (rawLine[pos] === quote) {
               closed = true;
               pos++;
@@ -116,9 +203,9 @@
             }
           }
           if (!closed) {
-            throw new CompileError(`Незакритий лапками рядок (${quote}) у рядку ${lineNum}.`, lineNum);
+            throw new CompileError(`Незакритий лапками рядок (${quote}) у рядку ${lineNum}.`, lineNum, col);
           }
-          tokens.push({ type: 'STRING', value: str, line: lineNum });
+          tokens.push({ type: 'STRING', value: str, line: lineNum, col });
           continue;
         }
 
@@ -129,60 +216,107 @@
           while (pos < rawLine.length && /[0-9.]/.test(rawLine[pos])) {
             if (rawLine[pos] === '.') dotCount++;
             if (dotCount > 1) {
-              throw new CompileError(`Некоректне число з кількома крапками у рядку ${lineNum}.`, lineNum);
+              throw new CompileError(`Некоректне число з кількома крапками у рядку ${lineNum}.`, lineNum, col);
             }
             numStr += rawLine[pos++];
           }
-          tokens.push({ type: 'NUMBER', value: parseFloat(numStr), raw: numStr, line: lineNum });
+          tokens.push({ type: 'NUMBER', value: parseFloat(numStr), raw: numStr, line: lineNum, col });
           continue;
         }
 
-        // Identifiers & Keywords (including Ukrainian/Unicode letters if kids write variable names in Ukrainian)
-        if (/[a-zA-Z_\u0400-\u04FF]/.test(ch)) {
-          let id = '';
-          while (pos < rawLine.length && /[a-zA-Z0-9_\u0400-\u04FF]/.test(rawLine[pos])) {
-            id += rawLine[pos++];
+        // Identifiers & Keywords (any Unicode letters, so kids can name variables in their own language)
+        const cp = String.fromCodePoint(rawLine.codePointAt(pos));
+        if (IDENT_START_RE.test(cp)) {
+          IDENT_RE.lastIndex = pos;
+          const m = IDENT_RE.exec(rawLine);
+          const id = m[0];
+          pos += id.length;
+          if (/^(f|r|b|u|fr|rf|br|rb)$/i.test(id) && (rawLine[pos] === '"' || rawLine[pos] === "'")) {
+            throw new CompileError(
+              /^f/i.test(id) || /f$/i.test(id)
+                ? `f-рядки не підтримуються (рядок ${lineNum}). Склейте текст через join("а", змінна).`
+                : `Префікс рядка "${id}" не підтримується (рядок ${lineNum}). Пишіть звичайні рядки в лапках.`,
+              lineNum,
+              col
+            );
           }
           if (KEYWORDS.has(id)) {
-            tokens.push({ type: 'KW', value: id, line: lineNum });
+            tokens.push({ type: 'KW', value: id, line: lineNum, col });
           } else {
-            tokens.push({ type: 'IDENT', value: id, line: lineNum });
+            tokens.push({ type: 'IDENT', value: id, line: lineNum, col });
           }
           continue;
         }
 
         // Two-character operators
         const two = rawLine.slice(pos, pos + 2);
+        if (two === '**') {
+          throw new CompileError(
+            `Оператор ** (степінь) не підтримується (рядок ${lineNum}). Використайте math_op("10 ^", x) або exp(x), чи помножте число саме на себе.`,
+            lineNum,
+            col
+          );
+        }
         if (['+=', '-=', '*=', '/=', '==', '!=', '<=', '>=', '//'].includes(two)) {
-          tokens.push({ type: 'OP', value: two, line: lineNum });
+          tokens.push({ type: 'OP', value: two, line: lineNum, col });
           pos += 2;
           continue;
         }
 
         // Single-character operators
         if ('+-*/%<>='.includes(ch)) {
-          tokens.push({ type: 'OP', value: ch, line: lineNum });
+          tokens.push({ type: 'OP', value: ch, line: lineNum, col });
           pos++;
           continue;
         }
 
         if ('():,@[].'.includes(ch)) {
-          tokens.push({ type: 'PUNCT', value: ch, line: lineNum });
+          if (OPEN_BRACKETS[ch]) {
+            bracketStack.push({ ch, line: lineNum, col });
+          } else if (CLOSE_BRACKETS[ch]) {
+            const top = bracketStack[bracketStack.length - 1];
+            if (!top) {
+              throw new CompileError(`Зайва закриваюча дужка "${ch}" у рядку ${lineNum}.`, lineNum, col);
+            }
+            if (top.ch !== CLOSE_BRACKETS[ch]) {
+              throw new CompileError(
+                `Дужка "${ch}" у рядку ${lineNum} не відповідає відкритій "${top.ch}" з рядка ${top.line}.`,
+                lineNum,
+                col
+              );
+            }
+            bracketStack.pop();
+          }
+          tokens.push({ type: 'PUNCT', value: ch, line: lineNum, col });
           pos++;
           continue;
         }
 
-        throw new CompileError(`Невідомий символ "${ch}" у рядку ${lineNum}.`, lineNum);
+        throw new CompileError(`Невідомий символ "${ch}" у рядку ${lineNum}.`, lineNum, col);
       }
 
-      tokens.push({ type: 'NEWLINE', value: '\n', line: lineNum });
+      if (bracketStack.length === 0 && !backslashContinued) {
+        tokens.push({ type: 'NEWLINE', value: '\n', line: lineNum, col: rawLine.length + 1 });
+      }
+    }
+
+    if (bracketStack.length > 0) {
+      const open = bracketStack[bracketStack.length - 1];
+      throw new CompileError(
+        `Забули закрити дужку "${open.ch}", відкриту в рядку ${open.line}.`,
+        open.line,
+        open.col
+      );
+    }
+    if (backslashContinued) {
+      tokens.push({ type: 'NEWLINE', value: '\n', line: lines.length, col: 1 });
     }
 
     while (indentStack.length > 1) {
       indentStack.pop();
-      tokens.push({ type: 'DEDENT', value: 0, line: lines.length });
+      tokens.push({ type: 'DEDENT', value: 0, line: lines.length, col: 1 });
     }
-    tokens.push({ type: 'EOF', value: '', line: lines.length });
+    tokens.push({ type: 'EOF', value: '', line: lines.length, col: 1 });
     return tokens;
   }
 
@@ -195,9 +329,40 @@
     function expect(type, value, friendlyMsg) {
       const tok = peek();
       if (tok.type !== type || (value !== undefined && tok.value !== value)) {
-        throw new CompileError(friendlyMsg || `Очікувалось "${value || type}" у рядку ${tok.line}.`, tok.line);
+        throw new CompileError(friendlyMsg || `Очікувалось "${value || type}" у рядку ${tok.line}.`, tok.line, tok.col);
       }
       return next();
+    }
+
+    // Python constructs that have no Scratch equivalent: explain what to do instead of a generic error
+    const UNSUPPORTED_STMT_HINTS = {
+      return: 'return не підтримується: власні блоки Scratch нічого не повертають. Збережіть результат у змінну (result = ...) і прочитайте її після виклику.',
+      break: 'break не підтримується в Scratch. Використайте цикл "while умова:" або прапорець-змінну, чи stop("this script").',
+      continue: 'continue не підтримується в Scratch. Загорніть решту тіла циклу в "if умова:".',
+      class: 'class не підтримується: у Scratch немає класів. Для даних спрайта використовуйте self.назва.',
+      import: 'import не потрібен: усі команди (move, say, ...) вже доступні одразу.',
+      from: 'from ... import не потрібен: усі команди (move, say, ...) вже доступні одразу.',
+      lambda: 'lambda не підтримується в Scratch. Оголосіть власний блок через def назва(...):.',
+      try: 'try/except не підтримується в Scratch.',
+      except: 'try/except не підтримується в Scratch.',
+      finally: 'try/finally не підтримується в Scratch.',
+      raise: 'raise не підтримується в Scratch.',
+      with: 'with не підтримується в Scratch.',
+      global: 'global не потрібен: звичайні змінні вже глобальні, локальні пишуться як self.назва.',
+      nonlocal: 'nonlocal не підтримується в Scratch.',
+      del: 'del не підтримується. Для списків використовуйте list_delete(...).',
+      yield: 'yield не підтримується в Scratch.',
+      async: 'async/await не підтримується в Scratch.',
+      await: 'async/await не підтримується в Scratch.',
+      assert: 'assert не підтримується в Scratch.'
+    };
+
+    function unsupportedConstructError(tok) {
+      if (tok.type !== 'IDENT' || !Object.prototype.hasOwnProperty.call(UNSUPPORTED_STMT_HINTS, tok.value)) return null;
+      const nxt = tokens[idx + 1];
+      // "return = 5" style identifiers still work as plain variable names
+      if (nxt && nxt.type === 'OP' && ['=', '+=', '-=', '*=', '/='].includes(nxt.value)) return null;
+      return new CompileError(`${UNSUPPORTED_STMT_HINTS[tok.value]} (рядок ${tok.line})`, tok.line, tok.col);
     }
 
     function skipNewlines() {
@@ -214,9 +379,12 @@
         } else if (tok.type === 'KW' && tok.value === 'def') {
           topNodes.push(parseCustomProcedure());
         } else {
+          const hint = unsupportedConstructError(tok);
+          if (hint) throw hint;
           throw new CompileError(
             `У рядку ${tok.line} код верхнього рівня має починатися з декоратора події (наприклад, @when_flag_clicked) або оголошення функції (def назва():).`,
-            tok.line
+            tok.line,
+            tok.col
           );
         }
         skipNewlines();
@@ -318,6 +486,8 @@
 
     function parseStmt() {
       const tok = peek();
+      const unsupported = unsupportedConstructError(tok);
+      if (unsupported) throw unsupported;
 
       if (tok.type === 'KW' && tok.value === 'pass') {
         next();
@@ -437,7 +607,7 @@
         }
       }
 
-      throw new CompileError(`Незрозуміла команда "${tok.value}" у рядку ${tok.line}.`, tok.line);
+      throw new CompileError(`Незрозуміла команда "${tok.value}" у рядку ${tok.line}.`, tok.line, tok.col);
     }
 
     function parseArgList(line) {
@@ -455,7 +625,16 @@
     }
 
     function parseExpr() {
-      return parseOr();
+      const expr = parseOr();
+      if (peek().type === 'KW' && peek().value === 'if') {
+        const t = peek();
+        throw new CompileError(
+          `Тернарний вираз "a if умова else b" не підтримується (рядок ${t.line}). Запишіть його як звичайний "if умова: ... else: ...".`,
+          t.line,
+          t.col
+        );
+      }
+      return expr;
     }
 
     function parseOr() {
@@ -559,10 +738,13 @@
         return expr;
       }
       if (tok.type === 'IDENT') {
+        if (tok.value === 'lambda') {
+          throw new CompileError(`${UNSUPPORTED_STMT_HINTS.lambda} (рядок ${tok.line})`, tok.line, tok.col);
+        }
         next();
         if (peek().type === 'PUNCT' && peek().value === '.') {
           if (tok.value !== 'self') {
-            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line);
+            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line, tok.col);
           }
           next();
           const attrTok = expect('IDENT', undefined, `Очікувалась назва локальної змінної після "self." у рядку ${tok.line}.`);
@@ -574,16 +756,100 @@
         }
         return { type: 'Var', name: tok.value, line: tok.line };
       }
-      throw new CompileError(`Неочікуваний вираз "${tok.value}" у рядку ${tok.line}.`, tok.line);
+      throw new CompileError(`Неочікуваний вираз "${tok.value}" у рядку ${tok.line}.`, tok.line, tok.col);
     }
 
     return parseProgram();
+  }
+
+  // --- 2b. RAW SCRIPT PRESERVATION (blocks the DSL cannot express) ---
+  function getDecompiler() {
+    if (typeof module !== 'undefined' && module.exports && typeof require === 'function') {
+      try {
+        return require('./decompiler.js');
+      } catch (_) {
+        /* fall through to the browser global */
+      }
+    }
+    return global.PyScratchDecompiler || null;
+  }
+
+  // Block ids referenced from a block's inputs (strings at index >= 1 of an input array are block ids;
+  // nested arrays are primitive literals / variable / list / broadcast references).
+  function inputBlockRefs(block) {
+    const refs = [];
+    for (const inp of Object.values(block.inputs || {})) {
+      if (!Array.isArray(inp)) continue;
+      for (let i = 1; i < inp.length; i++) {
+        if (typeof inp[i] === 'string') refs.push(inp[i]);
+      }
+    }
+    return refs;
+  }
+
+  /**
+   * Finds top-level scripts of `target` that the decompiler cannot express as DSL code (it prints a
+   * "# [збережено без змін]" comment for them) and returns them as a self-contained raw block map.
+   */
+  function collectRawScripts(target, stageTarget) {
+    const empty = { blocks: {}, roots: [], procedures: [] };
+    const old = target.blocks;
+    const dec = getDecompiler();
+    if (!dec || !old || typeof old !== 'object') return empty;
+    const report = {};
+    try {
+      dec.decompileTarget(target, stageTarget || null, report);
+    } catch (_) {
+      return empty;
+    }
+    const rootIds = report.unsupported ? Array.from(report.unsupported.keys()) : [];
+    if (rootIds.length === 0) return empty;
+
+    const rawBlocks = {};
+    const stack = rootIds.slice();
+    while (stack.length) {
+      const id = stack.pop();
+      const b = old[id];
+      if (!b || rawBlocks[id]) continue;
+      rawBlocks[id] = b;
+      if (typeof b.next === 'string') stack.push(b.next);
+      stack.push(...inputBlockRefs(b));
+    }
+
+    const procedures = [];
+    for (const rootId of rootIds) {
+      const def = old[rootId];
+      if (!def || def.opcode !== 'procedures_definition') continue;
+      const protoRef = def.inputs && def.inputs.custom_block ? def.inputs.custom_block[1] : null;
+      const proto = typeof protoRef === 'string' ? old[protoRef] : null;
+      const mut = (proto && proto.mutation) || {};
+      let paramIds = [];
+      let paramNames = [];
+      try {
+        paramIds = JSON.parse(mut.argumentids || '[]');
+        paramNames = JSON.parse(mut.argumentnames || '[]');
+      } catch (_) {
+        continue;
+      }
+      procedures.push({
+        fnName: dec.extractProcName ? dec.extractProcName(mut.proccode) : String(mut.proccode || '').split('%')[0].trim(),
+        proccode: mut.proccode,
+        paramIds,
+        paramNames,
+        warp: mut.warp === 'true' || mut.warp === true,
+        raw: true
+      });
+    }
+    return { blocks: rawBlocks, roots: rootIds, procedures };
   }
 
   // --- 3. SCRATCH 3.0 CODE GENERATOR ---
   function compileToScratch(source, target, stageTarget, projectJson) {
     const tokens = tokenize(source);
     const ast = parse(tokens);
+
+    // Scripts of an imported .sb3 that the DSL cannot express are kept verbatim (see mergeRawScripts)
+    const raw = collectRawScripts(target, stageTarget);
 
     let idCounter = 1;
     const genId = () => 'b_' + idCounter++;
@@ -617,12 +883,26 @@
     const usedGlobalListIds = new Set();
     const usedLocalListIds = new Set();
     const usedBroadcastIds = new Set();
+    let currentLine = null; // line of the statement being compiled (for diagnostics raised deep inside helpers)
+    let stmtTailId = null; // last block id of a statement that expands to several top-level blocks
 
     function ensureLocalVar(name) {
       const host = target.isStage ? globalHost : target;
       if (localVariables[name]) {
         usedLocalVarIds.add(localVariables[name]);
         return localVariables[name];
+      }
+      if (!target.isStage) {
+        // A sprite-local variable must not share its name with a global (Stage) variable
+        const clash = Object.entries(globalHost.variables || {}).find(
+          ([gid, v]) => v[0] === name && !prevOwned.globalVars.has(gid)
+        );
+        if (clash) {
+          throw new CompileError(
+            `Локальна змінна "self.${name}" конфліктує з глобальною змінною "${name}". Дайте їм різні імена.`,
+            currentLine
+          );
+        }
       }
       const localMatch = Object.entries(host.variables || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
@@ -737,6 +1017,53 @@
       return bId;
     }
 
+    function checkChoice(raw, whitelistKey, line, normalize = (v) => v) {
+      const wl = FIELD_WHITELISTS[whitelistKey];
+      const val = normalize(String(raw));
+      if (!wl.values.includes(val)) {
+        throw new CompileError(
+          `Недопустиме значення "${raw}" для ${wl.label} у рядку ${line}. Допустимі: ${wl.values.map((v) => '"' + v + '"').join(', ')}.`,
+          line
+        );
+      }
+      return val;
+    }
+
+    // Literal string argument for a field; non-string expressions are rejected for field values.
+    function literalArg(expr, defaultVal, what, line) {
+      if (!expr) return defaultVal;
+      if (expr.type !== 'String') {
+        throw new CompileError(`${what} має бути текстом у лапках (рядок ${line}).`, line);
+      }
+      return expr.value === '' ? defaultVal : String(expr.value);
+    }
+
+    function checkKeyOption(raw, line) {
+      const key = String(raw);
+      if (!KEY_OPTIONS.has(key.toLowerCase())) {
+        throw new CompileError(
+          `Недопустима клавіша "${key}" у рядку ${line}. Допустимі: "space", "up arrow", "down arrow", "left arrow", "right arrow", "enter", "any", літери "a"-"z" та цифри "0"-"9".`,
+          line
+        );
+      }
+      return key;
+    }
+
+    function checkTargetKind(name, line) {
+      if (target.isStage && SPRITE_ONLY_CALLS.has(name)) {
+        throw new CompileError(
+          `Блок "${name}()" (рядок ${line}) доступний лише спрайтам, а ви пишете код для Сцени.`,
+          line
+        );
+      }
+      if (!target.isStage && STAGE_ONLY_CALLS.has(name)) {
+        throw new CompileError(
+          `Блок "${name}()" (рядок ${line}) доступний лише на Сцені, а ви пишете код для спрайта.`,
+          line
+        );
+      }
+    }
+
     function createBlock(opcode, parentId, inputs = {}, fields = {}, extra = {}) {
       const id = genId();
       blocks[id] = {
@@ -776,7 +1103,7 @@
         return [1, [defaultShadowType === 10 ? 10 : 4, String(expr.value)]];
       }
       if (expr.type === 'String') {
-        if (/^#[0-9a-fA-F]{6}$/.test(expr.value)) {
+        if (defaultShadowType === 9 && /^#[0-9a-fA-F]{6}$/.test(expr.value)) {
           return [1, [9, expr.value]];
         }
         return [1, [10, expr.value]];
@@ -935,6 +1262,7 @@
 
       if (expr.type === 'Call') {
         const a = expr.args;
+        checkTargetKind(expr.name, expr.line);
         switch (expr.name) {
           case 'x_position':
             return createBlock('motion_xposition', parentId, {}, {}, { line: expr.line });
@@ -1009,7 +1337,7 @@
             return id;
           }
           case 'math_op': {
-            const opName = a[0] && a[0].value ? String(a[0].value) : 'abs';
+            const opName = checkChoice(literalArg(a[0], 'abs', 'Назва операції math_op', expr.line), 'mathOp', expr.line);
             const id = createBlock('operator_mathop', parentId, {}, { OPERATOR: [opName, null] }, { line: expr.line });
             blocks[id].inputs = { NUM: compileInput(a[1], id, 4) };
             return id;
@@ -1017,7 +1345,9 @@
           case 'key_pressed': {
             const id = createBlock('sensing_keypressed', parentId, {}, {}, { line: expr.line });
             blocks[id].inputs = {
-              KEY_OPTION: compileMenuOrExpr(a[0], 'sensing_keyoptions', 'KEY_OPTION', 'space', id)
+              KEY_OPTION: compileMenuOrExpr(a[0], 'sensing_keyoptions', 'KEY_OPTION', 'space', id, (v) =>
+                checkKeyOption(v, expr.line)
+              )
             };
             return id;
           }
@@ -1050,7 +1380,14 @@
             return id;
           }
           case 'attribute_of': {
-            const prop = a[0] && a[0].value !== undefined ? String(a[0].value) : 'x position';
+            const prop = literalArg(a[0], 'x position', 'Назва властивості attribute_of', expr.line);
+            const knownProp = SENSING_OF_PROPERTIES.find((p) => p.toLowerCase() === prop.toLowerCase());
+            if (knownProp && knownProp !== prop) {
+              throw new CompileError(
+                `Недопустима властивість "${prop}" у рядку ${expr.line}. Напишіть "${knownProp}" (регістр має значення). Допустимі: ${SENSING_OF_PROPERTIES.map((v) => '"' + v + '"').join(', ')} або назва змінної.`,
+                expr.line
+              );
+            }
             const id = createBlock('sensing_of', parentId, {}, { PROPERTY: [prop, null] }, { line: expr.line });
             blocks[id].inputs = {
               OBJECT: compileMenuOrExpr(
@@ -1078,7 +1415,12 @@
             return id;
           }
           case 'current_time': {
-            const unit = a[0] && a[0].value !== undefined ? String(a[0].value).toUpperCase() : 'YEAR';
+            const unit = checkChoice(
+              literalArg(a[0], 'YEAR', 'Одиниця часу current_time', expr.line),
+              'currentMenu',
+              expr.line,
+              (v) => v.toUpperCase()
+            );
             return createBlock('sensing_current', parentId, {}, { CURRENTMENU: [unit, null] }, { line: expr.line });
           }
           case 'days_since_2000':
@@ -1151,13 +1493,17 @@
 
       for (const stmt of stmts) {
         if (stmt.type === 'Pass') continue;
+        stmtTailId = null;
+        currentLine = stmt.line;
         const id = compileStmt(stmt, prevId);
+        const tailId = stmtTailId || id;
+        stmtTailId = null;
         if (!id) continue;
         if (!firstId) firstId = id;
         if (prevId && prevId !== parentId) {
           blocks[prevId].next = id;
         }
-        prevId = id;
+        prevId = tailId;
       }
       return firstId;
     }
@@ -1178,17 +1524,59 @@
         return id;
       }
       if (stmt.type === 'Repeat') {
-        if (
-          stmt.loopVar &&
+        // "for i in range(n)" with a body that reads i: emit "set i to 0" before the loop and
+        // "change i by 1" at the end of the body, so .sb3 matches the preview (i = 0..n-1).
+        const realBody = stmt.body.filter((st) => st.type !== 'Pass');
+        const lastStmt = realBody[realBody.length - 1];
+        const alreadyIncrements =
+          lastStmt &&
+          lastStmt.type === 'ChangeVar' &&
+          !lastStmt.isLocal &&
+          lastStmt.name === stmt.loopVar &&
+          lastStmt.value &&
+          lastStmt.value.type === 'Number' &&
+          lastStmt.value.value === 1;
+        const needsCounter =
+          !!stmt.loopVar &&
           !(activeProcedureParams && activeProcedureParams.has(stmt.loopVar)) &&
-          astUsesVar(stmt.body, stmt.loopVar)
-        ) {
-          ensureVar(stmt.loopVar, false);
+          astUsesVar(stmt.body, stmt.loopVar);
+        let initId = null;
+        let loopVarId = null;
+        if (needsCounter) {
+          loopVarId = ensureVar(stmt.loopVar, false);
+          if (!alreadyIncrements) {
+            initId = createBlock(
+              'data_setvariableto',
+              parentId,
+              {},
+              { VARIABLE: [stmt.loopVar, loopVarId] },
+              { line: stmt.line }
+            );
+            blocks[initId].inputs = { VALUE: [1, [10, '0']] };
+          }
         }
-        const id = createBlock('control_repeat', parentId, {}, {}, { line: stmt.line });
+        const id = createBlock('control_repeat', initId || parentId, {}, {}, { line: stmt.line });
         blocks[id].inputs = { TIMES: compileInput(stmt.count, id, 4) };
         const subFirst = compileStmtList(stmt.body, id);
         if (subFirst) blocks[id].inputs.SUBSTACK = [2, subFirst];
+        if (needsCounter && !alreadyIncrements && subFirst) {
+          let lastId = subFirst;
+          while (blocks[lastId].next) lastId = blocks[lastId].next;
+          const incId = createBlock(
+            'data_changevariableby',
+            lastId,
+            {},
+            { VARIABLE: [stmt.loopVar, loopVarId] },
+            { line: stmt.line }
+          );
+          blocks[incId].inputs = { VALUE: [1, [4, '1']] };
+          blocks[lastId].next = incId;
+        }
+        if (initId) {
+          blocks[initId].next = id;
+          stmtTailId = id;
+          return initId;
+        }
         return id;
       }
       if (stmt.type === 'Forever') {
@@ -1225,10 +1613,17 @@
 
     function compileCallStmt(stmt, parentId) {
       const a = stmt.args;
+      checkTargetKind(stmt.name, stmt.line);
 
       // Check if calling a user-defined procedure (My Block)
       if (procedures[stmt.name]) {
         const proc = procedures[stmt.name];
+        if (a.length !== proc.paramNames.length) {
+          throw new CompileError(
+            `Функція "${stmt.name}" очікує аргументів: ${proc.paramNames.length}, а передано ${a.length} (рядок ${stmt.line}).`,
+            stmt.line
+          );
+        }
         const id = createBlock(
           'procedures_call',
           parentId,
@@ -1246,8 +1641,9 @@
           }
         );
         const inputs = {};
+        const argKinds = String(proc.proccode || '').match(/%[sb]/g) || [];
         proc.paramIds.forEach((pId, idx) => {
-          inputs[pId] = compileInput(a[idx], id, 10);
+          inputs[pId] = argKinds[idx] === '%b' ? compileBoolInput(a[idx], id) || [1, [10, '']] : compileInput(a[idx], id, 10);
         });
         blocks[id].inputs = inputs;
         return id;
@@ -1351,7 +1747,7 @@
           blocks[id].opcode = 'motion_ifonedgebounce';
           return id;
         case 'set_rotation_style': {
-          const style = a[0] && a[0].value ? String(a[0].value) : 'all around';
+          const style = checkChoice(literalArg(a[0], 'all around', 'Стиль обертання', stmt.line), 'rotationStyle', stmt.line);
           blocks[id].opcode = 'motion_setrotationstyle';
           blocks[id].fields = { STYLE: [style, null] };
           return id;
@@ -1412,14 +1808,14 @@
           }
           return id;
         case 'set_effect': {
-          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'COLOR';
+          const eff = checkChoice(literalArg(a[0], 'COLOR', 'Назва ефекту', stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'looks_seteffectto';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
           return id;
         }
         case 'change_effect': {
-          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'COLOR';
+          const eff = checkChoice(literalArg(a[0], 'COLOR', 'Назва ефекту', stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'looks_changeeffectby';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { CHANGE: compileInput(a[1], id, 4) };
@@ -1450,14 +1846,14 @@
           blocks[id].opcode = 'sound_stopallsounds';
           return id;
         case 'set_sound_effect': {
-          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'PITCH';
+          const eff = checkChoice(literalArg(a[0], 'PITCH', 'Назва ефекту звуку', stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'sound_seteffectto';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
           return id;
         }
         case 'change_sound_effect': {
-          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'PITCH';
+          const eff = checkChoice(literalArg(a[0], 'PITCH', 'Назва ефекту звуку', stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'sound_changeeffectby';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
@@ -1520,7 +1916,7 @@
           blocks[id].inputs = { CONDITION: compileBoolInput(a[0], id) };
           return id;
         case 'stop': {
-          const opt = a[0] && a[0].value ? String(a[0].value) : 'all';
+          const opt = checkChoice(literalArg(a[0], 'all', 'Параметр stop()', stmt.line), 'stopOption', stmt.line);
           blocks[id].opcode = 'control_stop';
           blocks[id].fields = { STOP_OPTION: [opt, null] };
           blocks[id].mutation = {
@@ -1547,7 +1943,7 @@
           blocks[id].opcode = 'control_delete_this_clone';
           return id;
         case 'set_drag_mode': {
-          const mode = a[0] && a[0].value !== undefined ? String(a[0].value) : 'draggable';
+          const mode = checkChoice(literalArg(a[0], 'draggable', 'Режим перетягування', stmt.line), 'dragMode', stmt.line);
           blocks[id].opcode = 'sensing_setdragmode';
           blocks[id].fields = { DRAG_MODE: [mode, null] };
           return id;
@@ -1659,8 +2055,18 @@
     }
     scanLocalLists(ast);
 
+    for (const rawProc of raw.procedures) {
+      procedures[rawProc.fnName] = rawProc;
+    }
+
     for (const node of ast) {
       if (node.type === 'ProcDef') {
+        if (procedures[node.fnName] && procedures[node.fnName].raw) {
+          throw new CompileError(
+            `Власний блок "${node.fnName}" (рядок ${node.line}) уже існує в проєкті як скрипт, який DSL не вміє показувати; оберіть інше ім'я.`,
+            node.line
+          );
+        }
         const paramIds = node.params.map((p) => `arg_${node.fnName}_${p}`);
         const proccode =
           node.params.length > 0
@@ -1735,7 +2141,9 @@
       if (h.decorator === 'when_flag_clicked') {
         hatId = createBlock('event_whenflagclicked', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
       } else if (h.decorator === 'when_key_pressed') {
-        const key = h.decArgs[0] ? String(h.decArgs[0].value) : 'space';
+        const key = h.decArgs[0]
+          ? checkKeyOption(literalArg(h.decArgs[0], 'space', 'Клавіша у @when_key_pressed', h.line), h.line)
+          : 'space';
         hatId = createBlock(
           'event_whenkeypressed',
           null,
@@ -1766,7 +2174,12 @@
           { topLevel: true, x: 40, y: yOffset, line: h.line }
         );
       } else if (h.decorator === 'when_greater_than') {
-        const sensor = h.decArgs[0] && h.decArgs[0].value !== undefined ? String(h.decArgs[0].value).toUpperCase() : 'LOUDNESS';
+        const sensor = checkChoice(
+          literalArg(h.decArgs[0], 'LOUDNESS', 'Датчик у @when_greater_than', h.line),
+          'greaterThan',
+          h.line,
+          (v) => v.toUpperCase()
+        );
         hatId = createBlock(
           'event_whengreaterthan',
           null,
@@ -1778,6 +2191,9 @@
           VALUE: compileInput(h.decArgs[1], hatId, 4)
         };
       } else if (h.decorator === 'when_cloned') {
+        if (target.isStage) {
+          throw new CompileError(`@when_cloned (рядок ${h.line}) доступний лише спрайтам: Сцену клонувати не можна.`, h.line);
+        }
         hatId = createBlock('control_start_as_clone', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
       } else {
         throw new CompileError(`Невідомий декоратор @${h.decorator} у рядку ${h.line}.`, h.line);
@@ -1790,7 +2206,73 @@
       yOffset += 220;
     }
 
+    // Re-attach preserved raw scripts (collision-free ids) and fix up comments
+    const rawIdMap = mergeRawScripts();
+    function mergeRawScripts() {
+      const idMap = {};
+      const rawIds = Object.keys(raw.blocks);
+      const taken = new Set(Object.keys(blocks));
+      for (const id of rawIds) {
+        let newId = id;
+        if (taken.has(newId)) {
+          let n = 1;
+          newId = `raw_${id}`;
+          while (taken.has(newId) || raw.blocks[newId] !== undefined) newId = `raw_${id}_${n++}`;
+        }
+        taken.add(newId);
+        idMap[id] = newId;
+      }
+      const remap = (ref) => (typeof ref === 'string' && idMap[ref] !== undefined ? idMap[ref] : ref);
+      for (const id of rawIds) {
+        const src = raw.blocks[id];
+        const copy = { ...src };
+        if (src.parent !== undefined) copy.parent = remap(src.parent);
+        if (src.next !== undefined) copy.next = remap(src.next);
+        if (src.inputs) {
+          copy.inputs = {};
+          for (const [k, inp] of Object.entries(src.inputs)) {
+            copy.inputs[k] = Array.isArray(inp) ? inp.map((v, i) => (i >= 1 ? remap(v) : v)) : inp;
+          }
+        }
+        blocks[idMap[id]] = copy;
+        // Variables / lists / broadcasts referenced by preserved blocks must survive the orphan cleanup
+        const refIds = [];
+        for (const f of Object.values(src.fields || {})) {
+          if (Array.isArray(f) && typeof f[1] === 'string') refIds.push(f[1]);
+        }
+        for (const inp of Object.values(src.inputs || {})) {
+          if (!Array.isArray(inp)) continue;
+          for (let i = 1; i < inp.length; i++) {
+            if (Array.isArray(inp[i]) && typeof inp[i][2] === 'string') refIds.push(inp[i][2]);
+          }
+        }
+        for (const ref of refIds) {
+          if (prevOwned.globalVars.has(ref)) { usedGlobalVarIds.add(ref); nextOwned.globalVars.add(ref); }
+          if (prevOwned.localVars.has(ref)) { usedLocalVarIds.add(ref); nextOwned.localVars.add(ref); }
+          if (prevOwned.globalLists.has(ref)) { usedGlobalListIds.add(ref); nextOwned.globalLists.add(ref); }
+          if (prevOwned.localLists.has(ref)) { usedLocalListIds.add(ref); nextOwned.localLists.add(ref); }
+          if (prevOwned.broadcasts.has(ref)) { usedBroadcastIds.add(ref); nextOwned.broadcasts.add(ref); }
+        }
+      }
+      return idMap;
+    }
+
+    // Comments anchored to regenerated blocks would dangle (or, worse, attach to a different block that got the
+    // same generated id), so only workspace comments and comments of preserved raw scripts survive.
+    if (target.comments && typeof target.comments === 'object') {
+      const keptComments = {};
+      for (const [cid, c] of Object.entries(target.comments)) {
+        if (!c || c.blockId === null || c.blockId === undefined) {
+          keptComments[cid] = c;
+        } else if (rawIdMap[c.blockId] !== undefined) {
+          keptComments[cid] = { ...c, blockId: rawIdMap[c.blockId] };
+        }
+      }
+      target.comments = keptComments;
+    }
+
     target.blocks = blocks;
+    const deletedMonitorIds = new Set();
 
     // Clean up orphaned compiler-owned variables, lists, and broadcasts no longer referenced by any target
     const otherTargets = projectJson && Array.isArray(projectJson.targets)
@@ -1816,29 +2298,38 @@
     for (const oldId of prevOwned.globalVars) {
       if (!usedGlobalVarIds.has(oldId) && globalHost.variables && !isIdUsedElsewhere(oldId)) {
         delete globalHost.variables[oldId];
+        deletedMonitorIds.add(oldId);
       }
     }
     for (const oldId of prevOwned.localVars) {
       const host = target.isStage ? globalHost : target;
       if (!usedLocalVarIds.has(oldId) && host.variables) {
         delete host.variables[oldId];
+        deletedMonitorIds.add(oldId);
       }
     }
     for (const oldId of prevOwned.globalLists) {
       if (!usedGlobalListIds.has(oldId) && globalHost.lists && !isIdUsedElsewhere(oldId)) {
         delete globalHost.lists[oldId];
+        deletedMonitorIds.add(oldId);
       }
     }
     for (const oldId of prevOwned.localLists) {
       const host = target.isStage ? globalHost : target;
       if (!usedLocalListIds.has(oldId) && host.lists) {
         delete host.lists[oldId];
+        deletedMonitorIds.add(oldId);
       }
     }
     for (const oldId of prevOwned.broadcasts) {
       if (!usedBroadcastIds.has(oldId) && globalHost.broadcasts && !isIdUsedElsewhere(oldId)) {
         delete globalHost.broadcasts[oldId];
       }
+    }
+
+    // Monitors of removed variables / lists would otherwise stay in project.json pointing at nothing
+    if (projectJson && Array.isArray(projectJson.monitors) && deletedMonitorIds.size > 0) {
+      projectJson.monitors = projectJson.monitors.filter((m) => !(m && deletedMonitorIds.has(m.id)));
     }
 
     Object.defineProperty(target, '_pyCompiledOwned', {
