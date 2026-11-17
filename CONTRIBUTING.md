@@ -55,6 +55,7 @@ Looking for something to work on? Pick any unchecked `[ ]` item from [`TODO.md`]
 - **2-space JavaScript indentation**: All `.js` files (`js/*.js`, `test/*.js`) use 2 spaces per indentation level.
 - **4-space Python DSL indentation**: Generated DSL output (`js/decompiler.js`), templates (`js/app.js`), tests, and documentation examples must use 4 spaces per indentation level.
 - **Lossless round-trip invariant**: Every supported Python DSL program compiled with `compileToScratch`, saved/loaded via `.sb3`, and decompiled with `decompileTarget` must produce valid Python DSL that re-compiles cleanly with identical Scratch semantics.
+- **UI & Scratch 3.0 Style Guide**: All visual changes to [`index.html`](index.html) or [`style.css`](style.css) must follow [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) (1:1 Scratch 3.0 color tokens, light `#E5F0FF`/`#F9F9F9` workspace, `#855CD6` topbar, and legacy `--wp-*` alias invariants).
 
 ---
 

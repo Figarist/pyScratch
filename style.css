@@ -1,35 +1,130 @@
+/* ==========================================================================
+   pyScratch — Scratch 3.0 1:1 Design System
+   Reference: https://scratch.mit.edu/projects/editor/?tutorial=getStarted
+   Style Guide: docs/STYLE_GUIDE.md
+   ========================================================================== */
+
 :root {
-  --wp-bg: #0c1016;
-  --wp-surface: #121820;
-  --wp-panel: #161d27;
-  --wp-panel-hover: #1c2532;
-  --wp-border: #232d3b;
-  --wp-border-strong: #334155;
-  --wp-text: #f1f5f9;
-  --wp-muted: #94a3b8;
-  --wp-dim: #64748b;
-  --wp-accent: #38bdf8;
-  --wp-accent-hover: #0ea5e9;
-  --on-accent: #061826;
-  --green: #22c55e;
-  --on-green: #06210f;
-  --yellow: #eab308;
-  --on-yellow: #261b00;
-  --red: #ef4444;
-  --on-red: #ffffff;
-  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Scratch 3.0 Core Surfaces & Chrome */
+  --sc-page-bg: #E5F0FF;             /* hsla(215, 100%, 95%, 1) — .gui_body-wrapper */
+  --sc-workspace-bg: #F9F9F9;        /* --colour-workspace / --colour-flyout */
+  --sc-surface: #FFFFFF;             /* --colour-toolbox / card & panel surface */
+  --sc-tab-inactive: #D9E3F2;        /* hsla(215, 50%, 90%, 1) */
+  --sc-tab-hover: #E5F0FF;           /* hsla(215, 100%, 95%, 1) */
+  --sc-selected-bg: #E9EEF2;         /* --colour-toolboxSelected */
+  --sc-sprite-pane-bg: #EBF2FC;      /* hsla(215, 75%, 95%, 1) */
+
+  /* Scratch 3.0 Brand & Action Colors */
+  --sc-purple: #855CD6;              /* hsla(260, 60%, 60%, 1) — Menu Bar & Active Accent */
+  --sc-purple-dark: #7146C7;
+  --sc-purple-ring: rgba(133, 92, 214, 0.35);
+  --sc-purple-tint: rgba(133, 92, 214, 0.15);
+  --sc-orange: #FF8C1A;              /* hsla(30, 100%, 55%, 1) — Share / Variables */
+  --sc-orange-hover: #E67E17;
+  --sc-teal: #0FBD8C;                /* hsla(163, 85%, 40%, 1) — Remix / Tutorials / Pen */
+  --sc-teal-dark: #0B8E69;
+  --sc-teal-ring: rgba(15, 189, 140, 0.35);
+  --sc-green-flag: #4CBF56;          /* Scratch Green Flag */
+  --sc-green-flag-border: #389438;
+  --sc-stop-red: #EC5959;            /* Scratch Stop Sign */
+  --sc-stop-red-border: #D13D3D;
+
+  /* Scratch 3.0 Typography & Borders */
+  --sc-text: #575E75;                /* hsla(225, 15%, 40%, 1) — --colour-toolboxText */
+  --sc-text-muted: rgba(87, 94, 117, 0.78);
+  --sc-text-dim: rgba(87, 94, 117, 0.55);
+  --sc-text-on-color: #FFFFFF;
+  --sc-border: rgba(0, 0, 0, 0.15);  /* hsla(0, 0%, 0%, 0.15) */
+  --sc-border-strong: rgba(0, 0, 0, 0.25);
+  --sc-grid-dot: #DDDDDD;
+  --sc-scrollbar: #CECDCE;
+
+  /* Scratch 3.0 Block Category Colors (Fill + Stroke) */
+  --sc-motion: #4C97FF;
+  --sc-motion-border: #3373CC;
+  --sc-looks: #9966FF;
+  --sc-looks-border: #774DCB;
+  --sc-sound: #CF63CF;
+  --sc-sound-border: #BD42BD;
+  --sc-events: #FFBF00;
+  --sc-events-border: #CC9900;
+  --sc-control: #FFAB19;
+  --sc-control-border: #CF8B17;
+  --sc-sensing: #5CB1D6;
+  --sc-sensing-border: #2E8EB8;
+  --sc-operators: #59C059;
+  --sc-operators-border: #389438;
+  --sc-variables: #FF8C1A;
+  --sc-variables-border: #DB6E00;
+  --sc-list: #FF661A;
+  --sc-list-border: #E64D00;
+  --sc-myblocks: #FF6680;
+  --sc-myblocks-border: #FF3355;
+  --sc-pen: #0FBD8C;
+  --sc-pen-border: #0B8E69;
+
+  /* Radii & Shadows */
+  --sc-radius-sm: 4px;               /* 0.25rem */
+  --sc-radius-md: 8px;               /* 0.5rem */
+  --sc-radius-lg: 12px;              /* 0.75rem */
+  --sc-radius-tab: 16px;             /* 1rem */
+  --sc-radius-pill: 32px;            /* 2rem */
+  --sc-shadow-card: 0 5px 25px 5px rgba(0, 0, 0, 0.15);
+  --sc-shadow-menu: 0 8px 8px 0 rgba(0, 0, 0, 0.15);
+
+  /* Fonts */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "Fira Code", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+
+  /* Legacy Aliases (do not remove — referenced by inline styles in index.html & js/app.js) */
+  --wp-bg: var(--sc-workspace-bg);
+  --wp-surface: var(--sc-surface);
+  --wp-panel: var(--sc-tab-inactive);
+  --wp-panel-hover: var(--sc-tab-hover);
+  --wp-border: var(--sc-border);
+  --wp-border-strong: var(--sc-border-strong);
+  --wp-text: var(--sc-text);
+  --wp-muted: var(--sc-text-muted);
+  --wp-dim: var(--sc-text-dim);
+  --wp-accent: var(--sc-purple);
+  --wp-accent-hover: var(--sc-purple-dark);
+  --on-accent: var(--sc-text-on-color);
+  --green: var(--sc-green-flag);
+  --on-green: #FFFFFF;
+  --yellow: var(--sc-events);
+  --on-yellow: #FFFFFF;
+  --red: var(--sc-stop-red);
+  --on-red: #FFFFFF;
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* Scratch Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sc-scrollbar);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B4B4B4;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--wp-bg);
-  color: var(--wp-text);
+  background: var(--sc-page-bg);
+  color: var(--sc-text);
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -37,17 +132,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dense 42px Workbench Header (Anti-AI / wrist-pocket-ui standard) */
+/* ==========================================================================
+   1. Top Navigation / Menu Bar (Scratch 3.0 48px Purple Bar)
+   ========================================================================== */
 .topbar {
-  height: 42px;
-  min-height: 42px;
+  height: 48px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: var(--wp-surface);
-  border-bottom: 1px solid var(--wp-border);
+  background: var(--sc-purple);
+  color: var(--sc-text-on-color);
+  border-bottom: 1px solid var(--sc-border);
   gap: 10px;
+  z-index: 40;
 }
 
 .brand {
@@ -61,43 +160,45 @@ body {
 }
 
 .brand-mark {
-  background: var(--wp-accent);
-  color: var(--on-accent);
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  background: var(--sc-orange);
+  color: #FFFFFF;
+  padding: 4px 10px;
+  border-radius: var(--sc-radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .brand-sub {
-  color: var(--wp-muted);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .brand-links {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-left: 2px;
 }
 
 .brand-link {
-  color: var(--wp-muted);
+  color: #FFFFFF;
   text-decoration: none;
   font-size: 11px;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--wp-border);
-  background: var(--wp-panel);
-  transition: border-color 0.15s, color 0.15s;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--sc-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  transition: background-color 0.15s ease;
 }
 
 .brand-link:hover {
-  color: var(--wp-accent);
-  border-color: var(--wp-accent);
+  background: rgba(0, 0, 0, 0.15);
+  color: #FFFFFF;
 }
 
 #target-tabs {
@@ -116,140 +217,267 @@ body {
   gap: 6px;
 }
 
+/* Base Buttons */
 button, .btn {
-  background: var(--wp-panel);
-  color: var(--wp-text);
-  border: 1px solid var(--wp-border);
-  padding: 4px 10px;
-  height: 28px;
-  border-radius: 4px;
+  background: var(--sc-surface);
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--sc-radius-sm);
   font-family: var(--font-sans);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
 button:hover {
-  border-color: var(--wp-border-strong);
-  background: var(--wp-panel-hover);
+  background: var(--sc-tab-hover);
+  border-color: var(--sc-purple);
 }
 
-button.primary {
-  background: var(--wp-accent);
-  color: var(--on-accent);
-  border-color: var(--wp-accent);
+button:active {
+  transform: translateY(1px);
 }
 
-button.primary:hover {
-  background: var(--wp-accent-hover);
+/* Topbar Buttons (White on Purple) */
+.topbar button {
+  background: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.topbar button:hover {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Active Sprite / Stage Tab inside Topbar */
+#target-tabs button.tab-btn {
+  border-radius: var(--sc-radius-sm);
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+#target-tabs button.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+#target-tabs button.tab-btn.active {
+  background: var(--sc-surface);
+  color: var(--sc-purple);
+  border-color: var(--sc-surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* Action Button Variants */
+button.primary,
+.topbar button.primary {
+  background: var(--sc-orange);
+  color: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+button.primary:hover,
+.topbar button.primary:hover {
+  background: var(--sc-orange-hover);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.topbar #btn-share {
+  background: var(--sc-teal);
+  color: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.topbar #btn-share:hover {
+  background: var(--sc-teal-dark);
 }
 
 button.success {
-  background: var(--green);
-  color: var(--on-green);
-  border-color: var(--green);
+  background: var(--sc-green-flag);
+  color: #FFFFFF;
+  border-color: var(--sc-green-flag-border);
+}
+
+button.success:hover {
+  background: #40AD49;
+  border-color: var(--sc-green-flag-border);
 }
 
 button.warning {
-  background: var(--yellow);
-  color: var(--on-yellow);
-  border-color: var(--yellow);
+  background: var(--sc-control);
+  color: #FFFFFF;
+  border-color: var(--sc-control-border);
 }
 
 button.danger {
-  background: var(--red);
-  color: var(--on-red);
-  border-color: var(--red);
+  background: var(--sc-stop-red);
+  color: #FFFFFF;
+  border-color: var(--sc-stop-red-border);
 }
 
-button.tab-btn.active {
-  background: var(--wp-accent);
-  color: var(--on-accent);
-  border-color: var(--wp-accent);
+button.danger:hover {
+  background: #D94848;
+  border-color: var(--sc-stop-red-border);
 }
 
+/* ==========================================================================
+   2. Main Workspace Grid & Panels
+   ========================================================================== */
 .main-grid {
   display: grid;
   grid-template-columns: 1.18fr 0.82fr;
   flex: 1;
   min-height: 0;
+  gap: 10px;
+  padding: 8px 10px 10px;
 }
 
-.left-panel, .right-panel {
+.left-panel,
+.right-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.left-panel {
-  border-right: 1px solid var(--wp-border);
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  overflow: hidden;
 }
 
 .subbar {
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  background: var(--wp-surface);
-  border-bottom: 1px solid var(--wp-border);
+  padding: 6px 12px;
+  background: var(--sc-surface);
+  border-bottom: 1px solid var(--sc-border);
   gap: 8px;
   flex-wrap: wrap;
 }
 
+/* Scratch Overlapping Folder Tabs on Right Panel */
+.right-panel > .subbar {
+  background: var(--sc-page-bg);
+  padding: 6px 10px 0;
+  min-height: 44px;
+  align-items: flex-end;
+}
+
+.right-panel > .subbar .toolbar-group {
+  gap: 0;
+  align-items: flex-end;
+}
+
+.right-panel button.tab-btn {
+  height: 35px;
+  padding: 2px 16px 0;
+  border-radius: var(--sc-radius-tab) var(--sc-radius-tab) 0 0;
+  border: 1px solid var(--sc-border);
+  border-bottom: none;
+  background: var(--sc-tab-inactive);
+  color: var(--sc-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: -6px;
+  position: relative;
+  z-index: 1;
+}
+
+.right-panel button.tab-btn:first-child {
+  margin-left: 0;
+  z-index: 3;
+}
+
+.right-panel button.tab-btn:nth-child(2) {
+  z-index: 2;
+}
+
+.right-panel button.tab-btn:hover {
+  background: var(--sc-tab-hover);
+  color: var(--sc-text);
+}
+
+.right-panel button.tab-btn.active {
+  height: 39px;
+  background: var(--sc-surface);
+  color: var(--sc-purple);
+  z-index: 4;
+  margin-bottom: -1px;
+  padding-bottom: 1px;
+}
+
 .subbar-label {
   font-size: 11px;
-  color: var(--wp-muted);
-  font-weight: 600;
+  color: var(--sc-text-muted);
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .snippets {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .snippet-btn {
-  height: 24px;
+  height: 26px;
   font-size: 11.5px;
-  padding: 2px 8px;
-  background: var(--wp-panel);
+  padding: 0 10px;
+  border-radius: var(--sc-radius-pill);
+  background: var(--sc-tab-inactive);
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
 }
 
-/* Editor with Live Syntax Highlighting Overlay */
+.snippet-btn:hover {
+  background: var(--sc-motion);
+  color: #FFFFFF;
+  border-color: var(--sc-motion-border);
+}
+
+/* ==========================================================================
+   3. Python Code Editor (Scratch #F9F9F9 Workspace + 27px Dot Grid)
+   ========================================================================== */
 .editor-wrap {
   position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
-  background: var(--wp-bg);
+  background-color: var(--sc-workspace-bg);
+  background-image: radial-gradient(var(--sc-grid-dot) 1.15px, transparent 1.15px);
+  background-size: 27px 27px;
   overflow: hidden;
 }
 
 .line-numbers {
-  width: 44px;
-  padding: 10px 8px;
+  width: 46px;
+  padding: 12px 8px;
   text-align: right;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.55;
-  color: var(--wp-dim);
-  background: var(--wp-surface);
-  border-right: 1px solid var(--wp-border);
+  line-height: 1.6;
+  color: var(--sc-text-dim);
+  background: var(--sc-surface);
+  border-right: 1px solid var(--sc-border);
   user-select: none;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
 
 .line-numbers .err-line {
-  background: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
+  background: rgba(255, 51, 85, 0.14);
+  color: #CC1F3D;
   font-weight: 700;
   display: block;
   margin: 0 -8px;
@@ -257,8 +485,8 @@ button.tab-btn.active {
 }
 
 .line-numbers .active-line {
-  background: rgba(56, 189, 248, 0.18);
-  color: var(--wp-accent);
+  background: rgba(76, 151, 255, 0.15);
+  color: var(--sc-motion-border);
   font-weight: 700;
   display: block;
   margin: 0 -8px;
@@ -278,12 +506,12 @@ button.tab-btn.active {
   position: absolute;
   inset: 0;
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   width: 100%;
   height: 100%;
   font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 13.5px;
+  line-height: 1.6;
   tab-size: 4;
   white-space: pre;
   overflow: auto;
@@ -293,65 +521,93 @@ button.tab-btn.active {
 
 #code-highlight {
   pointer-events: none;
-  color: var(--wp-text);
+  color: var(--sc-text);
   z-index: 1;
 }
 
 #code-editor {
   background: transparent;
   color: transparent;
-  caret-color: var(--wp-accent);
+  caret-color: var(--sc-purple);
   resize: none;
   z-index: 2;
 }
 
 #code-editor::selection {
-  background: rgba(56, 189, 248, 0.25);
+  background: rgba(133, 92, 214, 0.22);
 }
 
-/* Syntax Token Palette */
-.tok-kw { color: #f472b6; font-weight: 600; }
-.tok-dec { color: #eab308; font-weight: 600; }
-.tok-api { color: #38bdf8; }
-.tok-pen { color: #34d399; }
-.tok-str { color: #a7f3d0; }
-.tok-num { color: #fbbf24; }
-.tok-com { color: #64748b; font-style: italic; }
+/* Syntax Token Palette — Mapped 1:1 to Scratch Block Categories (WCAG AA on #F9F9F9) */
+.tok-kw  { color: #CF8B17; font-weight: 700; }  /* Control */
+.tok-dec { color: #B88600; font-weight: 700; }  /* Events (@when_*) */
+.tok-api { color: #2B6CB0; font-weight: 600; }  /* Motion / Looks / Sensing */
+.tok-pen { color: #0B8E69; font-weight: 600; }  /* Pen Extension */
+.tok-str { color: #389438; }                    /* Operators Green */
+.tok-num { color: #DB6E00; font-weight: 600; }  /* Variables Orange */
+.tok-com { color: #8B93A7; font-style: italic; }
 
-/* Quick Command Insert Bar */
+/* ==========================================================================
+   4. Quick Command Insert Bar (Playful Mini Scratch Blocks)
+   ========================================================================== */
 .palette-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  background: var(--wp-surface);
-  border-top: 1px solid var(--wp-border);
+  gap: 6px;
+  padding: 7px 10px;
+  background: var(--sc-surface);
+  border-top: 1px solid var(--sc-border);
   overflow-x: auto;
 }
 
 .palette-chip {
-  height: 22px;
-  padding: 0 7px;
+  height: 26px;
+  padding: 0 10px;
   font-family: var(--font-mono);
   font-size: 11px;
-  border-radius: 3px;
-  background: var(--wp-panel);
-  color: var(--wp-muted);
-  border: 1px solid var(--wp-border);
+  font-weight: 700;
+  border-radius: var(--sc-radius-sm);
+  background: var(--sc-motion);
+  color: #FFFFFF;
+  border: 1px solid var(--sc-motion-border);
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
 }
 
 .palette-chip:hover {
-  color: var(--wp-text);
-  border-color: var(--wp-accent);
+  filter: brightness(1.06);
+  background: var(--sc-motion);
+  border-color: var(--sc-motion-border);
+}
+
+.palette-chip[data-insert*="pen"] {
+  background: var(--sc-pen);
+  border-color: var(--sc-pen-border);
+}
+
+.palette-chip[data-insert*="say"] {
+  background: var(--sc-looks);
+  border-color: var(--sc-looks-border);
+}
+
+.palette-chip[data-insert*="wait"],
+.palette-chip[data-insert*="for"] {
+  background: var(--sc-control);
+  border-color: var(--sc-control-border);
+}
+
+.palette-chip[data-insert*="touching"] {
+  background: var(--sc-sensing);
+  border-color: var(--sc-sensing-border);
 }
 
 .status-banner {
-  height: 30px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 12px;
   font-size: 12px;
-  border-top: 1px solid var(--wp-border);
-  background: var(--wp-surface);
+  font-weight: 600;
+  border-top: 1px solid var(--sc-border);
+  background: var(--sc-workspace-bg);
+  color: var(--sc-text);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -359,39 +615,43 @@ button.tab-btn.active {
 }
 
 .status-banner.error {
-  background: #3b0a0a;
-  color: #fecaca;
-  border-top-color: var(--red);
+  background: #FFEBEF;
+  color: #B91C1C;
+  border-top-color: var(--sc-myblocks-border);
 }
 
 .status-banner.ok {
-  background: #06210f;
-  color: #bbf7d0;
-  border-top-color: #15803d;
+  background: #E6F9F3;
+  color: var(--sc-teal-dark);
+  border-top-color: var(--sc-teal);
 }
 
 .cursor-telemetry {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--wp-muted);
+  color: var(--sc-text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* ==========================================================================
+   5. Stage, Controls, Telemetry & Variables Watch
+   ========================================================================== */
 .right-content {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  background: var(--sc-surface);
 }
 
 .stage-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .canvas-frame {
@@ -404,36 +664,45 @@ button.tab-btn.active {
   width: 100%;
   max-width: 480px;
   aspect-ratio: 4 / 3;
-  border-radius: 4px;
-  border: 1px solid var(--wp-border-strong);
-  background: var(--wp-bg);
+  border-radius: var(--sc-radius-md);
+  border: 1px solid var(--sc-border);
+  background: #FFFFFF;
   display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .ask-overlay {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  background: rgba(18, 24, 32, 0.95);
-  border: 1px solid var(--wp-accent);
-  border-radius: 4px;
-  padding: 6px 8px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  background: #FFFFFF;
+  border: 2px solid var(--sc-motion);
+  border-radius: var(--sc-radius-md);
+  padding: 8px 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 
 .ask-overlay input {
   flex: 1;
-  height: 26px;
-  background: var(--wp-bg);
-  color: var(--wp-text);
-  border: 1px solid var(--wp-border);
-  border-radius: 3px;
-  padding: 0 8px;
+  height: 30px;
+  background: #FFFFFF;
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-pill);
+  padding: 0 12px;
   font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 600;
+}
+
+.ask-overlay input:focus {
+  outline: none;
+  border-color: var(--sc-purple);
+  box-shadow: 0 0 0 3px var(--sc-purple-ring);
 }
 
 .stage-controls {
@@ -445,17 +714,17 @@ button.tab-btn.active {
   max-width: 480px;
 }
 
-/* Monospace Telemetry Strip */
+/* Telemetry Strip */
 .telemetry-grid {
   width: 100%;
   max-width: 480px;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
-  background: var(--wp-surface);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 6px 8px;
+  gap: 6px;
+  background: var(--sc-workspace-bg);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  padding: 8px 10px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -468,24 +737,25 @@ button.tab-btn.active {
 }
 
 .tele-label {
-  color: var(--wp-dim);
+  color: var(--sc-text-dim);
   font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .tele-val {
-  color: var(--wp-text);
-  font-weight: 600;
+  color: var(--sc-text);
+  font-weight: 700;
   text-align: right;
 }
 
 .vars-watch {
   width: 100%;
   max-width: 480px;
-  background: var(--wp-surface);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 6px 8px;
+  background: var(--sc-sprite-pane-bg);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  padding: 8px 10px;
   font-size: 11.5px;
   display: flex;
   flex-wrap: wrap;
@@ -494,17 +764,35 @@ button.tab-btn.active {
 }
 
 .var-pill {
-  background: var(--wp-panel);
-  border: 1px solid #f97316;
-  color: var(--wp-text);
-  padding: 2px 6px;
-  border-radius: 3px;
+  background: var(--sc-variables);
+  border: 1px solid var(--sc-variables-border);
+  color: #FFFFFF;
+  padding: 3px 8px;
+  border-radius: var(--sc-radius-sm);
   font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-/* Authentic Scratch Block Tree Inspector */
+.var-pill-list {
+  background: var(--sc-list);
+  border-color: var(--sc-list-border);
+}
+
+.var-pill-local {
+  background: var(--sc-motion);
+  border-color: var(--sc-motion-border);
+}
+
+.var-pill-local-list {
+  background: var(--sc-looks);
+  border-color: var(--sc-looks-border);
+}
+
+/* ==========================================================================
+   6. Authentic Scratch 3.0 Block Tree Inspector
+   ========================================================================== */
 .block-tree {
   display: flex;
   flex-direction: column;
@@ -512,78 +800,88 @@ button.tab-btn.active {
 }
 
 .script-stack {
-  background: var(--wp-surface);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 10px;
+  background: var(--sc-workspace-bg);
+  background-image: radial-gradient(var(--sc-grid-dot) 1px, transparent 1px);
+  background-size: 27px 27px;
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  padding: 12px;
 }
 
 .scratch-hat {
-  background: var(--yellow);
-  color: var(--on-yellow);
+  background: var(--sc-events);
+  color: #FFFFFF;
+  border: 1px solid var(--sc-events-border);
   font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 10px 10px 3px 3px;
-  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 14px 14px 4px 4px;
+  font-size: 12.5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   cursor: pointer;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
 }
 
 .scratch-block {
-  background: #2563eb;
-  color: #ffffff;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  margin-top: 3px;
+  background: var(--sc-motion);
+  color: #FFFFFF;
+  border: 1px solid var(--sc-motion-border);
+  padding: 6px 12px;
+  border-radius: var(--sc-radius-sm);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 2px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   cursor: pointer;
-  border-left: 3px solid rgba(255, 255, 255, 0.25);
 }
 
-.scratch-block:hover, .scratch-hat:hover {
-  filter: brightness(1.1);
+.scratch-block:hover,
+.scratch-hat:hover {
+  filter: brightness(1.06);
 }
 
-.scratch-block.pen { background: var(--green); color: var(--on-green); font-weight: 600; }
-.scratch-block.looks { background: #7c3aed; color: #ffffff; }
-.scratch-block.sound { background: #c026d3; color: #ffffff; }
-.scratch-block.control { background: var(--yellow); color: var(--on-yellow); font-weight: 600; }
-.scratch-block.sensing { background: #0284c7; color: #ffffff; }
-.scratch-block.data { background: #ea580c; color: #ffffff; }
-.scratch-block.custom { background: #e11d48; color: #ffffff; font-weight: 600; }
+.scratch-block.pen     { background: var(--sc-pen);       border-color: var(--sc-pen-border);       color: #FFFFFF; }
+.scratch-block.looks   { background: var(--sc-looks);     border-color: var(--sc-looks-border);     color: #FFFFFF; }
+.scratch-block.sound   { background: var(--sc-sound);     border-color: var(--sc-sound-border);     color: #FFFFFF; }
+.scratch-block.control { background: var(--sc-control);   border-color: var(--sc-control-border);   color: #FFFFFF; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }
+.scratch-block.sensing { background: var(--sc-sensing);   border-color: var(--sc-sensing-border);   color: #FFFFFF; }
+.scratch-block.data    { background: var(--sc-variables); border-color: var(--sc-variables-border); color: #FFFFFF; }
+.scratch-block.custom  { background: var(--sc-myblocks);  border-color: var(--sc-myblocks-border);  color: #FFFFFF; }
 
 .block-meta {
   font-family: var(--font-mono);
   font-size: 10px;
-  opacity: 0.8;
+  opacity: 0.9;
   font-variant-numeric: tabular-nums;
 }
 
 .scratch-nested {
   margin-left: 14px;
   padding-left: 8px;
-  border-left: 2px solid var(--yellow);
+  border-left: 3px solid var(--sc-control);
 }
 
+/* ==========================================================================
+   7. Sprite & Asset Manager + Docs Table
+   ========================================================================== */
 .assets-section {
-  background: var(--wp-surface);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 10px;
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-md);
+  padding: 12px;
   font-size: 12px;
 }
 
 .assets-section h4 {
   margin: 0 0 8px 0;
   font-size: 12px;
-  color: var(--wp-accent);
+  font-weight: 700;
+  color: var(--sc-purple);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -592,67 +890,62 @@ button.tab-btn.active {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--wp-panel);
-  border: 1px solid var(--wp-border);
-  padding: 3px 8px;
-  border-radius: 3px;
+  background: var(--sc-workspace-bg);
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
+  padding: 4px 10px;
+  border-radius: var(--sc-radius-pill);
   margin: 2px 4px 2px 0;
   font-family: var(--font-mono);
   font-size: 11.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .badge:hover {
-  border-color: var(--wp-accent);
-  color: var(--wp-accent);
+  border-color: var(--sc-purple);
+  background: var(--sc-purple-tint);
+  color: var(--sc-purple);
 }
 
 .docs-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .docs-table th,
 .docs-table td {
-  border-bottom: 1px solid var(--wp-border);
-  padding: 5px 6px;
+  border-bottom: 1px solid var(--sc-border);
+  padding: 7px 8px;
   text-align: left;
   vertical-align: top;
 }
 
 .docs-table th {
-  color: var(--wp-muted);
-  font-weight: 600;
+  color: var(--sc-text-muted);
+  font-weight: 700;
+  background: var(--sc-workspace-bg);
 }
 
 .docs-table code {
   font-family: var(--font-mono);
-  color: var(--wp-accent);
+  color: var(--sc-motion-border);
+  font-weight: 700;
   cursor: pointer;
 }
 
-.var-pill-list {
-  border-color: var(--yellow);
+.docs-table code:hover {
+  text-decoration: underline;
 }
 
-.var-pill-local {
-  border-color: var(--wp-accent);
-  background: rgba(56, 189, 248, 0.08);
-}
-
-.var-pill-local-list {
-  border-color: #a855f7;
-  background: rgba(168, 85, 247, 0.08);
-}
-
-/* Interactive Sprite & Asset Manager */
 .assets-section + .assets-section {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .active-sprite-section {
-  border-color: var(--wp-accent);
+  border: 2px solid var(--sc-purple);
+  box-shadow: 0 0 0 4px var(--sc-purple-ring);
 }
 
 .assets-header {
@@ -670,85 +963,91 @@ button.tab-btn.active {
 
 .assets-hint {
   font-size: 11px;
-  color: var(--wp-muted);
+  color: var(--sc-text-muted);
   margin: 4px 0;
 }
 
 .asset-upload-btn {
-  height: 24px;
-  padding: 2px 8px;
+  height: 26px;
+  padding: 0 10px;
   font-size: 11px;
-  border-color: var(--wp-border-strong);
+  border-radius: var(--sc-radius-pill);
+  border-color: var(--sc-border);
 }
 
 .asset-upload-btn:hover {
-  border-color: var(--wp-accent);
-  color: var(--wp-accent);
+  border-color: var(--sc-purple);
+  color: var(--sc-purple);
 }
 
 .sprite-rename-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
 }
 
 .sprite-rename-row input {
   flex: 1;
   min-width: 120px;
-  height: 26px;
-  background: var(--wp-bg);
-  color: var(--wp-text);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 0 8px;
-  font-family: var(--font-mono);
+  height: 30px;
+  background: #FFFFFF;
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-pill);
+  padding: 0 12px;
+  font-family: var(--font-sans);
   font-size: 12px;
+  font-weight: 700;
 }
 
 .sprite-rename-row input:focus {
   outline: none;
-  border-color: var(--wp-accent);
+  border-color: var(--sc-purple);
+  box-shadow: 0 0 0 3px var(--sc-purple-ring);
 }
 
 .sprite-props-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .prop-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .prop-field label {
   font-size: 10px;
-  color: var(--wp-muted);
+  font-weight: 700;
+  color: var(--sc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .prop-field input,
 .prop-field select {
-  height: 26px;
-  background: var(--wp-bg);
-  color: var(--wp-text);
-  border: 1px solid var(--wp-border);
-  border-radius: 4px;
-  padding: 0 6px;
-  font-family: var(--font-mono);
+  height: 30px;
+  background: #FFFFFF;
+  color: var(--sc-text);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-pill);
+  padding: 0 10px;
+  font-family: var(--font-sans);
   font-size: 11.5px;
+  font-weight: 700;
   width: 100%;
 }
 
 .prop-field input:focus,
 .prop-field select:focus {
   outline: none;
-  border-color: var(--wp-accent);
+  border-color: var(--sc-purple);
+  box-shadow: 0 0 0 3px var(--sc-purple-ring);
 }
 
 .sprite-toggles-row {
@@ -756,8 +1055,8 @@ button.tab-btn.active {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  padding: 4px 0 8px;
-  border-bottom: 1px solid var(--wp-border);
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--sc-border);
   margin-bottom: 8px;
 }
 
@@ -766,13 +1065,14 @@ button.tab-btn.active {
   align-items: center;
   gap: 5px;
   font-size: 11.5px;
-  color: var(--wp-text);
+  font-weight: 700;
+  color: var(--sc-text);
   cursor: pointer;
   user-select: none;
 }
 
 .prop-check input {
-  accent-color: var(--wp-accent);
+  accent-color: var(--sc-purple);
   cursor: pointer;
 }
 
@@ -786,16 +1086,19 @@ button.tab-btn.active {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
-  color: var(--wp-muted);
+  color: var(--sc-text-muted);
   font-size: 11.5px;
+  font-weight: 700;
 }
 
-/* Drag-and-Drop .sb3 Overlay */
+/* ==========================================================================
+   8. Drag-and-Drop .sb3 Overlay
+   ========================================================================== */
 .drop-overlay {
   position: fixed;
   inset: 0;
   z-index: 999;
-  background: rgba(12, 16, 22, 0.84);
+  background: rgba(229, 240, 255, 0.88);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -805,31 +1108,33 @@ button.tab-btn.active {
 }
 
 .drop-overlay-card {
-  border: 2px dashed var(--wp-accent);
-  background: var(--wp-surface);
-  border-radius: 10px;
+  border: 2px dashed var(--sc-purple);
+  background: #FFFFFF;
+  border-radius: var(--sc-radius-lg);
   padding: 28px 36px;
   text-align: center;
   max-width: 420px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--sc-shadow-card);
 }
 
 .drop-overlay-title {
   font-size: 17px;
   font-weight: 700;
-  color: var(--wp-accent);
+  color: var(--sc-purple);
   margin-bottom: 6px;
 }
 
 .drop-overlay-sub {
   font-size: 12.5px;
-  color: var(--wp-muted);
+  color: var(--sc-text-muted);
 }
 
-/* Compact Embed Mode (?embed=1) for sivochka.com iframes */
+/* ==========================================================================
+   9. Compact Embed Mode (?embed=1) & Responsive Breakpoints
+   ========================================================================== */
 body.embed-mode .topbar {
-  height: 36px;
-  min-height: 36px;
+  height: 40px;
+  min-height: 40px;
   padding: 0 8px;
   gap: 6px;
 }
@@ -842,6 +1147,11 @@ body.embed-mode #btn-template {
 body.embed-mode .left-panel .subbar,
 body.embed-mode .palette-bar {
   display: none;
+}
+
+body.embed-mode .main-grid {
+  padding: 6px;
+  gap: 6px;
 }
 
 body.embed-mode .right-content {
@@ -865,7 +1175,7 @@ body.embed-mode .right-content {
   .topbar {
     height: auto;
     flex-wrap: wrap;
-    padding: 6px 10px;
+    padding: 8px 10px;
   }
 
   .main-grid {
@@ -873,9 +1183,7 @@ body.embed-mode .right-content {
   }
 
   .left-panel {
-    border-right: none;
-    border-bottom: 1px solid var(--wp-border);
-    min-height: 360px;
+    min-height: 380px;
   }
 }
 

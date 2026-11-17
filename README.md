@@ -71,7 +71,7 @@ node test/test_roundtrip.js
 | File | Role & Responsibilities |
 | --- | --- |
 | [`index.html`](index.html) | Workbench UI layout: target tabs, template selector, code editor, quick palette, 480x360 stage canvas, telemetry grid, block/asset/API tabs, `.sb3` drag-and-drop overlay, and asset upload inputs. |
-| [`style.css`](style.css) | Dark workbench theme, split-pane responsive grid, syntax highlighting token classes, Scratch category block colors, sprite/asset manager forms, drag-and-drop overlay, and `?embed=1` compact layout. |
+| [`style.css`](style.css) | Scratch 3.0 1:1 light theme ([`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)), split-pane responsive grid, category-mapped syntax tokens, Scratch block colors, sprite/asset manager forms, drag-and-drop overlay, and `?embed=1` compact layout. |
 | [`js/compiler.js`](js/compiler.js) | Lexer (`tokenize`), recursive-descent AST parser (`parse`), Ukrainian `CompileError` diagnostics, and Scratch 3.0 block generator (`compileToScratch`) with `self.var`/`local_list_*`, `@warp`, and dynamic menu expressions. |
 | [`js/decompiler.js`](js/decompiler.js) | Scratch 3.0-to-Python DSL decompiler (`decompileTarget`) with local/global scoping, `elif`/operator/negative-literal reconstruction, and Ukrainian block inspector formatter (`formatBlockUk`). |
 | [`js/preview.js`](js/preview.js) | `StagePreview` 480x360 Canvas 2D execution engine supporting multi-sprite ASTs, clone-local state isolation (up to 300 clones), `@warp` procedures, `layerOrder`, Pen HSV/alpha, graphic effects, Web Audio `.wav`/`.mp3` playback, input/color sensing, dragging, and telemetry. |
