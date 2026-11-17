@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://gc.zgo.at; connect-src 'self' https://*.goatcounter.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; media-src 'self' data: blob:" />
-  <title>pyScratch — Перевести Скретч в Пайтон онлайн (.sb3 ↔ Python) | Figarist</title>
-  <meta name="description" content="pyScratch — бесплатная онлайн IDE для перевода Scratch 3.0 (.sb3) в Python и обратно. Редактируйте .sb3 на Python, анализируйте ассеты и запускайте проекты в браузере." />
+  <title>Scratch в Python онлайн: конвертер и IDE .sb3 | Figarist</title>
+  <meta name="description" content="Бесплатный онлайн-конвертер Scratch в Python и IDE для .sb3: редактируйте проекты Scratch 3.0 на Python, собирайте обратно в .sb3 и запускайте в браузере." />
   <meta name="keywords" content="перевести скретч в пайтон, scratch в python онлайн, редактировать sb3 в python, pyscratch" />
   <meta name="author" content="Ihor Sivochka (Figarist)" />
   <meta name="theme-color" content="#855CD6" />
@@ -14,19 +14,87 @@
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
-  <meta property="og:title" content="pyScratch — Перевести Скретч в Пайтон онлайн (.sb3 ↔ Python)" />
-  <meta property="og:description" content="Конвертируйте проекты Scratch 3.0 (.sb3) в Python-код и обратно прямо в браузере." />
+  <meta property="og:title" content="Scratch в Python онлайн: конвертер и IDE .sb3 | Figarist" />
+  <meta property="og:description" content="Бесплатный онлайн-конвертер Scratch в Python и IDE для .sb3: редактируйте проекты Scratch 3.0 на Python, собирайте обратно в .sb3 и запускайте в браузере." />
   <meta property="og:locale" content="ru_RU" />
   <meta property="og:locale:alternate" content="uk_UA" />
   <meta property="og:locale:alternate" content="en_US" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/ru/" />
-  <meta property="og:image" content="https://sivochka.com/assets/images/default-social-card.webp" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="pyScratch — Перевести Скретч в Пайтон онлайн (.sb3 ↔ Python)" />
-  <meta name="twitter:description" content="Конвертируйте проекты Scratch 3.0 (.sb3) в Python-код и обратно прямо в браузере." />
-  <meta name="twitter:image" content="https://sivochka.com/assets/images/default-social-card.webp" />
+  <meta property="og:image" content="https://sivochka.com/assets/images/figaristgithub.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Scratch в Python онлайн: конвертер и IDE .sb3 | Figarist" />
+  <meta name="twitter:description" content="Бесплатный онлайн-конвертер Scratch в Python и IDE для .sb3: редактируйте проекты Scratch 3.0 на Python, собирайте обратно в .sb3 и запускайте в браузере." />
+  <meta name="twitter:image" content="https://sivochka.com/assets/images/figaristgithub.png" />
   <meta name="twitter:creator" content="@figarist" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://sivochka.com/pyScratch/ru/#app",
+        "name": "pyScratch",
+        "url": "https://sivochka.com/pyScratch/ru/",
+        "description": "Двусторонний компилятор и декомпилятор Python DSL ↔ Scratch 3.0 (.sb3) с живой сценой Canvas 2D в браузере.",
+        "applicationCategory": [
+          "EducationalApplication",
+          "DeveloperApplication"
+        ],
+        "operatingSystem": "All",
+        "inLanguage": "ru",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "@id": "https://sivochka.com#person",
+          "name": "Ihor Sivochka",
+          "alternateName": [
+            "Figarist",
+            "Ігор Сівочка"
+          ],
+          "url": "https://sivochka.com/"
+        },
+        "creator": {
+          "@id": "https://sivochka.com#person"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://sivochka.com#website",
+          "name": "Ihor Sivochka (Figarist)",
+          "url": "https://sivochka.com/"
+        },
+        "audience": {
+          "@type": "EducationalAudience",
+          "educationalRole": "student"
+        },
+        "image": "https://sivochka.com/assets/images/figaristgithub.png"
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://sivochka.com/pyScratch/ru/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "sivochka.com",
+            "item": "https://sivochka.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "pyScratch",
+            "item": "https://sivochka.com/pyScratch/ru/"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="../site.webmanifest" />
   <link rel="stylesheet" href="../style.css" />
@@ -60,8 +128,9 @@
     </div>
 
     <nav class="menu-links" aria-label="Links">
-      <a href="https://sivochka.com/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-hub" title="Создано sivochka.com — персональный хаб Игоря Сивочки">sivochka.com</a>
-      <a href="https://sivochka.com/tutoring/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring" title="Индивидуальные занятия по Scratch и Python">Репетиторство</a>
+      <a href="https://sivochka.com/ru/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-hub" title="Создано sivochka.com — персональный хаб Игоря Сивочки">sivochka.com</a>
+      <a href="https://sivochka.com/ru/tutoring/python/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-python" title="Индивидуальные занятия по Python">Python-репетитор</a>
+      <a href="https://sivochka.com/ru/tutoring/scratch/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-scratch" title="Индивидуальные занятия по Scratch">Scratch-репетитор</a>
       <a href="https://github.com/Figarist/pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" title="Исходный код pyScratch на GitHub">GitHub</a>
     </nav>
 

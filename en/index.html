@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://gc.zgo.at; connect-src 'self' https://*.goatcounter.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; media-src 'self' data: blob:" />
-  <title>pyScratch — Online Scratch to Python Converter &amp; .sb3 Editor | Figarist</title>
-  <meta name="description" content="pyScratch — free online Scratch to Python converter and bidirectional .sb3 IDE. Edit Scratch 3.0 projects in Python, inspect .sb3 assets, and run on a live Canvas 2D stage." />
+  <title>Scratch to Python Converter Online &amp; .sb3 IDE | Figarist</title>
+  <meta name="description" content="Free online Scratch to Python converter and .sb3 IDE: edit Scratch 3.0 projects as Python, compile back to .sb3 and run on a live stage in the browser." />
   <meta name="keywords" content="scratch to python converter online, edit sb3 in python, scratch 3.0 python ide, sb3 decompiler, pyscratch" />
   <meta name="author" content="Ihor Sivochka (Figarist)" />
   <meta name="theme-color" content="#855CD6" />
@@ -14,19 +14,87 @@
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
-  <meta property="og:title" content="pyScratch — Online Scratch to Python Converter &amp; .sb3 Editor" />
-  <meta property="og:description" content="Convert Scratch 3.0 (.sb3) projects to clean Python and compile Python back to .sb3 in your browser." />
+  <meta property="og:title" content="Scratch to Python Converter Online &amp; .sb3 IDE | Figarist" />
+  <meta property="og:description" content="Free online Scratch to Python converter and .sb3 IDE: edit Scratch 3.0 projects as Python, compile back to .sb3 and run on a live stage in the browser." />
   <meta property="og:locale" content="en_US" />
   <meta property="og:locale:alternate" content="uk_UA" />
   <meta property="og:locale:alternate" content="ru_RU" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/en/" />
-  <meta property="og:image" content="https://sivochka.com/assets/images/default-social-card.webp" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="pyScratch — Online Scratch to Python Converter &amp; .sb3 Editor" />
-  <meta name="twitter:description" content="Convert Scratch 3.0 (.sb3) projects to clean Python and compile Python back to .sb3 in your browser." />
-  <meta name="twitter:image" content="https://sivochka.com/assets/images/default-social-card.webp" />
+  <meta property="og:image" content="https://sivochka.com/assets/images/figaristgithub.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Scratch to Python Converter Online &amp; .sb3 IDE | Figarist" />
+  <meta name="twitter:description" content="Free online Scratch to Python converter and .sb3 IDE: edit Scratch 3.0 projects as Python, compile back to .sb3 and run on a live stage in the browser." />
+  <meta name="twitter:image" content="https://sivochka.com/assets/images/figaristgithub.png" />
   <meta name="twitter:creator" content="@figarist" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://sivochka.com/pyScratch/en/#app",
+        "name": "pyScratch",
+        "url": "https://sivochka.com/pyScratch/en/",
+        "description": "Bidirectional Python DSL to Scratch 3.0 (.sb3) compiler, decompiler and live Canvas 2D stage simulator in the browser.",
+        "applicationCategory": [
+          "EducationalApplication",
+          "DeveloperApplication"
+        ],
+        "operatingSystem": "All",
+        "inLanguage": "en",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "@id": "https://sivochka.com#person",
+          "name": "Ihor Sivochka",
+          "alternateName": [
+            "Figarist",
+            "Ігор Сівочка"
+          ],
+          "url": "https://sivochka.com/"
+        },
+        "creator": {
+          "@id": "https://sivochka.com#person"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://sivochka.com#website",
+          "name": "Ihor Sivochka (Figarist)",
+          "url": "https://sivochka.com/"
+        },
+        "audience": {
+          "@type": "EducationalAudience",
+          "educationalRole": "student"
+        },
+        "image": "https://sivochka.com/assets/images/figaristgithub.png"
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://sivochka.com/pyScratch/en/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "sivochka.com",
+            "item": "https://sivochka.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "pyScratch",
+            "item": "https://sivochka.com/pyScratch/en/"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="../site.webmanifest" />
   <link rel="stylesheet" href="../style.css" />
@@ -61,7 +129,8 @@
 
     <nav class="menu-links" aria-label="Links">
       <a href="https://sivochka.com/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-hub" title="Built by sivochka.com — Ihor Sivochka&#x27;s personal hub">sivochka.com</a>
-      <a href="https://sivochka.com/tutoring/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring" title="Private lessons in Scratch and Python">Tutoring</a>
+      <a href="https://sivochka.com/tutoring/python/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-python" title="Private Python lessons">Python tutor</a>
+      <a href="https://sivochka.com/tutoring/scratch/" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-scratch" title="Private Scratch lessons">Scratch tutor</a>
       <a href="https://github.com/Figarist/pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" title="pyScratch source code on GitHub">GitHub</a>
     </nav>
 
