@@ -23,13 +23,16 @@
 - **Educational Browser IDE & Shareable URLs** ([`index.html`](index.html), [`js/app.js`](js/app.js), [`style.css`](style.css))
   - Dark workbench layout with live syntax highlighting, line-number error/selection markers, 4-space `Tab` and `:` auto-indentation, `Ctrl+Enter` / `Cmd+Enter` execution shortcut, and a **Share (`Поділитися`)** button that encodes the active script into a shareable `?code=<base64url>` link.
   - Interactive **Sprite & Asset Manager** UI in the `Асети (.sb3)` tab to rename/delete sprites, edit initial `x`, `y`, `size`, `direction`, `rotationStyle`, `visible`, and `draggable` properties, and upload `.svg`/`.png`/`.jpg` costumes/backdrops or `.wav`/`.mp3` sounds.
-  - Multi-target tab switcher (`Stage`, `Sprite1`, and `+ Спрайт` creation), clickable quick command palette, interactive Ukrainian block tree inspector (`formatBlockUk`) that jumps to the corresponding source line, built-in API reference tab, and 6 interactive learning templates:
+  - Multi-target tab switcher (`Stage`, `Sprite1`, and `+ Спрайт` creation), clickable quick command palette, interactive Ukrainian block tree inspector (`formatBlockUk`) that jumps to the corresponding source line, built-in API reference tab, and 9 interactive learning templates:
     - `hexagon` — Geometry & Pen Extension drawing + backdrop transition
     - `functions` — Custom procedures (`def polygon(sides, step):`)
     - `arrows` — Arrow-key movement, edge bouncing, and stamping
     - `clones` — Clones and firework-style particle bursts
     - `quiz` — Interactive `ask()`/`answer()` dialog, `elif` branching, and lists
     - `levels` — Multi-level backdrop switching and `broadcast()` events
+    - `pong` — Classic Pong paddle-and-ball arcade game
+    - `maze` — Arrow-key maze navigation with `touching_color()`
+    - `clicker` — Timed clone-clicking mini-game
 
 ## Quick Start
 
@@ -52,7 +55,7 @@ The browser IDE accepts URL query parameters for lesson embeds and shareable lin
 | Parameter | Example | Behavior |
 | --- | --- | --- |
 | `?embed=1` | `?embed=1` (or `true`) | Enables compact `embed-mode` layout (hides template subbar, quick palette, brand subtitle, and reset button) for iframes. |
-| `?snippet=<name>` | `?snippet=clones` | Preloads one of the 6 built-in templates (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`). |
+| `?snippet=<name>` | `?snippet=clones` | Preloads one of the 9 built-in templates (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`). |
 | `?code=<base64url>` | `?code=QGd...` | Decodes a UTF-8 Base64URL-encoded Python DSL script into the active sprite editor (generated automatically by the **Поділитися / Share** button). Overrides `?snippet`. |
 | `?autorun=1` | `?embed=1&snippet=clones&autorun=1` | Automatically compiles and runs the project on the stage when the page loads (unless `?code=` decoding failed). |
 
@@ -76,15 +79,18 @@ node test/test_roundtrip.js
 | [`js/decompiler.js`](js/decompiler.js) | Scratch 3.0-to-Python DSL decompiler (`decompileTarget`) with local/global scoping, `elif`/operator/negative-literal reconstruction, and Ukrainian block inspector formatter (`formatBlockUk`). |
 | [`js/preview.js`](js/preview.js) | `StagePreview` 480x360 Canvas 2D execution engine supporting multi-sprite ASTs, clone-local state isolation (up to 300 clones), `@warp` procedures, `layerOrder`, Pen HSV/alpha, graphic effects, Web Audio `.wav`/`.mp3` playback, input/color sensing, dragging, and telemetry. |
 | [`js/sb3Bridge.js`](js/sb3Bridge.js) | `.sb3` ZIP pack/unpack bridge (`loadSb3`, `saveSb3`), RFC 1321 `md5` hasher, procedural `.wav` generator, default project/sprite builders, and sprite/asset management APIs (`renameSprite`, `deleteSprite`, `updateSpriteProps`, `addCostumeAsset`, `addSoundAsset`). |
-| [`js/app.js`](js/app.js) | Browser IDE controller wiring editor highlighting, cursor telemetry, 6 learning templates (`SNIPPETS`), built-in `API_DOCS`, block tree navigation, Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, URL parameters (`?embed=1`, `?snippet=`, `?code=`, `?autorun=1`), and Share button. |
+| [`js/app.js`](js/app.js) | Browser IDE controller wiring editor highlighting, cursor telemetry, 9 learning templates (`SNIPPETS`), built-in `API_DOCS`, block tree navigation, Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, URL parameters (`?embed=1`, `?snippet=`, `?code=`, `?autorun=1`), and Share button. |
+| [`js/inspector.js`](js/inspector.js) | `.sb3` project analyzer and optimizer (5 MB `project.json` / 10 MB asset limits, unused asset cleanup, and raster optimization). |
+| [`js/i18n.js`](js/i18n.js) | Multi-language UI localization (`uk`, `en`, `ru`) with `?lang=` query parameter and `localStorage` persistence. |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip v3.10.1 library enabling offline ZIP compression/decompression in both browser and Node.js tests. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | 9-part Node.js verification suite covering MD5, assets, compilation, idempotent round-trips, `formatBlockUk`, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, and full 1:1 Scratch 3.0 parity integration. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | 12-part Node.js verification suite covering MD5, assets, compilation, idempotent round-trips, `formatBlockUk`, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, Scratch 3.0 parity, and reliability regressions. |
 
-## Documentation & Resources
+## Documentation & Versioning
 
+- **[Changelog](CHANGELOG.md)** — Release history and version tracking (`MAJOR.MINOR.PATCH` in [`package.json`](package.json) and `meta.agent` in [`js/sb3Bridge.js`](js/sb3Bridge.js); every update must bump the version).
 - **[Python DSL Reference](docs/DSL_REFERENCE.md)** — Complete specification of supported Python DSL syntax, event decorators, custom procedures, Scratch 3.0 opcode mappings, and compiler/runtime behaviors.
 - **[Roadmap & TODO](TODO.md)** — Planned features, improvements, and open items.
-- **[Contributing Guide](CONTRIBUTING.md)** — Architecture overview, 4-step block workflow, and pull request guidelines.
+- **[Contributing Guide](CONTRIBUTING.md)** — Architecture overview, 4-step block workflow, versioning policy, and pull request guidelines.
 - **[License](LICENSE)** — MIT License terms.
 
 ## Contributing & Open Source

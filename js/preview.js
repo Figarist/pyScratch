@@ -1591,8 +1591,10 @@
     }
 
     moveActorTo(actor, nx, ny) {
-      const clampedX = Math.max(-240, Math.min(240, nx));
-      const clampedY = Math.max(-180, Math.min(180, ny));
+      const safeX = Number.isFinite(Number(nx)) ? Number(nx) : 0;
+      const safeY = Number.isFinite(Number(ny)) ? Number(ny) : 0;
+      const clampedX = Math.max(-240, Math.min(240, safeX));
+      const clampedY = Math.max(-180, Math.min(180, safeY));
       if (actor.penDown) {
         this.penCtx.strokeStyle = actor.penColor;
         this.penCtx.lineWidth = actor.penSize;
@@ -1623,17 +1625,20 @@
     }
 
     async _glideToCoords(actor, secs, targetX, targetY, warpMode, scriptCtx) {
-      if (secs <= 0) {
-        this.moveActorTo(actor, targetX, targetY);
+      const safeSecs = Number(secs);
+      const safeTargetX = Number.isFinite(Number(targetX)) ? Number(targetX) : actor.x;
+      const safeTargetY = Number.isFinite(Number(targetY)) ? Number(targetY) : actor.y;
+      if (!(safeSecs > 0)) {
+        this.moveActorTo(actor, safeTargetX, safeTargetY);
         return true;
       }
       const startX = actor.x;
       const startY = actor.y;
-      const steps = Math.max(1, Math.floor((secs * 1000) / 16));
+      const steps = Math.max(1, Math.floor((safeSecs * 1000) / 16));
       for (let i = 1; i <= steps; i++) {
         if (scriptCtx && scriptCtx.isStopped()) return false;
         const t = i / steps;
-        this.moveActorTo(actor, startX + (targetX - startX) * t, startY + (targetY - startY) * t);
+        this.moveActorTo(actor, startX + (safeTargetX - startX) * t, startY + (safeTargetY - startY) * t);
         if (!warpMode) this.render();
         const ok = await this._sleepCancellable(16, scriptCtx);
         if (!ok) return false;
@@ -1780,13 +1785,13 @@
           break;
         }
         case 'turn_right':
-          actor.direction += Number(arg(0));
+          actor.direction += Number.isFinite(Number(arg(0))) ? Number(arg(0)) : 0;
           break;
         case 'turn_left':
-          actor.direction -= Number(arg(0));
+          actor.direction -= Number.isFinite(Number(arg(0))) ? Number(arg(0)) : 0;
           break;
         case 'point_in_direction':
-          actor.direction = Number(arg(0));
+          actor.direction = Number.isFinite(Number(arg(0))) ? Number(arg(0)) : 0;
           break;
         case 'point_towards': {
           const dest = String(arg(0));
@@ -2190,8 +2195,10 @@
           if (this.onAsk) {
             const ans = await new Promise((resolve) => {
               this.pendingAskResolver = resolve;
+              this._pendingAskScriptCtx = scriptCtx;
               this.onAsk(question, (submittedVal) => {
                 this.pendingAskResolver = null;
+                this._pendingAskScriptCtx = null;
                 resolve(submittedVal);
               });
             });
@@ -2248,14 +2255,16 @@
         }
         case 'show_variable':
         case 'show_list': {
-          const mName = String(arg(0));
+          const arg0 = stmt.args && stmt.args[0];
+          const mName = arg0 && arg0.type === 'Var' ? String(arg0.name) : String(arg(0));
           this.hiddenMonitors.delete(mName);
           this.visibleMonitors.add(mName);
           break;
         }
         case 'hide_variable':
         case 'hide_list': {
-          const mName = String(arg(0));
+          const arg0 = stmt.args && stmt.args[0];
+          const mName = arg0 && arg0.type === 'Var' ? String(arg0.name) : String(arg(0));
           this.hiddenMonitors.add(mName);
           this.visibleMonitors.delete(mName);
           break;
@@ -2268,6 +2277,12 @@
           if (opt === 'other scripts in sprite' || opt === 'other scripts in stage') {
             actor._scriptGen = (actor._scriptGen || 0) + 1;
             if (scriptCtx) scriptCtx.gen = actor._scriptGen;
+            if (this.pendingAskResolver && this._pendingAskScriptCtx && this._pendingAskScriptCtx.isStopped()) {
+              this.pendingAskResolver('');
+              this.pendingAskResolver = null;
+              this._pendingAskScriptCtx = null;
+              if (this.onAsk) this.onAsk(null);
+            }
             break;
           }
           this.isRunning = false;
@@ -2278,6 +2293,7 @@
             this.pendingAskResolver('');
             this.pendingAskResolver = null;
           }
+          this._pendingAskScriptCtx = null;
           if (this.onAsk) this.onAsk(null);
           for (const a of this.actors) a.sayText = '';
           return 'RETURN_SCRIPT';

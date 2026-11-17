@@ -280,7 +280,7 @@
       meta: {
         semver: '3.0.0',
         vm: '2.3.0',
-        agent: 'pyScratch-2.0'
+        agent: 'pyScratch-1.1.0'
       }
     };
 
@@ -663,7 +663,7 @@
     }
     const projectText = await projectFile.async('string');
     const projectJson = JSON.parse(projectText);
-    if (!projectJson || !Array.isArray(projectJson.targets)) {
+    if (!projectJson || !Array.isArray(projectJson.targets) || projectJson.targets.length === 0) {
       throw new Error('Некоректна структура project.json у файлі .sb3');
     }
 
@@ -692,6 +692,7 @@
 
     if (assetsMap) {
       for (const [filename, data] of assetsMap.entries()) {
+        if (filename === 'project.json') continue;
         zip.file(filename, data);
       }
     }

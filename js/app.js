@@ -1148,7 +1148,20 @@ def catch_target():
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, w, h);
 
-        const outFmt = item.dataFormat === 'png' && !needsShrink ? 'png' : 'jpg';
+        let hasAlpha = false;
+        if (item.dataFormat === 'png' && typeof ctx.getImageData === 'function') {
+          try {
+            const px = ctx.getImageData(0, 0, w, h).data;
+            for (let i = 3; i < px.length; i += 4) {
+              if (px[i] < 255) {
+                hasAlpha = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        const outFmt = item.dataFormat === 'png' && (!needsShrink || hasAlpha) ? 'png' : 'jpg';
         const outMime = outFmt === 'png' ? 'image/png' : 'image/jpeg';
         const outBlob = await new Promise((resolve) => canvas.toBlob(resolve, outMime, 0.82));
         if (!outBlob) continue;
@@ -1346,9 +1359,10 @@ def catch_target():
       return el;
     }
 
-    function renderChain(startId, container) {
+    function renderChain(startId, container, visited = new Set()) {
       let curr = startId;
-      while (curr && blocks[curr]) {
+      while (curr && blocks[curr] && !visited.has(curr)) {
+        visited.add(curr);
         const b = blocks[curr];
         const el = createBlockRow(curr, false);
         container.appendChild(el);
@@ -1356,7 +1370,7 @@ def catch_target():
         if (b.inputs && b.inputs.SUBSTACK && b.inputs.SUBSTACK[1]) {
           const nest = document.createElement('div');
           nest.className = 'scratch-nested';
-          renderChain(b.inputs.SUBSTACK[1], nest);
+          renderChain(b.inputs.SUBSTACK[1], nest, visited);
           container.appendChild(nest);
         }
         if (b.inputs && b.inputs.SUBSTACK2 && b.inputs.SUBSTACK2[1]) {
@@ -1367,7 +1381,7 @@ def catch_target():
 
           const nest2 = document.createElement('div');
           nest2.className = 'scratch-nested';
-          renderChain(b.inputs.SUBSTACK2[1], nest2);
+          renderChain(b.inputs.SUBSTACK2[1], nest2, visited);
           container.appendChild(nest2);
         }
         curr = b.next;
@@ -1633,6 +1647,11 @@ def catch_target():
     btn.onclick = () => {
       const key = btn.getAttribute('data-snippet');
       if (SNIPPETS[key] && editor) {
+        const activeTarget = state.projectJson && state.projectJson.targets[state.activeTargetIdx];
+        if (activeTarget && activeTarget.isStage) {
+          const firstSpriteIdx = state.projectJson.targets.findIndex((t) => !t.isStage);
+          if (firstSpriteIdx >= 0) selectTarget(firstSpriteIdx);
+        }
         editor.value = SNIPPETS[key];
         state.highlightedLine = null;
         updateEditorDecorations();
@@ -1855,7 +1874,7 @@ def catch_target():
         a.href = url;
         a.download = 'pyscratch_project.sb3';
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         setStatus('Файл pyscratch_project.sb3 збережено (усі спрайти та асети упаковано).');
       } catch (err) {
         setStatus('Помилка збереження .sb3: ' + (err && err.message ? err.message : String(err)), true);

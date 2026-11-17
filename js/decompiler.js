@@ -79,7 +79,12 @@
         const type = val[0];
         // 4..8: numeric literals
         if (type >= 4 && type <= 8) {
-          return val[1] === '' || val[1] === null || val[1] === undefined ? '0' : String(val[1]);
+          if (val[1] === '' || val[1] === null || val[1] === undefined) return '0';
+          const strVal = String(val[1]).trim();
+          if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(strVal)) return strVal;
+          const num = Number(strVal);
+          if (strVal !== '' && Number.isFinite(num)) return String(num);
+          return JSON.stringify(String(val[1]));
         }
         // 9: color (#hex), 10: string, 11: broadcast
         if (type === 9 || type === 10 || type === 11) {
@@ -126,13 +131,18 @@
       return JSON.stringify(fallback);
     }
 
+    const activeReporters = new Set();
+
     function decompileReporter(blockId) {
+      if (!blockId || activeReporters.has(blockId)) return '0';
       const b = blocks[blockId];
       if (!b) return '0';
-      switch (b.opcode) {
-        case 'argument_reporter_string_number':
-        case 'argument_reporter_boolean':
-          return readField(b, 'VALUE', 'arg');
+      activeReporters.add(blockId);
+      try {
+        switch (b.opcode) {
+          case 'argument_reporter_string_number':
+          case 'argument_reporter_boolean':
+            return sanitizeIdent(readField(b, 'VALUE', 'arg'), 'arg');
         case 'motion_xposition':
           return 'x_position()';
         case 'motion_yposition':
@@ -265,6 +275,9 @@
         }
         default:
           return `0`;
+        }
+      } finally {
+        activeReporters.delete(blockId);
       }
     }
 
@@ -324,36 +337,39 @@
     const parts = [];
     parts.push(`# === ${target.isStage ? 'СКРИПТ СЦЕНИ' : 'СКРИПТ ГРАВЦЯ'} (${target.name}) ===\n`);
 
-    function decompileIf(b, indent, keyword = 'if') {
+    function decompileIf(b, indent, keyword = 'if', visited = new Set()) {
       const lines = [];
       const pad = '    '.repeat(indent);
       lines.push(`${pad}${keyword} ${readInput(b, 'CONDITION')}:`);
       const sub1 = b.inputs && b.inputs.SUBSTACK ? b.inputs.SUBSTACK[1] : null;
-      lines.push(...(sub1 ? decompileChain(sub1, indent + 1) : [`${pad}    pass`]));
+      lines.push(...(sub1 ? decompileChain(sub1, indent + 1, visited) : [`${pad}    pass`]));
 
       if (b.opcode === 'control_if_else') {
         const sub2 = b.inputs && b.inputs.SUBSTACK2 ? b.inputs.SUBSTACK2[1] : null;
         if (
           sub2 &&
+          !visited.has(sub2) &&
           blocks[sub2] &&
           (blocks[sub2].opcode === 'control_if' || blocks[sub2].opcode === 'control_if_else') &&
           !blocks[sub2].next
         ) {
-          lines.push(...decompileIf(blocks[sub2], indent, 'elif'));
+          visited.add(sub2);
+          lines.push(...decompileIf(blocks[sub2], indent, 'elif', visited));
         } else {
           lines.push(`${pad}else:`);
-          lines.push(...(sub2 ? decompileChain(sub2, indent + 1) : [`${pad}    pass`]));
+          lines.push(...(sub2 ? decompileChain(sub2, indent + 1, visited) : [`${pad}    pass`]));
         }
       }
       return lines;
     }
 
-    function decompileChain(startId, indent) {
+    function decompileChain(startId, indent, visited = new Set()) {
       const lines = [];
       let currId = startId;
       const pad = '    '.repeat(indent);
 
-      while (currId && blocks[currId]) {
+      while (currId && blocks[currId] && !visited.has(currId)) {
+        visited.add(currId);
         const b = blocks[currId];
         switch (b.opcode) {
           case 'motion_movesteps':
@@ -639,24 +655,24 @@
           case 'control_repeat': {
             lines.push(`${pad}for i in range(${readInput(b, 'TIMES')}):`);
             const sub = b.inputs && b.inputs.SUBSTACK ? b.inputs.SUBSTACK[1] : null;
-            lines.push(...(sub ? decompileChain(sub, indent + 1) : [`${pad}    pass`]));
+            lines.push(...(sub ? decompileChain(sub, indent + 1, visited) : [`${pad}    pass`]));
             break;
           }
           case 'control_forever': {
             lines.push(`${pad}while True:`);
             const sub = b.inputs && b.inputs.SUBSTACK ? b.inputs.SUBSTACK[1] : null;
-            lines.push(...(sub ? decompileChain(sub, indent + 1) : [`${pad}    pass`]));
+            lines.push(...(sub ? decompileChain(sub, indent + 1, visited) : [`${pad}    pass`]));
             break;
           }
           case 'control_repeat_until': {
             lines.push(`${pad}while not (${readInput(b, 'CONDITION')}):`);
             const sub = b.inputs && b.inputs.SUBSTACK ? b.inputs.SUBSTACK[1] : null;
-            lines.push(...(sub ? decompileChain(sub, indent + 1) : [`${pad}    pass`]));
+            lines.push(...(sub ? decompileChain(sub, indent + 1, visited) : [`${pad}    pass`]));
             break;
           }
           case 'control_if':
           case 'control_if_else':
-            lines.push(...decompileIf(b, indent, 'if'));
+            lines.push(...decompileIf(b, indent, 'if', visited));
             break;
 
           default:

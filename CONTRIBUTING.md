@@ -16,9 +16,11 @@ We welcome pull requests of all sizes—from implementing missing Scratch 3.0 bl
 | [`js/decompiler.js`](js/decompiler.js) | Decompiles Scratch 3.0 `target.blocks` back into 4-space-indented Python DSL (`decompileTarget`) and generates Ukrainian block labels for the visual block tree inspector (`formatBlockUk`). |
 | [`js/preview.js`](js/preview.js) | `StagePreview` 480×360 Canvas 2D execution engine supporting multi-sprite ASTs, clones, custom procedures, Pen drawing/stamping, Web Audio synthesis, input sensing, and live telemetry. |
 | [`js/sb3Bridge.js`](js/sb3Bridge.js) | Packs and unpacks `.sb3` ZIP archives (`loadSb3`, `saveSb3`), computes RFC 1321 MD5 hashes (`md5`), and generates default SVG costumes/backdrops and procedural `.wav` sounds. |
+| [`js/inspector.js`](js/inspector.js) | Analyzes `.sb3` limits (5 MB `project.json`, 10 MB per asset), detects orphan scripts, and removes unused assets. |
+| [`js/i18n.js`](js/i18n.js) | Handles UK/EN/RU UI localization with `?lang=` and `localStorage` persistence. |
 | [`js/app.js`](js/app.js) | Browser IDE controller wiring target tabs, syntax highlighting, error/cursor telemetry, templates (`SNIPPETS`), API reference (`API_DOCS`), block tree navigation, and `.sb3` file I/O (with [`index.html`](index.html) and [`style.css`](style.css)). |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip (`v3.10.1`) providing offline `.sb3` compression/decompression in both the browser and Node.js. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 8-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, `formatBlockUk`, `.sb3` ZIP I/O, headless `StagePreview` execution, and error diagnostics. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 12-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, `formatBlockUk`, `.sb3` ZIP I/O, headless `StagePreview` execution, error diagnostics, and reliability regressions. |
 
 ---
 
@@ -59,9 +61,25 @@ Looking for something to work on? Pick any unchecked `[ ]` item from [`TODO.md`]
 
 ---
 
+## Versioning Policy (Mandatory for Every Update)
+
+To make builds easy to track across lessons, student links, and exported `.sb3` files, **every update must bump the version**:
+
+- **Format**: Semantic Versioning (`MAJOR.MINOR.PATCH`), e.g. `1.1.0`:
+  - `PATCH` (`1.1.X`): bug fixes, reliability improvements, documentation or test updates.
+  - `MINOR` (`1.X.0`): new Scratch 3.0 blocks, runtime features, snippets, or UI capabilities.
+  - `MAJOR` (`X.0.0`): breaking changes to Python DSL syntax or `.sb3` project structure.
+- **Where to update**:
+  1. `version` in [`package.json`](package.json)
+  2. `meta.agent` (`'pyScratch-<version>'`) in [`js/sb3Bridge.js`](js/sb3Bridge.js)
+  3. A new dated section in [`CHANGELOG.md`](CHANGELOG.md)
+
+---
+
 ## Pull Request Process
 
 1. Fork the repository and create a branch from `main` (for example, `feat/glide-to-block`).
 2. Keep changes focused and follow the 4-step workflow above.
-3. Verify `npm test` (`node test/test_roundtrip.js`) exits with code `0`.
-4. Open a Pull Request and complete the checklist in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+3. Bump the version (`package.json`, `js/sb3Bridge.js`, and `CHANGELOG.md`).
+4. Verify `npm test` (`node test/test_roundtrip.js`) exits with code `0`.
+5. Open a Pull Request and complete the checklist in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).

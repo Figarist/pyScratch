@@ -268,7 +268,7 @@
     let str = table[key] != null ? table[key] : (DICT.uk[key] != null ? DICT.uk[key] : key);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        str = str.split(`{${k}}`).join(String(v));
       }
     }
     return str;

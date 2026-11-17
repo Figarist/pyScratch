@@ -915,7 +915,139 @@ def stopper():
   const upperLoaded = await loadSb3(upperBuf);
   assert.strictEqual(typeof upperLoaded.assetsMap.get('TESTASSET.SVG'), 'string', 'Uppercase .SVG must load as string');
 
-  console.log('ALL 11 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 12. Testing Reliability Audit Round 2 Fixes (N-01..N-11) ---');
+  // N-02 & N-10: Custom procedure parameter sanitization in body & non-numeric shadow type 4..8
+  const n02Target = {
+    isStage: false,
+    name: 'N02Sprite',
+    variables: {},
+    lists: {},
+    blocks: {
+      def1: {
+        opcode: 'procedures_definition',
+        next: 'call1',
+        parent: null,
+        inputs: { custom_block: [1, 'proto1'] },
+        fields: {},
+        shadow: false,
+        topLevel: true,
+        x: 0,
+        y: 0
+      },
+      proto1: {
+        opcode: 'procedures_prototype',
+        next: null,
+        parent: 'def1',
+        inputs: {},
+        fields: {},
+        shadow: true,
+        mutation: {
+          tagName: 'mutation',
+          children: [],
+          proccode: 'step_proc %s',
+          argumentids: '["arg1"]',
+          argumentnames: '["step size"]',
+          argumentdefaults: '[""]',
+          warp: 'false'
+        }
+      },
+      call1: {
+        opcode: 'motion_movesteps',
+        next: 'call2',
+        parent: 'def1',
+        inputs: { STEPS: [3, 'arg_rep1', [4, '10']] },
+        fields: {},
+        shadow: false,
+        topLevel: false
+      },
+      arg_rep1: {
+        opcode: 'argument_reporter_string_number',
+        next: null,
+        parent: 'call1',
+        inputs: {},
+        fields: { VALUE: ['step size', null] },
+        shadow: false,
+        topLevel: false
+      },
+      call2: {
+        opcode: 'motion_movesteps',
+        next: null,
+        parent: 'call1',
+        inputs: { STEPS: [1, [4, 'abc']] },
+        fields: {},
+        shadow: false,
+        topLevel: false
+      }
+    }
+  };
+  const n02Dec = decompileTarget(n02Target, f01Stage);
+  assert(n02Dec.includes('def step_proc(step_size):'), 'Procedure param must be sanitized');
+  assert(n02Dec.includes('move(step_size)'), 'Argument reporter must use sanitized ident');
+  assert(n02Dec.includes('move("abc")'), 'Non-numeric type 4 literal must be quoted as string');
+  compileToScratch(n02Dec, n02Target, f01Stage, f01Proj.projectJson);
+
+  // N-03: Cycle protection in decompileChain and decompileReporter
+  const cyclicTarget = {
+    isStage: false,
+    name: 'Cyclic',
+    variables: {},
+    lists: {},
+    blocks: {
+      hat: { opcode: 'event_whenflagclicked', next: 'b1', parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 0, y: 0 },
+      b1: { opcode: 'motion_movesteps', next: 'b2', parent: 'hat', inputs: { STEPS: [3, 'rep1', [4, '1']] }, fields: {}, shadow: false, topLevel: false },
+      b2: { opcode: 'motion_turnright', next: 'b1', parent: 'b1', inputs: { DEGREES: [1, [4, '15']] }, fields: {}, shadow: false, topLevel: false },
+      rep1: { opcode: 'operator_add', next: null, parent: 'b1', inputs: { NUM1: [3, 'rep1', [4, '0']], NUM2: [1, [4, '1']] }, fields: {}, shadow: false, topLevel: false }
+    }
+  };
+  const cyclicDec = decompileTarget(cyclicTarget, f01Stage);
+  assert(cyclicDec.includes('move('), 'Cyclic block graph must decompile without hanging or stack overflow');
+
+  // N-04, N-05, N-08: show_variable(self.hp), NaN coercion, stop("other scripts in sprite") ask cleanup
+  let n08Ask = 'init';
+  const simN = new StagePreview(
+    { width: 480, height: 360, getContext: () => mockCtx },
+    { onAsk: (q) => { n08Ask = q; } }
+  );
+  const nAst = parse(tokenize(`
+@when_flag_clicked
+def main():
+    self.hp = 100
+    show_variable(self.hp)
+    goto("bad_x", 25)
+    glide("bad_secs", 50, -30)
+    turn_right("bad_deg")
+    ask("Still there?")
+
+@when_flag_clicked
+def cancel_other():
+    wait(0.02)
+    stop("other scripts in sprite")
+`));
+  await simN.runAst(nAst);
+  assert(simN.visibleMonitors.has('hp') && !simN.visibleMonitors.has('100'), 'show_variable(self.hp) must register monitor "hp", not its value');
+  assert(Number.isFinite(simN.sprite.x) && simN.sprite.x === 50, 'glide with NaN secs must snap to finite X=50');
+  assert(Number.isFinite(simN.sprite.y) && simN.sprite.y === -30, 'glide with NaN secs must snap to finite Y=-30');
+  assert(Number.isFinite(simN.sprite.direction), 'turn_right with NaN must keep finite direction');
+  assert.strictEqual(n08Ask, null, 'stop("other scripts in sprite") must close active ask() from stopped sibling');
+  simN.reset();
+
+  // N-07: Empty targets validation in loadSb3 & project.json guard in saveSb3
+  const emptyZip = new global.JSZip();
+  emptyZip.file('project.json', JSON.stringify({ targets: [] }));
+  const emptyBuf = await emptyZip.generateAsync({ type: 'uint8array' });
+  await assert.rejects(() => loadSb3(emptyBuf), /Некоректна структура project\.json/);
+
+  const guardMap = new Map(f01Proj.assetsMap);
+  guardMap.set('project.json', '{"targets":[]}');
+  const guardBuf = await saveSb3(f01Proj.projectJson, guardMap, 'uint8array');
+  const guardLoaded = await loadSb3(guardBuf);
+  assert(guardLoaded.projectJson.targets.length >= 2, 'saveSb3 must not let assetsMap overwrite project.json');
+
+  // N-11: i18n parameter substitution with $& / $$
+  const i18nMsg = I18n.t('insp_clean_done', { count: 2, size: '$& $$ 10 KB' });
+  assert(i18nMsg.includes('$& $$ 10 KB'), 'i18n.t must preserve literal $ sequences in params');
+
+  console.log('ALL 12 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {
