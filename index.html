@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pyScratch — Двосторонній конвертер Python ↔ Scratch 3.0 (.sb3)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">pyScratch</span>
+      <span class="brand-sub">Python DSL ↔ Scratch 3.0 (.sb3)</span>
+    </div>
+
+    <div class="toolbar-group" id="target-tabs">
+      <!-- Динамічні вкладки Сцени та Спрайтів -->
+    </div>
+
+    <div class="toolbar-group">
+      <button id="btn-add-sprite" title="Додати новий спрайт у проєкт">+ Спрайт</button>
+      <input type="file" id="file-input" accept=".sb3" class="hidden" />
+      <button id="btn-open">Відкрити .sb3</button>
+      <button id="btn-template">Скинути шаблон</button>
+      <button id="btn-save" class="primary">Зберегти .sb3</button>
+    </div>
+  </header>
+
+  <main class="main-grid">
+    <section class="left-panel">
+      <div class="subbar">
+        <span class="subbar-label">Навчальні шаблони:</span>
+        <div class="snippets">
+          <button class="snippet-btn" data-snippet="hexagon">Геометрія (Олівець)</button>
+          <button class="snippet-btn" data-snippet="functions">Власні функції (def)</button>
+          <button class="snippet-btn" data-snippet="arrows">Керування стрілками</button>
+          <button class="snippet-btn" data-snippet="clones">Клони та Салют</button>
+          <button class="snippet-btn" data-snippet="quiz">Діалог і Списки</button>
+          <button class="snippet-btn" data-snippet="levels">Рівні та Події</button>
+        </div>
+      </div>
+
+      <div class="editor-wrap">
+        <div class="line-numbers" id="line-numbers">1</div>
+        <div class="code-stage">
+          <pre id="code-highlight" aria-hidden="true"></pre>
+          <textarea id="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        </div>
+      </div>
+
+      <div class="palette-bar" id="quick-palette" title="Натисніть, щоб вставити команду в курсор">
+        <button class="palette-chip" data-insert="move(50)">move(50)</button>
+        <button class="palette-chip" data-insert="turn_right(90)">turn_right(90)</button>
+        <button class="palette-chip" data-insert="goto(0, 0)">goto(0, 0)</button>
+        <button class="palette-chip" data-insert="glide(1, 100, 50)">glide(1, 100, 50)</button>
+        <button class="palette-chip" data-insert="pen_down()">pen_down()</button>
+        <button class="palette-chip" data-insert="set_pen_color(&quot;#00ffcc&quot;)">set_pen_color()</button>
+        <button class="palette-chip" data-insert="say(&quot;Привіт!&quot;, 2)">say()</button>
+        <button class="palette-chip" data-insert="wait(0.5)">wait(0.5)</button>
+        <button class="palette-chip" data-insert="for i in range(4):\n    move(60)\n    turn_right(90)">for range()</button>
+        <button class="palette-chip" data-insert="if touching(&quot;edge&quot;):\n    if_on_edge_bounce()">if touching()</button>
+      </div>
+
+      <div class="status-banner ok" id="status-banner">
+        <span id="status-text">Готово. Натисніть «Запустити» або «Зберегти .sb3».</span>
+        <span class="cursor-telemetry" id="cursor-pos">Ряд 1, Стовп 1</span>
+      </div>
+    </section>
+
+    <section class="right-panel">
+      <div class="subbar">
+        <div class="toolbar-group">
+          <button class="tab-btn active" data-view="preview">Сцена (Canvas 2D)</button>
+          <button class="tab-btn" data-view="blocks">Блоки Scratch</button>
+          <button class="tab-btn" data-view="assets">Асети (.sb3)</button>
+          <button class="tab-btn" data-view="docs">Довідник API</button>
+        </div>
+      </div>
+
+      <div class="right-content">
+        <div id="view-preview" class="stage-wrap">
+          <div class="stage-controls">
+            <div class="toolbar-group">
+              <button id="btn-run" class="success">Запустити (Ctrl+Enter)</button>
+              <button id="btn-stop" class="danger">Стоп</button>
+              <button id="btn-mute" title="Увімкнути/вимкнути звук">Звук: Увімк</button>
+            </div>
+            <span id="backdrop-indicator" style="font-family: var(--font-mono); font-size: 11px; color: var(--wp-muted);">Тло: space_bg</span>
+          </div>
+
+          <div class="canvas-frame">
+            <canvas id="stage-canvas" width="480" height="360"></canvas>
+            <div id="ask-overlay" class="ask-overlay hidden">
+              <input type="text" id="ask-input" placeholder="Введіть відповідь..." />
+              <button id="ask-submit" class="primary">OK</button>
+            </div>
+          </div>
+
+          <div class="telemetry-grid">
+            <div class="tele-cell"><span class="tele-label">X</span><span class="tele-val" id="tele-x">0</span></div>
+            <div class="tele-cell"><span class="tele-label">Y</span><span class="tele-val" id="tele-y">0</span></div>
+            <div class="tele-cell"><span class="tele-label">Кут</span><span class="tele-val" id="tele-dir">90°</span></div>
+            <div class="tele-cell"><span class="tele-label">Розмір</span><span class="tele-val" id="tele-size">100%</span></div>
+            <div class="tele-cell"><span class="tele-label">Миша</span><span class="tele-val" id="tele-mouse">0, 0</span></div>
+            <div class="tele-cell"><span class="tele-label">Таймер</span><span class="tele-val" id="tele-timer">0.0s</span></div>
+          </div>
+
+          <div class="vars-watch" id="vars-watch">
+            <span style="color: var(--wp-dim); font-size: 11px;">Змінні та списки з'являться тут під час виконання.</span>
+          </div>
+        </div>
+
+        <div id="view-blocks" class="block-tree hidden"></div>
+        <div id="view-assets" class="hidden"></div>
+        <div id="view-docs" class="hidden"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="vendor/jszip.min.js"></script>
+  <script src="js/sb3Bridge.js"></script>
+  <script src="js/compiler.js"></script>
+  <script src="js/decompiler.js"></script>
+  <script src="js/preview.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

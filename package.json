@@ -1,0 +1,25 @@
+{
+  "name": "pyscratch",
+  "version": "1.0.0",
+  "description": "Bidirectional Python DSL to Scratch 3.0 (.sb3) compiler, decompiler, and Canvas 2D stage simulator",
+  "main": "js/compiler.js",
+  "scripts": {
+    "test": "node test/test_roundtrip.js"
+  },
+  "homepage": "https://sivochka.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Figarist/pyScratch.git"
+  },
+  "keywords": [
+    "scratch",
+    "scratch3",
+    "sb3",
+    "python",
+    "compiler",
+    "decompiler",
+    "education"
+  ],
+  "author": "Figarist",
+  "license": "MIT"
+}
