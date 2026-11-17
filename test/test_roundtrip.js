@@ -22,6 +22,8 @@ const {
 const { compileToScratch, CompileError, tokenize, parse } = require('../js/compiler.js');
 const { decompileTarget, formatBlockUk } = require('../js/decompiler.js');
 const { StagePreview } = require('../js/preview.js');
+const Inspector = require('../js/inspector.js');
+const I18n = require('../js/i18n.js');
 
 async function runAllTests() {
   console.log('--- 1. Testing RFC 1321 MD5 (ASCII, UTF-8 & Binary WAV) ---');
@@ -717,7 +719,95 @@ def inspect():
 
   sim2.reset();
 
-  console.log('ALL 9 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 10. Testing .sb3 Inspector, Asset Optimizer, i18n & Game Snippets (pong, maze, clicker) ---');
+  const inspProj = createDefaultProject();
+  const inspStage = inspProj.projectJson.targets.find((t) => t.isStage);
+  const inspSprite = inspProj.projectJson.targets.find((t) => !t.isStage);
+  compileToScratch('@when_flag_clicked\ndef go():\n    move(10)\n', inspSprite, inspStage, inspProj.projectJson);
+
+  const report1 = Inspector.analyzeProject(inspProj.projectJson, inspProj.assetsMap);
+  assert.strictEqual(report1.spritesCount, 1, 'Inspector must count 1 sprite');
+  assert(report1.backdropsCount >= 1, 'Inspector must count stage backdrops');
+  assert(report1.costumesCount >= 1, 'Inspector must count sprite costumes');
+  assert(report1.totalBlocks >= 2, 'Inspector must count compiled blocks');
+  assert.strictEqual(report1.orphanScripts, 0, 'Compiled hat script must have 0 orphan scripts');
+  assert.strictEqual(report1.isProjectJsonOversized, false, 'Default project.json must be under 5 MB limit');
+
+  // Orphan script detection
+  inspSprite.blocks.orphan_1 = {
+    opcode: 'motion_movesteps',
+    next: null,
+    parent: null,
+    inputs: {},
+    fields: {},
+    shadow: false,
+    topLevel: true,
+    x: 0,
+    y: 0
+  };
+  const reportOrphan = Inspector.analyzeProject(inspProj.projectJson, inspProj.assetsMap);
+  assert.strictEqual(reportOrphan.orphanScripts, 1, 'Inspector must detect orphan top-level non-hat script');
+  delete inspSprite.blocks.orphan_1;
+
+  // Unused asset cleanup
+  const unusedKey = 'deadbeefdeadbeefdeadbeefdeadbeef.png';
+  inspProj.assetsMap.set(unusedKey, new Uint8Array([1, 2, 3, 4]));
+  const reportUnused = Inspector.analyzeProject(inspProj.projectJson, inspProj.assetsMap);
+  assert.strictEqual(reportUnused.unusedAssets.length, 1, 'Inspector must detect 1 unused asset');
+  const cleaned = Inspector.removeUnusedAssets(inspProj.projectJson, inspProj.assetsMap);
+  assert.strictEqual(cleaned.removedCount, 1, 'removeUnusedAssets must remove 1 unused asset');
+  assert.strictEqual(cleaned.freedBytes, 4, 'removeUnusedAssets must report 4 freed bytes');
+  assert(!inspProj.assetsMap.has(unusedKey), 'Unused key must be deleted from assetsMap');
+
+  // Asset replacement & MD5 hash update
+  const oldCostume = inspSprite.costumes[0];
+  const oldMd5ext = oldCostume.md5ext;
+  const newPngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+  const replaced = Inspector.replaceAssetData(inspProj.projectJson, inspProj.assetsMap, oldMd5ext, newPngBytes, 'png', md5);
+  assert.strictEqual(replaced.newAssetId, md5(newPngBytes), 'replaceAssetData must compute exact MD5');
+  assert.strictEqual(replaced.newMd5ext, `${md5(newPngBytes)}.png`, 'replaceAssetData must build new md5ext');
+  assert.strictEqual(oldCostume.assetId, replaced.newAssetId, 'Target costume assetId must update');
+  assert.strictEqual(oldCostume.md5ext, replaced.newMd5ext, 'Target costume md5ext must update');
+  assert(inspProj.assetsMap.has(replaced.newMd5ext), 'assetsMap must contain new asset key');
+  assert(!inspProj.assetsMap.has(oldMd5ext), 'assetsMap must remove old asset key');
+
+  // i18n completeness across uk / en / ru
+  const ukKeys = Object.keys(I18n.DICT.uk).sort();
+  for (const lang of ['en', 'ru']) {
+    assert.deepStrictEqual(Object.keys(I18n.DICT[lang]).sort(), ukKeys, `i18n dictionary for ${lang} must match uk keys`);
+    I18n.setLang(lang, false);
+    assert.strictEqual(I18n.getLang(), lang);
+    assert(I18n.t('tab_inspector').length > 0);
+  }
+  I18n.setLang('uk', false);
+
+  // Extract SNIPPETS from js/app.js and test pong, maze, clicker (compile + decompile + run)
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const snippetsMatch = appSource.match(/const SNIPPETS = (\{[\s\S]*?\n  \});/);
+  assert(snippetsMatch, 'SNIPPETS object must exist in js/app.js');
+  const SNIPPETS = new Function(`return ${snippetsMatch[1]};`)();
+
+  for (const gameKey of ['pong', 'maze', 'clicker']) {
+    assert(typeof SNIPPETS[gameKey] === 'string' && SNIPPETS[gameKey].length > 20, `Snippet ${gameKey} must exist`);
+    const gProj = createDefaultProject();
+    const gStage = gProj.projectJson.targets.find((t) => t.isStage);
+    const gSprite = gProj.projectJson.targets.find((t) => !t.isStage);
+
+    const compiledGame = compileToScratch(SNIPPETS[gameKey], gSprite, gStage, gProj.projectJson);
+    assert(Object.keys(compiledGame.blocks).length > 5, `${gameKey} must compile to >5 Scratch blocks`);
+
+    const decompiledGame = decompileTarget(gSprite, gStage);
+    const recompiledGame = compileToScratch(decompiledGame, gSprite, gStage, gProj.projectJson);
+    assert(Object.keys(recompiledGame.blocks).length > 5, `${gameKey} must re-compile cleanly after decompilation`);
+
+    const gSim = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+    const astMap = new Map([[1, parse(tokenize(SNIPPETS[gameKey]))]]);
+    gSim.runProject(astMap, gProj.projectJson, gProj.assetsMap);
+    await new Promise((r) => setTimeout(r, 60));
+    gSim.reset();
+  }
+
+  console.log('ALL 10 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {

@@ -170,6 +170,109 @@ def on_boss():
     play_sound("laser")
     glide(0.8, 0, 40)
     say("Рівень 2: Хвиля почалась!", 2)
+`,
+    pong: `# === ПІНГ-ПОНГ (КЛАСИЧНА ГРА) ===
+
+@when_flag_clicked
+def start_pong():
+    score = 0
+    show_variable("score")
+    goto(0, 120)
+    point_in_direction(135)
+    while True:
+        move(7)
+        if_on_edge_bounce()
+        if y_position() < -130:
+            if abs(x_position() - mouse_x()) < 55:
+                score += 1
+                play_sound("pop")
+                point_in_direction(random(-45, 45))
+                set_y(-120)
+            else:
+                say(join("Гру завершено! Рахунок: ", score), 2)
+                goto(0, 120)
+                score = 0
+`,
+    maze: `# === ЛАБІРИНТ (СТРІЛКИ + ТОРКАННЯ КОЛЬОРУ) ===
+
+@when_flag_clicked
+def start_maze():
+    switch_backdrop("grid_bg")
+    pen_clear()
+    pen_up()
+    goto(-180, -120)
+    set_pen_color("#1e293b")
+    set_pen_size(14)
+    pen_down()
+    goto(-180, 120)
+    goto(80, 120)
+    pen_up()
+    goto(-120, 40)
+    set_pen_color("#22c55e")
+    set_pen_size(24)
+    pen_down()
+    goto(160, 110)
+    pen_up()
+    goto(-140, -100)
+    say("Дійди до зеленої цілі стрілками!", 2)
+
+@when_key_pressed("up arrow")
+def go_up():
+    point_in_direction(0)
+    move(12)
+    if touching_color("#1e293b"):
+        move(-12)
+    if touching_color("#22c55e"):
+        say("Перемога!", 2)
+
+@when_key_pressed("down arrow")
+def go_down():
+    point_in_direction(180)
+    move(12)
+    if touching_color("#1e293b"):
+        move(-12)
+
+@when_key_pressed("left arrow")
+def go_left():
+    point_in_direction(-90)
+    move(12)
+    if touching_color("#1e293b"):
+        move(-12)
+
+@when_key_pressed("right arrow")
+def go_right():
+    point_in_direction(90)
+    move(12)
+    if touching_color("#1e293b"):
+        move(-12)
+    if touching_color("#22c55e"):
+        say("Перемога!", 2)
+`,
+    clicker: `# === ШВИДКИЙ КЛІКЕР (КЛОНИ + ТАЙМЕР) ===
+
+@when_flag_clicked
+def start_clicker():
+    score = 0
+    show_variable("score")
+    reset_timer()
+    goto(0, 0)
+    while timer() < 15:
+        create_clone("myself")
+        wait(0.8)
+    say(join("Час вийшов! Бали: ", score), 3)
+    stop("all")
+
+@when_cloned
+def clone_target():
+    goto(random(-180, 180), random(-120, 120))
+    wait(1.6)
+    delete_this_clone()
+
+@when_this_sprite_clicked
+def catch_target():
+    score += 1
+    play_sound("pop")
+    delete_this_clone()
 `
   };
 
@@ -243,8 +346,16 @@ def on_boss():
   const targetTabs = document.getElementById('target-tabs');
   const viewBlocks = document.getElementById('view-blocks');
   const viewAssets = document.getElementById('view-assets');
+  const viewInspector = document.getElementById('view-inspector');
   const viewDocs = document.getElementById('view-docs');
   const viewPreview = document.getElementById('view-preview');
+
+  function i18nT(key, params) {
+    if (typeof PyScratchI18n !== 'undefined' && typeof PyScratchI18n.t === 'function') {
+      return PyScratchI18n.t(key, params);
+    }
+    return key;
+  }
   const backdropIndicator = document.getElementById('backdrop-indicator');
   const varsWatch = document.getElementById('vars-watch');
   const askOverlay = document.getElementById('ask-overlay');
@@ -991,10 +1102,187 @@ def on_boss():
     });
   }
 
+  async function compressOversizedRasterCostumes() {
+    if (typeof PyScratchInspector === 'undefined' || !state.projectJson || !state.assetsMap) return { count: 0, savedBytes: 0 };
+    const report = PyScratchInspector.analyzeProject(state.projectJson, state.assetsMap);
+    const rasterTargets = report.assets.filter(
+      (a) => (a.dataFormat === 'png' || a.dataFormat === 'jpg' || a.dataFormat === 'jpeg') && a.bytes > 0
+    );
+    let count = 0;
+    let savedBytes = 0;
+    const processed = new Set();
+
+    for (const item of rasterTargets) {
+      if (processed.has(item.md5ext)) continue;
+      processed.add(item.md5ext);
+      const raw = state.assetsMap.get(item.md5ext);
+      if (!raw || typeof Image === 'undefined' || typeof document === 'undefined') continue;
+
+      const mime = item.dataFormat === 'png' ? 'image/png' : 'image/jpeg';
+      const blob = new Blob([raw], { type: mime });
+      const url = URL.createObjectURL(blob);
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = url;
+        });
+        const needsResize = img.width > 960 || img.height > 960;
+        const needsShrink = item.bytes > PyScratchInspector.LARGE_ASSET_BYTES;
+        if (!needsResize && !needsShrink) continue;
+
+        const scale = needsResize ? Math.min(960 / img.width, 960 / img.height) : 1;
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const outFmt = item.dataFormat === 'png' && !needsShrink ? 'png' : 'jpg';
+        const outMime = outFmt === 'png' ? 'image/png' : 'image/jpeg';
+        const outBlob = await new Promise((resolve) => canvas.toBlob(resolve, outMime, 0.82));
+        if (!outBlob) continue;
+        const outBytes = new Uint8Array(await outBlob.arrayBuffer());
+        if (outBytes.byteLength >= item.bytes && !needsResize) continue;
+
+        const replaced = PyScratchInspector.replaceAssetData(
+          state.projectJson,
+          state.assetsMap,
+          item.md5ext,
+          outBytes,
+          outFmt
+        );
+        savedBytes += Math.max(0, replaced.oldBytes - replaced.newBytes);
+        count += 1;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    if (count > 0) {
+      if (preview) {
+        preview.syncProjectAssets(state.projectJson, state.assetsMap);
+        preview.render();
+      }
+      renderAssetsView();
+      renderInspectorView();
+    }
+    return { count, savedBytes };
+  }
+
+  function renderInspectorView() {
+    if (!viewInspector || !state.projectJson || typeof PyScratchInspector === 'undefined') return;
+    const report = PyScratchInspector.analyzeProject(state.projectJson, state.assetsMap);
+    const fmt = PyScratchInspector.formatBytes;
+    const jsonPct = Math.min(100, Math.round(report.projectJsonRatio * 100));
+    const jsonBarCls = report.isProjectJsonOversized ? 'danger' : (report.projectJsonRatio > 0.75 ? 'warn' : '');
+
+    let html = `
+      <div class="assets-section">
+        <h4>${escapeHtml(i18nT('insp_summary_title'))}</h4>
+        <div class="inspector-grid">
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_sprites'))}</span><span class="inspector-stat-val">${report.spritesCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_backdrops'))}</span><span class="inspector-stat-val">${report.backdropsCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_costumes'))}</span><span class="inspector-stat-val">${report.costumesCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_sounds'))}</span><span class="inspector-stat-val">${report.soundsCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_vars'))}</span><span class="inspector-stat-val">${report.globalVarsCount} / ${report.localVarsCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_lists'))}</span><span class="inspector-stat-val">${report.globalListsCount} / ${report.localListsCount}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_blocks'))}</span><span class="inspector-stat-val">${report.totalBlocks}</span></div>
+          <div class="inspector-stat"><span class="inspector-stat-label">${escapeHtml(i18nT('insp_orphans'))}</span><span class="inspector-stat-val">${report.orphanScripts}</span></div>
+        </div>
+      </div>
+
+      <div class="assets-section">
+        <h4>${escapeHtml(i18nT('insp_limits_title'))}</h4>
+        <div class="inspector-limit-row">
+          <div class="inspector-limit-head">
+            <span>${escapeHtml(i18nT('insp_json_size'))}</span>
+            <span>${escapeHtml(fmt(report.projectJsonBytes))} / 5.00 MB (${jsonPct}%)</span>
+          </div>
+          <div class="inspector-bar-track"><div class="inspector-bar-fill ${jsonBarCls}" style="width:${Math.max(2, jsonPct)}%"></div></div>
+        </div>
+        <div class="assets-hint">${escapeHtml(i18nT('insp_assets_total'))}: <strong>${escapeHtml(fmt(report.totalAssetsBytes))}</strong> · ${escapeHtml(i18nT('insp_unused_count'))}: <strong>${report.unusedAssets.length}</strong></div>
+      </div>
+
+      <div class="assets-section">
+        <h4>${escapeHtml(i18nT('insp_opt_title'))}</h4>
+        <div class="inspector-actions">
+          <button type="button" id="btn-insp-clean-unused">${escapeHtml(i18nT('insp_btn_clean_unused'))} (${report.unusedAssets.length})</button>
+          <button type="button" id="btn-insp-compress-imgs" class="primary">${escapeHtml(i18nT('insp_btn_compress_imgs'))}</button>
+        </div>
+      </div>
+
+      <div class="assets-section">
+        <h4>${escapeHtml(i18nT('insp_assets_list_title'))}</h4>
+        <table class="docs-table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(i18nT('insp_col_name'))}</th>
+              <th>${escapeHtml(i18nT('insp_col_target'))}</th>
+              <th>${escapeHtml(i18nT('insp_col_type'))}</th>
+              <th>${escapeHtml(i18nT('insp_col_size'))}</th>
+              <th>${escapeHtml(i18nT('insp_col_status'))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.assets
+              .map((a) => {
+                const pillCls = a.isOversized ? 'danger' : (a.isLarge ? 'warn' : 'ok');
+                const pillTxt = a.isOversized
+                  ? i18nT('insp_status_over')
+                  : (a.isLarge ? i18nT('insp_status_large') : i18nT('insp_status_ok'));
+                return `<tr>
+                  <td>${escapeHtml(a.name)}</td>
+                  <td>${escapeHtml(a.targetName)}</td>
+                  <td>${escapeHtml(a.dataFormat || a.kind)}</td>
+                  <td><code>${escapeHtml(fmt(a.bytes))}</code></td>
+                  <td><span class="insp-pill ${pillCls}">${escapeHtml(pillTxt)}</span></td>
+                </tr>`;
+              })
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    viewInspector.innerHTML = html;
+
+    const btnClean = document.getElementById('btn-insp-clean-unused');
+    if (btnClean) {
+      btnClean.onclick = () => {
+        const res = PyScratchInspector.removeUnusedAssets(state.projectJson, state.assetsMap);
+        renderInspectorView();
+        renderAssetsView();
+        if (res.removedCount > 0) {
+          setStatus(i18nT('insp_clean_done', { count: res.removedCount, size: fmt(res.freedBytes) }));
+        } else {
+          setStatus(i18nT('insp_clean_none'));
+        }
+      };
+    }
+
+    const btnCompress = document.getElementById('btn-insp-compress-imgs');
+    if (btnCompress) {
+      btnCompress.onclick = async () => {
+        const res = await compressOversizedRasterCostumes();
+        if (res.count > 0) {
+          setStatus(i18nT('insp_compress_done', { count: res.count, size: fmt(res.savedBytes) }));
+        } else {
+          setStatus(i18nT('insp_compress_none'));
+        }
+      };
+    }
+  }
+
   function renderDocsView() {
     if (!viewDocs) return;
-    let html = `<div class="assets-section"><h4>Довідник команд Python ↔ Scratch 3.0 (клікніть на код для вставки)</h4>`;
-    html += `<table class="docs-table"><thead><tr><th>Категорія</th><th>Команда Python</th><th>Блок у Scratch 3.0</th></tr></thead><tbody>`;
+    let html = `<div class="assets-section"><h4>${escapeHtml(i18nT('docs_title'))}</h4>`;
+    html += `<table class="docs-table"><thead><tr><th>${escapeHtml(i18nT('docs_col_cat'))}</th><th>${escapeHtml(
+      i18nT('docs_col_cmd')
+    )}</th><th>${escapeHtml(i18nT('docs_col_block'))}</th></tr></thead><tbody>`;
     for (const [cat, cmd, desc] of API_DOCS) {
       html += `<tr><td>${escapeHtml(cat)}</td><td><code data-doc-insert='${escapeHtml(cmd)}'>${escapeHtml(
         cmd
@@ -1097,6 +1385,9 @@ def on_boss():
       const res = PyScratchCompiler.compileToScratch(editor.value, target, stage, state.projectJson);
       state.codeByTarget.set(state.activeTargetIdx, editor.value);
       renderBlocksTree(res.blocks);
+      if (viewInspector && !viewInspector.classList.contains('hidden')) {
+        renderInspectorView();
+      }
       if (showSuccess) {
         const count = Object.keys(res.blocks).length;
         setStatus(
@@ -1349,9 +1640,30 @@ def on_boss():
       if (viewPreview) viewPreview.classList.toggle('hidden', v !== 'preview');
       if (viewBlocks) viewBlocks.classList.toggle('hidden', v !== 'blocks');
       if (viewAssets) viewAssets.classList.toggle('hidden', v !== 'assets');
+      if (viewInspector) {
+        viewInspector.classList.toggle('hidden', v !== 'inspector');
+        if (v === 'inspector') renderInspectorView();
+      }
       if (viewDocs) viewDocs.classList.toggle('hidden', v !== 'docs');
     };
   });
+
+  // Language switcher (UA | EN | RU)
+  document.querySelectorAll('.lang-btn[data-lang]').forEach((btn) => {
+    btn.onclick = () => {
+      if (typeof PyScratchI18n === 'undefined') return;
+      PyScratchI18n.setLang(btn.getAttribute('data-lang'));
+      renderDocsView();
+      renderInspectorView();
+      if (btnMute && preview) {
+        btnMute.textContent = preview.muted ? i18nT('sound_off') : i18nT('sound_on');
+      }
+    };
+  });
+
+  if (typeof PyScratchI18n !== 'undefined') {
+    PyScratchI18n.applyDomTranslations();
+  }
 
   // Add new Sprite
   const btnAddSprite = document.getElementById('btn-add-sprite');
@@ -1396,9 +1708,10 @@ def on_boss():
 
   const btnMute = document.getElementById('btn-mute');
   if (btnMute && preview) {
+    btnMute.textContent = preview.muted ? i18nT('sound_off') : i18nT('sound_on');
     btnMute.onclick = () => {
       preview.muted = !preview.muted;
-      btnMute.textContent = preview.muted ? 'Звук: Вимк' : 'Звук: Увімк';
+      btnMute.textContent = preview.muted ? i18nT('sound_off') : i18nT('sound_on');
     };
   }
 

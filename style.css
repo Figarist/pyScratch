@@ -1130,7 +1130,136 @@ button.danger:hover {
 }
 
 /* ==========================================================================
-   9. Compact Embed Mode (?embed=1) & Responsive Breakpoints
+   9. Language Switcher & .sb3 Inspector / Optimizer
+   ========================================================================== */
+.lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: var(--sc-radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.topbar button.lang-btn {
+  height: 24px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+}
+
+.topbar button.lang-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+}
+
+.topbar button.lang-btn.active {
+  background: var(--sc-surface);
+  color: var(--sc-purple);
+}
+
+.inspector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.inspector-stat {
+  background: var(--sc-workspace-bg);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inspector-stat-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--sc-text-muted);
+  text-transform: uppercase;
+}
+
+.inspector-stat-val {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sc-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-limit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.inspector-limit-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inspector-bar-track {
+  height: 8px;
+  background: var(--sc-tab-inactive);
+  border-radius: var(--sc-radius-pill);
+  overflow: hidden;
+}
+
+.inspector-bar-fill {
+  height: 100%;
+  background: var(--sc-teal);
+  border-radius: var(--sc-radius-pill);
+  transition: width 0.2s ease;
+}
+
+.inspector-bar-fill.warn {
+  background: var(--sc-control);
+}
+
+.inspector-bar-fill.danger {
+  background: var(--sc-stop-red);
+}
+
+.inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.insp-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--sc-radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.insp-pill.ok {
+  background: #E6F9F3;
+  color: var(--sc-teal-dark);
+}
+
+.insp-pill.warn {
+  background: #FFF4E5;
+  color: #B45309;
+}
+
+.insp-pill.danger {
+  background: #FFEBEF;
+  color: #B91C1C;
+}
+
+/* ==========================================================================
+   10. Compact Embed Mode (?embed=1) & Responsive Breakpoints
    ========================================================================== */
 body.embed-mode .topbar {
   height: 40px;
