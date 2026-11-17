@@ -44,6 +44,8 @@
       this._audioBufferCache = new Map();
       this._soundEpoch = 0;
       this._activeBroadcasts = new WeakMap();
+      this._activeKeyHandlers = new WeakMap();
+      this._activeClickHandlers = new WeakMap();
       this._gtInterval = null;
       this._draggingActor = null;
       this._dragOffsetX = 0;
@@ -371,24 +373,42 @@
         }
       }
 
+      // Prune stale cached images and audio buffers no longer present in assetsMap
+      if (assetsMap instanceof Map) {
+        for (const key of Array.from(this.imageCache.keys())) {
+          if (!assetsMap.has(key)) this.imageCache.delete(key);
+        }
+        for (const key of Array.from(this._audioBufferCache.keys())) {
+          if (!assetsMap.has(key)) this._audioBufferCache.delete(key);
+        }
+      }
+
       if (assetsMap && typeof Image !== 'undefined') {
         for (const [md5ext, content] of assetsMap.entries()) {
           if (this.imageCache.has(md5ext)) continue;
-          if (md5ext.endsWith('.svg') && typeof content === 'string') {
+          const lowerName = String(md5ext).toLowerCase();
+          if (lowerName.endsWith('.svg') && typeof content === 'string') {
             const img = new Image();
             img.onload = () => this.render();
             img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(content);
             this.imageCache.set(md5ext, img);
           } else if (
-            (md5ext.endsWith('.png') || md5ext.endsWith('.jpg')) &&
+            (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) &&
             content instanceof Uint8Array &&
             typeof Blob !== 'undefined' &&
             typeof URL !== 'undefined'
           ) {
             const blob = new Blob([content]);
+            const objectUrl = URL.createObjectURL(blob);
             const img = new Image();
-            img.onload = () => this.render();
-            img.src = URL.createObjectURL(blob);
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              this.render();
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+            };
+            img.src = objectUrl;
             this.imageCache.set(md5ext, img);
           }
         }
@@ -403,6 +423,8 @@
       this._stopAllSounds();
       this._draggingActor = null;
       this._activeBroadcasts = new WeakMap();
+      this._activeKeyHandlers = new WeakMap();
+      this._activeClickHandlers = new WeakMap();
       this.hiddenMonitors = new Set();
       this.visibleMonitors = new Set();
 
@@ -624,7 +646,7 @@
         const ry = costumeObj.rotationCenterY !== undefined ? costumeObj.rotationCenterY : h / 2;
 
         let drawable = cachedImg;
-        if (pixelateVal > 0 && typeof document !== 'undefined' && typeof document.createElement === 'function') {
+        if (Math.abs(pixelateVal) > 0 && typeof document !== 'undefined' && typeof document.createElement === 'function') {
           const pFactor = Math.max(1, Math.min(32, Math.floor(Math.abs(pixelateVal) / 5) + 1));
           if (pFactor > 1) {
             const pw = Math.max(1, Math.floor(w / pFactor));
@@ -698,6 +720,7 @@
     render() {
       const ctx = this.ctx;
       if (!ctx) return;
+      ctx.clearRect(0, 0, 480, 360);
 
       // 1. Render Stage Backdrop
       const stageTarget =
@@ -935,6 +958,40 @@
             if (targetArg !== argMatch && !(decorator === 'when_key_pressed' && targetArg === 'any')) {
               continue;
             }
+          }
+          if (decorator === 'when_key_pressed') {
+            let keyMap = this._activeKeyHandlers.get(actor);
+            if (!keyMap) {
+              keyMap = new Map();
+              this._activeKeyHandlers.set(actor, keyMap);
+            }
+            const prevCtx = keyMap.get(h);
+            if (prevCtx && !prevCtx.isStopped()) {
+              continue;
+            }
+            const scriptCtx = this._createScriptCtx(actor, myRunId);
+            keyMap.set(h, scriptCtx);
+            const p = this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx).finally(() => {
+              if (keyMap.get(h) === scriptCtx) keyMap.delete(h);
+            });
+            tasks.push(p);
+            continue;
+          }
+          if (decorator === 'when_this_sprite_clicked' || decorator === 'when_stage_clicked') {
+            let clickMap = this._activeClickHandlers.get(actor);
+            if (!clickMap) {
+              clickMap = new Map();
+              this._activeClickHandlers.set(actor, clickMap);
+            }
+            const prevCtx = clickMap.get(h);
+            if (prevCtx) prevCtx.cancelled = true;
+            const scriptCtx = this._createScriptCtx(actor, myRunId);
+            clickMap.set(h, scriptCtx);
+            const p = this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx).finally(() => {
+              if (clickMap.get(h) === scriptCtx) clickMap.delete(h);
+            });
+            tasks.push(p);
+            continue;
           }
           const scriptCtx = this._createScriptCtx(actor, myRunId);
           tasks.push(this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx));
@@ -1203,6 +1260,36 @@
       if (this.onBackdropChange) this.onBackdropChange(this.currentBackdrop);
     }
 
+    _toNumericIfValid(val) {
+      if (typeof val === 'number') return Number.isFinite(val) ? val : NaN;
+      if (typeof val === 'boolean' || val === null || val === undefined) return NaN;
+      const s = String(val).trim();
+      if (s === '') return NaN;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    _equalsValues(a, b) {
+      const na = this._toNumericIfValid(a);
+      const nb = this._toNumericIfValid(b);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na === nb;
+      if (typeof a === 'boolean' || typeof b === 'boolean') {
+        return String(a).toLowerCase() === String(b).toLowerCase();
+      }
+      return String(a).toLowerCase() === String(b).toLowerCase();
+    }
+
+    _compareValues(a, b) {
+      const na = this._toNumericIfValid(a);
+      const nb = this._toNumericIfValid(b);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) {
+        return na < nb ? -1 : na > nb ? 1 : 0;
+      }
+      const sa = String(a).toLowerCase();
+      const sb = String(b).toLowerCase();
+      return sa < sb ? -1 : sa > sb ? 1 : 0;
+    }
+
     evalExpr(expr, actor = this.sprite, localScope = {}) {
       if (!expr) return 0;
       switch (expr.type) {
@@ -1233,12 +1320,12 @@
             case '*': return Number(l) * Number(r);
             case '/': return Number(r) === 0 ? 0 : Number(l) / Number(r);
             case '%': return Number(r) === 0 ? 0 : Number(l) % Number(r);
-            case '==': return l == r;
-            case '!=': return l != r;
-            case '<': return Number(l) < Number(r);
-            case '>': return Number(l) > Number(r);
-            case '<=': return Number(l) <= Number(r);
-            case '>=': return Number(l) >= Number(r);
+            case '==': return this._equalsValues(l, r);
+            case '!=': return !this._equalsValues(l, r);
+            case '<': return this._compareValues(l, r) < 0;
+            case '>': return this._compareValues(l, r) > 0;
+            case '<=': return this._compareValues(l, r) <= 0;
+            case '>=': return this._compareValues(l, r) >= 0;
             case 'and': return Boolean(l && r);
             case 'or': return Boolean(l || r);
           }
@@ -2187,6 +2274,12 @@
           this.runId++;
           this._stopAllSounds();
           this._clearGreaterThanWatcher();
+          if (this.pendingAskResolver) {
+            this.pendingAskResolver('');
+            this.pendingAskResolver = null;
+          }
+          if (this.onAsk) this.onAsk(null);
+          for (const a of this.actors) a.sayText = '';
           return 'RETURN_SCRIPT';
         }
       }

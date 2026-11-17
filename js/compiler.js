@@ -362,9 +362,16 @@
         expect('PUNCT', ':', `Забули двокрапку ":" після умови while у рядку ${tok.line}.`);
         expect('NEWLINE', undefined);
         const body = parseBlock(tok.line);
+        const invertedCond =
+          cond.type === 'BinOp' && (cond.op === '!=' || cond.op === '<=' || cond.op === '>=')
+            ? {
+                ...cond,
+                op: cond.op === '!=' ? '==' : cond.op === '<=' ? '>' : '<'
+              }
+            : { type: 'UnaryOp', op: 'not', expr: cond, line: tok.line };
         return {
           type: 'RepeatUntil',
-          cond: { type: 'UnaryOp', op: 'not', expr: cond, line: tok.line },
+          cond: invertedCond,
           body,
           line: tok.line
         };
@@ -591,34 +598,67 @@
     let usesPen = false;
 
     const globalHost = stageTarget || target;
+    const prevOwned = target._pyCompiledOwned || {
+      globalVars: new Set(),
+      localVars: new Set(),
+      globalLists: new Set(),
+      localLists: new Set(),
+      broadcasts: new Set()
+    };
+    const nextOwned = {
+      globalVars: new Set(),
+      localVars: new Set(),
+      globalLists: new Set(),
+      localLists: new Set(),
+      broadcasts: new Set()
+    };
+    const usedGlobalVarIds = new Set();
+    const usedLocalVarIds = new Set();
+    const usedGlobalListIds = new Set();
+    const usedLocalListIds = new Set();
+    const usedBroadcastIds = new Set();
 
     function ensureLocalVar(name) {
       const host = target.isStage ? globalHost : target;
-      if (localVariables[name]) return localVariables[name];
+      if (localVariables[name]) {
+        usedLocalVarIds.add(localVariables[name]);
+        return localVariables[name];
+      }
       const localMatch = Object.entries(host.variables || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
         localVariables[name] = localMatch[0];
+        if (prevOwned.localVars.has(localMatch[0])) nextOwned.localVars.add(localMatch[0]);
+        usedLocalVarIds.add(localMatch[0]);
         return localMatch[0];
       }
       const varId = (target.isStage ? 'v_' : 'lv_') + name + '_' + idCounter++;
       localVariables[name] = varId;
       if (!host.variables) host.variables = {};
       host.variables[varId] = [name, 0];
+      nextOwned.localVars.add(varId);
+      usedLocalVarIds.add(varId);
       return varId;
     }
 
     function ensureVar(name, isLocal = false) {
       if (isLocal) return ensureLocalVar(name);
-      if (variables[name]) return variables[name];
+      if (variables[name]) {
+        usedGlobalVarIds.add(variables[name]);
+        return variables[name];
+      }
       // Check target local variables first, then stage global variables
       const localMatch = Object.entries(target.variables || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
         variables[name] = localMatch[0];
+        if (prevOwned.localVars.has(localMatch[0])) nextOwned.localVars.add(localMatch[0]);
+        usedLocalVarIds.add(localMatch[0]);
         return localMatch[0];
       }
       const globalMatch = Object.entries(globalHost.variables || {}).find(([, v]) => v[0] === name);
       if (globalMatch) {
         variables[name] = globalMatch[0];
+        if (prevOwned.globalVars.has(globalMatch[0])) nextOwned.globalVars.add(globalMatch[0]);
+        usedGlobalVarIds.add(globalMatch[0]);
         return globalMatch[0];
       }
       // Create new variables on Stage (global) by default, matching Scratch's "For all sprites" default
@@ -626,50 +666,74 @@
       variables[name] = varId;
       if (!globalHost.variables) globalHost.variables = {};
       globalHost.variables[varId] = [name, 0];
+      nextOwned.globalVars.add(varId);
+      usedGlobalVarIds.add(varId);
       return varId;
     }
 
     function ensureLocalList(name) {
       const host = target.isStage ? globalHost : target;
-      if (localLists[name]) return localLists[name];
+      if (localLists[name]) {
+        usedLocalListIds.add(localLists[name]);
+        return localLists[name];
+      }
       const localMatch = Object.entries(host.lists || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
         localLists[name] = localMatch[0];
+        if (prevOwned.localLists.has(localMatch[0])) nextOwned.localLists.add(localMatch[0]);
+        usedLocalListIds.add(localMatch[0]);
         return localMatch[0];
       }
       const listId = (target.isStage ? 'l_' : 'll_') + name + '_' + idCounter++;
       localLists[name] = listId;
       if (!host.lists) host.lists = {};
       host.lists[listId] = [name, []];
+      nextOwned.localLists.add(listId);
+      usedLocalListIds.add(listId);
       return listId;
     }
 
     function ensureList(name, isLocal = false) {
       if (isLocal || declaredLocalLists.has(name)) return ensureLocalList(name);
-      if (lists[name]) return lists[name];
+      if (lists[name]) {
+        usedGlobalListIds.add(lists[name]);
+        return lists[name];
+      }
       const localMatch = Object.entries(target.lists || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
         lists[name] = localMatch[0];
+        if (prevOwned.localLists.has(localMatch[0])) nextOwned.localLists.add(localMatch[0]);
+        usedLocalListIds.add(localMatch[0]);
         return localMatch[0];
       }
       const globalMatch = Object.entries(globalHost.lists || {}).find(([, v]) => v[0] === name);
       if (globalMatch) {
         lists[name] = globalMatch[0];
+        if (prevOwned.globalLists.has(globalMatch[0])) nextOwned.globalLists.add(globalMatch[0]);
+        usedGlobalListIds.add(globalMatch[0]);
         return globalMatch[0];
       }
       const listId = 'l_' + name + '_' + idCounter++;
       lists[name] = listId;
       if (!globalHost.lists) globalHost.lists = {};
       globalHost.lists[listId] = [name, []];
+      nextOwned.globalLists.add(listId);
+      usedGlobalListIds.add(listId);
       return listId;
     }
 
     function ensureBroadcast(msg) {
       if (!globalHost.broadcasts) globalHost.broadcasts = {};
       const existing = Object.entries(globalHost.broadcasts).find(([, v]) => v === msg);
-      if (existing) return existing[0];
+      if (existing) {
+        if (prevOwned.broadcasts.has(existing[0])) nextOwned.broadcasts.add(existing[0]);
+        usedBroadcastIds.add(existing[0]);
+        return existing[0];
+      }
       const bId = 'bc_' + idCounter++;
       globalHost.broadcasts[bId] = msg;
+      nextOwned.broadcasts.add(bId);
+      usedBroadcastIds.add(bId);
       return bId;
     }
 
@@ -1727,10 +1791,78 @@
     }
 
     target.blocks = blocks;
-    if (usesPen && projectJson) {
+
+    // Clean up orphaned compiler-owned variables, lists, and broadcasts no longer referenced by any target
+    const otherTargets = projectJson && Array.isArray(projectJson.targets)
+      ? projectJson.targets.filter((t) => t !== target)
+      : [];
+    const isIdUsedElsewhere = (id) =>
+      otherTargets.some((t) => {
+        const owned = t._pyCompiledOwned;
+        if (
+          owned &&
+          (owned.globalVars.has(id) || owned.globalLists.has(id) || owned.broadcasts.has(id))
+        ) {
+          return true;
+        }
+        return Object.values(t.blocks || {}).some((b) => {
+          if (!b) return false;
+          if (b.fields && Object.values(b.fields).some((f) => Array.isArray(f) && f[1] === id)) return true;
+          if (b.inputs && Object.values(b.inputs).some((inp) => Array.isArray(inp) && Array.isArray(inp[1]) && inp[1][2] === id)) return true;
+          return false;
+        });
+      });
+
+    for (const oldId of prevOwned.globalVars) {
+      if (!usedGlobalVarIds.has(oldId) && globalHost.variables && !isIdUsedElsewhere(oldId)) {
+        delete globalHost.variables[oldId];
+      }
+    }
+    for (const oldId of prevOwned.localVars) {
+      const host = target.isStage ? globalHost : target;
+      if (!usedLocalVarIds.has(oldId) && host.variables) {
+        delete host.variables[oldId];
+      }
+    }
+    for (const oldId of prevOwned.globalLists) {
+      if (!usedGlobalListIds.has(oldId) && globalHost.lists && !isIdUsedElsewhere(oldId)) {
+        delete globalHost.lists[oldId];
+      }
+    }
+    for (const oldId of prevOwned.localLists) {
+      const host = target.isStage ? globalHost : target;
+      if (!usedLocalListIds.has(oldId) && host.lists) {
+        delete host.lists[oldId];
+      }
+    }
+    for (const oldId of prevOwned.broadcasts) {
+      if (!usedBroadcastIds.has(oldId) && globalHost.broadcasts && !isIdUsedElsewhere(oldId)) {
+        delete globalHost.broadcasts[oldId];
+      }
+    }
+
+    Object.defineProperty(target, '_pyCompiledOwned', {
+      value: nextOwned,
+      enumerable: false,
+      configurable: true,
+      writable: true
+    });
+
+    if (projectJson) {
       if (!projectJson.extensions) projectJson.extensions = [];
-      if (!projectJson.extensions.includes('pen')) {
-        projectJson.extensions.push('pen');
+      if (usesPen) {
+        if (!projectJson.extensions.includes('pen')) {
+          projectJson.extensions.push('pen');
+        }
+      } else if (projectJson.extensions.includes('pen')) {
+        const anyTargetUsesPen = Array.isArray(projectJson.targets)
+          ? projectJson.targets.some((t) =>
+              Object.values((t && t.blocks) || {}).some((b) => b && typeof b.opcode === 'string' && b.opcode.startsWith('pen_'))
+            )
+          : false;
+        if (!anyTargetUsesPen) {
+          projectJson.extensions = projectJson.extensions.filter((ext) => ext !== 'pen');
+        }
       }
     }
 

@@ -518,9 +518,13 @@ def catch_target():
           let inQ = null;
           for (let i = 0; i < line.length; i++) {
             const c = line[i];
-            if ((c === '"' || c === "'") && line[i - 1] !== '\\') {
-              if (!inQ) inQ = c;
-              else if (inQ === c) inQ = null;
+            if (c === '"' || c === "'") {
+              let bs = 0;
+              for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) bs++;
+              if (bs % 2 === 0) {
+                if (!inQ) inQ = c;
+                else if (inQ === c) inQ = null;
+              }
             } else if (c === '#' && !inQ) {
               return i;
             }
@@ -560,7 +564,10 @@ def catch_target():
 
   function setStatus(msg, isError = false, errLine = null) {
     if (statusText) statusText.textContent = msg;
-    if (statusBanner) statusBanner.className = 'status-banner ' + (isError ? 'error' : 'ok');
+    if (statusBanner) {
+      statusBanner.className = 'status-banner ' + (isError ? 'error' : 'ok');
+      if (statusBanner.dataset) statusBanner.dataset.customStatus = '1';
+    }
     state.errorLine = isError ? errLine : null;
     updateEditorDecorations();
   }
@@ -1555,6 +1562,11 @@ def catch_target():
     }
   }
 
+  // Apply initial DOM translations before loading project so startup errors/statuses are preserved
+  if (typeof PyScratchI18n !== 'undefined') {
+    PyScratchI18n.applyDomTranslations();
+  }
+
   // Initialize default project
   const def = Sb3Bridge.createDefaultProject();
   loadProject(def.projectJson, def.assetsMap, startupCode);
@@ -1661,9 +1673,7 @@ def catch_target():
     };
   });
 
-  if (typeof PyScratchI18n !== 'undefined') {
-    PyScratchI18n.applyDomTranslations();
-  }
+  // Initial DOM translations already applied before loadProject()
 
   // Add new Sprite
   const btnAddSprite = document.getElementById('btn-add-sprite');

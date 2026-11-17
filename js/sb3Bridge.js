@@ -452,7 +452,7 @@
       }
 
       const step = 8 + chunkSize + (chunkSize % 2);
-      if (step <= 8) break;
+      if (!Number.isFinite(step) || step < 8) break;
       offset += step;
     }
 
@@ -671,7 +671,7 @@
     const entries = Object.keys(zip.files);
     for (const filename of entries) {
       if (filename === 'project.json' || zip.files[filename].dir) continue;
-      if (filename.endsWith('.svg')) {
+      if (filename.toLowerCase().endsWith('.svg')) {
         const svgText = await zip.files[filename].async('string');
         assetsMap.set(filename, svgText);
       } else {

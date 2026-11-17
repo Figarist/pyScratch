@@ -7,13 +7,18 @@
 (function (global) {
   'use strict';
 
+  const PYTHON_RESERVED_IDENTS = new Set([
+    'def', 'for', 'in', 'while', 'if', 'elif', 'else', 'pass',
+    'and', 'or', 'not', 'True', 'False', 'self', 'range'
+  ]);
+
   function sanitizeIdent(raw, fallback = 'item') {
     const cleaned = String(raw || '')
       .trim()
       .replace(/[^a-zA-Z0-9_\u0400-\u04FF]/g, '_');
     if (!cleaned) return fallback;
-    if (/^[0-9]/.test(cleaned)) return '_' + cleaned;
-    return cleaned;
+    const safe = /^[0-9]/.test(cleaned) ? '_' + cleaned : cleaned;
+    return PYTHON_RESERVED_IDENTS.has(safe) ? `${safe}_var` : safe;
   }
 
   function extractProcName(proccode) {
@@ -79,8 +84,8 @@
         // 9: color (#hex), 10: string, 11: broadcast
         if (type === 9 || type === 10 || type === 11) {
           const strVal = String(val[1] ?? '');
-          // If type 10 holds a pure numeric literal (e.g. from defaultShadowType 10), keep it numeric if valid
-          if (type === 10 && /^-?\d+(\.\d+)?$/.test(strVal)) {
+          // If type 10 holds a canonical numeric literal (no leading zeros like "007"), keep it numeric
+          if (type === 10 && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(strVal)) {
             return strVal;
           }
           return JSON.stringify(strVal);
@@ -662,12 +667,23 @@
       return lines;
     }
 
+    const usedFnNames = new Set();
+    const allocFnName = (baseName) => {
+      let candidate = baseName;
+      let suffix = 2;
+      while (usedFnNames.has(candidate)) {
+        candidate = `${baseName}_${suffix++}`;
+      }
+      usedFnNames.add(candidate);
+      return candidate;
+    };
+
     for (const [, hat] of topBlocks) {
       if (hat.opcode === 'procedures_definition') {
         const protoId = hat.inputs && hat.inputs.custom_block ? hat.inputs.custom_block[1] : null;
         const proto = protoId ? blocks[protoId] : null;
         const mut = (proto && proto.mutation) || {};
-        const fnName = extractProcName(mut.proccode);
+        const fnName = allocFnName(extractProcName(mut.proccode));
         let argNames = [];
         try {
           argNames = JSON.parse(mut.argumentnames || '[]').map((n) => sanitizeIdent(n, 'arg'));
@@ -718,6 +734,7 @@
       }
 
       handlerIndex++;
+      fnName = allocFnName(fnName);
       parts.push(`${dec}\ndef ${fnName}():`);
       const bodyLines = hat.next ? decompileChain(hat.next, 1) : ['    pass'];
       parts.push(bodyLines.join('\n') + '\n');

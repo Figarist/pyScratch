@@ -229,6 +229,15 @@
     }
   };
 
+  function getBrowserStorage() {
+    try {
+      if (typeof window !== 'undefined' && window.location && window.localStorage) {
+        return window.localStorage;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   function detectInitialLang() {
     if (typeof window !== 'undefined' && window.location && typeof URLSearchParams !== 'undefined') {
       const params = new URLSearchParams(window.location.search || '');
@@ -239,8 +248,9 @@
       return window.__PYSCRATCH_DEFAULT_LANG;
     }
     try {
-      if (typeof localStorage !== 'undefined') {
-        const saved = localStorage.getItem(STORAGE_KEY);
+      const storage = getBrowserStorage();
+      if (storage) {
+        const saved = storage.getItem(STORAGE_KEY);
         if (SUPPORTED_LANGS.includes(saved)) return saved;
       }
     } catch (_) {}
@@ -268,7 +278,11 @@
     if (typeof document === 'undefined' || !document.documentElement) return;
     document.documentElement.lang = currentLang;
 
+    const statusBanner = typeof document.getElementById === 'function' ? document.getElementById('status-banner') : null;
+    const preserveStatus = statusBanner && (statusBanner.classList.contains('error') || (statusBanner.dataset && statusBanner.dataset.customStatus === '1'));
+
     document.querySelectorAll('[data-i18n]').forEach((el) => {
+      if (preserveStatus && el.id === 'status-text') return;
       const key = el.getAttribute('data-i18n');
       if (key) el.textContent = t(key);
     });
@@ -291,7 +305,8 @@
     currentLang = normalized;
     if (persist) {
       try {
-        if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, currentLang);
+        const storage = getBrowserStorage();
+        if (storage) storage.setItem(STORAGE_KEY, currentLang);
       } catch (_) {}
     }
     applyDomTranslations();

@@ -807,7 +807,115 @@ def inspect():
     gSim.reset();
   }
 
-  console.log('ALL 10 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 11. Testing Reliability Audit Regression Fixes (F-01..F-11) ---');
+  // F-01: Orphan variable/list/broadcast cleanup & pen extension removal on recompile
+  const f01Proj = createDefaultProject();
+  const f01Stage = f01Proj.projectJson.targets[0];
+  const f01Sprite = f01Proj.projectJson.targets[1];
+  compileToScratch('@when_flag_clicked\ndef main():\n    temp_x = 1\n    pen_down()\n    broadcast("temp_bc")\n', f01Sprite, f01Stage, f01Proj.projectJson);
+  assert(Object.values(f01Stage.variables).some((v) => v[0] === 'temp_x'));
+  assert(f01Proj.projectJson.extensions.includes('pen'));
+  compileToScratch('@when_flag_clicked\ndef main():\n    final_x = 2\n', f01Sprite, f01Stage, f01Proj.projectJson);
+  assert(!Object.values(f01Stage.variables).some((v) => v[0] === 'temp_x'), 'Orphan variable temp_x must be cleaned up');
+  assert(Object.values(f01Stage.variables).some((v) => v[0] === 'final_x'), 'Active variable final_x must remain');
+  assert(!Object.values(f01Stage.broadcasts).includes('temp_bc'), 'Orphan broadcast temp_bc must be cleaned up');
+  assert(!f01Proj.projectJson.extensions.includes('pen'), 'Unused pen extension must be removed');
+
+  // F-04: while inequality without double negation + leading-zero string literal preservation
+  compileToScratch('@when_flag_clicked\ndef main():\n    say("007", 1)\n    while x != 10:\n        x += 1\n', f01Sprite, f01Stage, f01Proj.projectJson);
+  const f04Dec = decompileTarget(f01Sprite, f01Stage);
+  assert(f04Dec.includes('say("007", 1)'), 'Leading-zero string "007" must stay quoted');
+  assert(!f04Dec.includes('not (not'), 'while x != 10 must not produce double negation');
+
+  // F-07: Reserved Python keywords in variable names & duplicate event handler deduplication
+  f01Sprite.blocks = {
+    h1: { opcode: 'event_whenthisspriteclicked', next: 's1', parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 0, y: 0 },
+    s1: { opcode: 'data_setvariableto', next: null, parent: 'h1', inputs: { VALUE: [1, [10, '1']] }, fields: { VARIABLE: ['pass', 'v_pass'] }, shadow: false, topLevel: false },
+    h2: { opcode: 'event_whenthisspriteclicked', next: null, parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 0, y: 100 }
+  };
+  f01Stage.variables.v_pass = ['pass', 0];
+  const f07Dec = decompileTarget(f01Sprite, f01Stage);
+  assert(f07Dec.includes('pass_var = 1'), 'Reserved keyword variable "pass" must be sanitized');
+  assert(f07Dec.includes('def on_sprite_clicked():') && f07Dec.includes('def on_sprite_clicked_2():'), 'Duplicate handlers must get unique names');
+  compileToScratch(f07Dec, f01Sprite, f01Stage, f01Proj.projectJson);
+
+  // F-03, F-05, F-06, F-08: StagePreview key-repeat guard, stop("all") ask cleanup, clearRect, cache pruning, Scratch comparisons
+  let clearRectCalled = 0;
+  const auditMockCtx = {
+    ...mockCtx,
+    clearRect() { clearRectCalled++; }
+  };
+  let lastAskPrompt = 'init';
+  const simAudit = new StagePreview(
+    { width: 480, height: 360, getContext: () => auditMockCtx },
+    { onAsk: (q) => { lastAskPrompt = q; } }
+  );
+  clearRectCalled = 0;
+  simAudit.render();
+  assert(clearRectCalled >= 1, 'StagePreview.render() must call ctx.clearRect before drawing');
+
+  simAudit.imageCache.set('stale.png', {});
+  simAudit._audioBufferCache.set('stale.wav', {});
+  simAudit.syncProjectAssets(f01Proj.projectJson, f01Proj.assetsMap);
+  assert(!simAudit.imageCache.has('stale.png'), 'Stale imageCache entries must be pruned');
+  assert(!simAudit._audioBufferCache.has('stale.wav'), 'Stale _audioBufferCache entries must be pruned');
+
+  const cmpAst = parse(tokenize(`
+@when_flag_clicked
+def main():
+    flag = True
+    bool_ok = (flag == "true")
+    str_lt = ("apple" < "banana")
+    if flag:
+        branch_ok = 1
+
+@when_key_pressed("space")
+def on_space():
+    key_runs += 1
+    wait(0.08)
+`));
+  await simAudit.runAst(cmpAst);
+  assert.strictEqual(simAudit.vars.bool_ok, true, 'Boolean true == "true" must evaluate to true');
+  assert.strictEqual(simAudit.vars.str_lt, true, 'String comparison "apple" < "banana" must evaluate to true');
+  simAudit.triggerKey('space');
+  simAudit.triggerKey('space'); // rapid key repeat while running
+  await new Promise((r) => setTimeout(r, 120));
+  assert.strictEqual(simAudit.vars.key_runs, 1, 'Key repeat must not spawn duplicate concurrent handlers');
+
+  const askStopAst = parse(tokenize(`
+@when_flag_clicked
+def main():
+    ask("Name?")
+
+@when_flag_clicked
+def stopper():
+    wait(0.02)
+    stop("all")
+`));
+  await simAudit.runAst(askStopAst);
+  assert.strictEqual(lastAskPrompt, null, 'stop("all") must close active ask() overlay');
+  simAudit.reset();
+
+  // F-09: Empty WAV chunk (chunkSize === 0) & uppercase .SVG loading
+  const baseWav = f01Proj.assetsMap.get(f01Stage.sounds[0].md5ext);
+  const junkChunk = new Uint8Array(8);
+  junkChunk.set([0x4a, 0x55, 0x4e, 0x4b, 0, 0, 0, 0]); // "JUNK" + size 0
+  const wavWithEmptyChunk = new Uint8Array(baseWav.length + 8);
+  wavWithEmptyChunk.set(baseWav.slice(0, 12), 0);
+  wavWithEmptyChunk.set(junkChunk, 12);
+  wavWithEmptyChunk.set(baseWav.slice(12), 20);
+  new DataView(wavWithEmptyChunk.buffer).setUint32(4, wavWithEmptyChunk.length - 8, true);
+  const wavAdded = addSoundAsset(f01Proj.projectJson, f01Proj.assetsMap, 1, 'junk_wav', 'wav', wavWithEmptyChunk);
+  assert(wavAdded.sampleCount > 0, 'WAV with empty JUNK chunk must still parse sampleCount');
+
+  const upperZip = new global.JSZip();
+  upperZip.file('project.json', JSON.stringify(f01Proj.projectJson));
+  upperZip.file('TESTASSET.SVG', '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
+  const upperBuf = await upperZip.generateAsync({ type: 'uint8array' });
+  const upperLoaded = await loadSb3(upperBuf);
+  assert.strictEqual(typeof upperLoaded.assetsMap.get('TESTASSET.SVG'), 'string', 'Uppercase .SVG must load as string');
+
+  console.log('ALL 11 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {
