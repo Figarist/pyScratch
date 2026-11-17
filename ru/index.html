@@ -192,6 +192,9 @@
         <button type="button" class="category-item" data-category="variables" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_variables">Переменные</span></button>
         <button type="button" class="category-item" data-category="myblocks" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_myblocks">Мои блоки</span></button>
         <button type="button" class="category-item" data-category="pen" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_pen">Перо</span></button>
+        <button type="button" class="category-item" data-category="music" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_music">Музыка</span></button>
+        <button type="button" class="category-item" data-category="text2speech" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_text2speech">Озвучивание текста</span></button>
+        <button type="button" class="category-item" data-category="translate" aria-pressed="false"><span class="category-bubble" aria-hidden="true"></span><span class="category-label" data-l10n="cat_translate">Перевод</span></button>
           </nav>
 
           <div class="flyout" id="quick-palette" data-i18n-title="palette_title" title="Нажмите, чтобы вставить команду в курсор">
@@ -259,6 +262,7 @@
           <button type="button" class="palette-chip hat" data-insert="@when_message_received(&quot;msg&quot;)\ndef on_message():\n    move(10)\n">@when_message_received(&quot;msg&quot;)</button>
           <button type="button" class="palette-chip hat" data-insert="@when_greater_than(&quot;timer&quot;, 5)\ndef on_timer():\n    move(10)\n">@when_greater_than(&quot;timer&quot;, 5)</button>
           <button type="button" class="palette-chip hat" data-insert="@when_cloned\ndef on_clone():\n    move(10)\n">@when_cloned</button>
+          <button type="button" class="palette-chip hat" data-insert="@when_touching(&quot;Sprite2&quot;)\ndef on_touch():\n    move(10)\n">@when_touching(&quot;Sprite2&quot;)</button>
           <button type="button" class="palette-chip" data-insert="broadcast(&quot;msg&quot;)">broadcast(&quot;msg&quot;)</button>
           <button type="button" class="palette-chip" data-insert="broadcast_and_wait(&quot;msg&quot;)">broadcast_and_wait(&quot;msg&quot;)</button>
         </section>
@@ -335,6 +339,7 @@
           <h3 class="flyout-title" id="fh-myblocks" data-l10n="cat_myblocks">Мои блоки</h3>
           <button type="button" class="palette-chip" data-insert="def my_block(x, y):\n    move(x)\n    turn_right(y)\n">def my_block(x, y):</button>
           <button type="button" class="palette-chip" data-insert="@warp\ndef fast_block():\n    move(10)\n">@warp def fast_block():</button>
+          <button type="button" class="palette-chip" data-insert="def jump(height, flag: bool):\n    if flag:\n        change_y(height)\n">def jump(height, flag: bool):</button>
           <button type="button" class="palette-chip" data-insert="my_block(10, 15)">my_block(10, 15)</button>
         </section>
         <section class="flyout-group hidden" data-group="pen" aria-labelledby="fh-pen">
@@ -345,6 +350,27 @@
           <button type="button" class="palette-chip" data-insert="pen_stamp()">pen_stamp()</button>
           <button type="button" class="palette-chip" data-insert="set_pen_color(&quot;#00ffcc&quot;)">set_pen_color(&quot;#00ffcc&quot;)</button>
           <button type="button" class="palette-chip" data-insert="set_pen_size(3)">set_pen_size(3)</button>
+        </section>
+        <section class="flyout-group hidden" data-group="music" aria-labelledby="fh-music">
+          <h3 class="flyout-title" id="fh-music" data-l10n="cat_music">Музыка</h3>
+          <button type="button" class="palette-chip" data-insert="play_drum(1, 0.25)">play_drum(1, 0.25)</button>
+          <button type="button" class="palette-chip" data-insert="rest(0.25)">rest(0.25)</button>
+          <button type="button" class="palette-chip" data-insert="play_note(60, 0.5)">play_note(60, 0.5)</button>
+          <button type="button" class="palette-chip" data-insert="set_instrument(1)">set_instrument(1)</button>
+          <button type="button" class="palette-chip" data-insert="set_tempo(60)">set_tempo(60)</button>
+          <button type="button" class="palette-chip" data-insert="change_tempo(20)">change_tempo(20)</button>
+          <button type="button" class="palette-chip reporter" data-insert="tempo()">tempo()</button>
+        </section>
+        <section class="flyout-group hidden" data-group="text2speech" aria-labelledby="fh-text2speech">
+          <h3 class="flyout-title" id="fh-text2speech" data-l10n="cat_text2speech">Озвучивание текста</h3>
+          <button type="button" class="palette-chip" data-insert="speak(&quot;Hello&quot;)">speak(&quot;Hello&quot;)</button>
+          <button type="button" class="palette-chip" data-insert="set_voice(&quot;alto&quot;)">set_voice(&quot;alto&quot;)</button>
+          <button type="button" class="palette-chip" data-insert="set_language(&quot;en&quot;)">set_language(&quot;en&quot;)</button>
+        </section>
+        <section class="flyout-group hidden" data-group="translate" aria-labelledby="fh-translate">
+          <h3 class="flyout-title" id="fh-translate" data-l10n="cat_translate">Перевод</h3>
+          <button type="button" class="palette-chip reporter" data-insert="translate(&quot;hello&quot;, &quot;es&quot;)">translate(&quot;hello&quot;, &quot;es&quot;)</button>
+          <button type="button" class="palette-chip reporter" data-insert="language()">language()</button>
         </section>
           </div>
 

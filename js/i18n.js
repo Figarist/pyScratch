@@ -205,7 +205,16 @@
       doc_46: 'Оголосити локальний список для цього спрайта',
       doc_47: 'Робота зі списками Scratch',
       doc_48: 'Індекс (1..N) елемента у списку або 0',
-      doc_49: 'Показати або сховати список на сцені'
+      doc_49: 'Показати або сховати список на сцені',
+      cat_music: 'Музика',
+      cat_text2speech: 'Озвучення тексту',
+      cat_translate: 'Переклад',
+      doc_50: 'Подія: спрайт торкнувся об\'єкта ("edge", "mouse" або ім\'я спрайта)',
+      doc_51: 'Логічний аргумент власного блока (ім\'я: bool)',
+      doc_52: 'Барабан (1–18), пауза та нота (0–130) на задану кількість тактів',
+      doc_53: 'Інструмент (1–21) і темп (20–500 ударів за хвилину)',
+      doc_54: 'Озвучити текст (голоси alto, tenor, squeak, giant, kitten); у тестовому запуску — через speechSynthesis браузера',
+      doc_55: 'Переклад тексту (у симуляторі повертає текст без змін) і мова інтерфейсу'
     },
     en: {
       brand_sub: 'Python DSL ↔ Scratch 3.0 (.sb3)',
@@ -407,7 +416,16 @@
       doc_46: 'Declare a local list for this sprite',
       doc_47: 'Work with Scratch lists',
       doc_48: 'Index (1..N) of an item in a list, or 0',
-      doc_49: 'Show or hide a list on the stage'
+      doc_49: 'Show or hide a list on the stage',
+      cat_music: 'Music',
+      cat_text2speech: 'Text to Speech',
+      cat_translate: 'Translate',
+      doc_50: 'Event: the sprite touches an object ("edge", "mouse" or a sprite name)',
+      doc_51: 'Boolean argument of a custom block (name: bool)',
+      doc_52: 'Drum (1-18), rest and note (0-130) for a number of beats',
+      doc_53: 'Instrument (1-21) and tempo (20-500 beats per minute)',
+      doc_54: 'Speak text (voices alto, tenor, squeak, giant, kitten); the preview uses the browser speechSynthesis',
+      doc_55: 'Translate text (the preview returns the text unchanged) and the viewer language'
     },
     ru: {
       brand_sub: 'Python DSL ↔ Scratch 3.0 (.sb3)',
@@ -609,7 +627,16 @@
       doc_46: 'Объявить локальный список для этого спрайта',
       doc_47: 'Работа со списками Scratch',
       doc_48: 'Индекс (1..N) элемента в списке или 0',
-      doc_49: 'Показать или скрыть список на сцене'
+      doc_49: 'Показать или скрыть список на сцене',
+      cat_music: 'Музыка',
+      cat_text2speech: 'Озвучивание текста',
+      cat_translate: 'Перевод',
+      doc_50: 'Событие: спрайт коснулся объекта ("edge", "mouse" или имя спрайта)',
+      doc_51: 'Логический аргумент пользовательского блока (имя: bool)',
+      doc_52: 'Барабан (1–18), пауза и нота (0–130) на заданное число тактов',
+      doc_53: 'Инструмент (1–21) и темп (20–500 ударов в минуту)',
+      doc_54: 'Озвучить текст (голоса alto, tenor, squeak, giant, kitten); в предпросмотре используется speechSynthesis браузера',
+      doc_55: 'Перевод текста (в симуляторе возвращает текст без изменений) и язык интерфейса'
     }
   };
 

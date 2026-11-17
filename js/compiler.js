@@ -55,7 +55,8 @@
       values: ['abs', 'floor', 'ceiling', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log', 'e ^', '10 ^']
     },
     currentMenu: { label: 'одиниці часу', values: ['YEAR', 'MONTH', 'DATE', 'DAYOFWEEK', 'HOUR', 'MINUTE', 'SECOND'] },
-    greaterThan: { label: 'датчика', values: ['LOUDNESS', 'TIMER'] }
+    greaterThan: { label: 'датчика', values: ['LOUDNESS', 'TIMER'] },
+    ttsVoice: { label: 'голосу', values: ['ALTO', 'TENOR', 'SQUEAK', 'GIANT', 'KITTEN'] }
   };
   const SENSING_OF_PROPERTIES = [
     'x position', 'y position', 'direction', 'costume #', 'costume name', 'size', 'volume',
@@ -74,6 +75,14 @@
   // Note: switch_backdrop_and_wait is hidden from the sprite palette in Scratch but the VM runs it on sprites,
   // and the editor snippets use it, so it is intentionally not listed here.
   const STAGE_ONLY_CALLS = new Set([]);
+
+  // Scratch extensions that the compiler adds to / removes from project.json "extensions" by opcode prefix
+  const EXTENSION_PREFIXES = {
+    pen: 'pen_',
+    music: 'music_',
+    text2speech: 'text2speech_',
+    translate: 'translate_'
+  };
 
   // --- 1. TOKENIZER ---
   const IDENT_START_RE = /[\p{L}_]/u;
@@ -435,11 +444,29 @@
       const fnName = expect('IDENT', undefined, `Очікувалась назва функції після def у рядку ${defTok.line}.`).value;
       expect('PUNCT', '(', `Очікувалась "(" після ${fnName} у рядку ${defTok.line}.`);
       const params = [];
+      const paramTypes = []; // 'any' (text/number, %s) or 'bool' (boolean, %b)
+      const readParam = (msg) => {
+        params.push(expect('IDENT', undefined, msg).value);
+        if (peek().type === 'PUNCT' && peek().value === ':') {
+          next();
+          const typeTok = expect('IDENT', undefined, `Після ":" очікується тип параметра "bool" (рядок ${defTok.line}).`);
+          if (typeTok.value !== 'bool') {
+            throw new CompileError(
+              `Непідтримуваний тип параметра "${typeTok.value}" у рядку ${defTok.line}: можна писати лише "ім'я: bool" для логічного аргументу.`,
+              typeTok.line,
+              typeTok.col
+            );
+          }
+          paramTypes.push('bool');
+        } else {
+          paramTypes.push('any');
+        }
+      };
       if (!(peek().type === 'PUNCT' && peek().value === ')')) {
-        params.push(expect('IDENT', undefined, `Очікувалось ім'я параметра у рядку ${defTok.line}.`).value);
+        readParam(`Очікувалось ім'я параметра у рядку ${defTok.line}.`);
         while (peek().type === 'PUNCT' && peek().value === ',') {
           next();
-          params.push(expect('IDENT', undefined, `Очікувалось ім'я параметра після коми у рядку ${defTok.line}.`).value);
+          readParam(`Очікувалось ім'я параметра після коми у рядку ${defTok.line}.`);
         }
       }
       expect('PUNCT', ')', `Забули закрити дужку ")" у def ${fnName} у рядку ${defTok.line}.`);
@@ -447,7 +474,7 @@
       expect('NEWLINE', undefined, `Після ":" потрібен новий рядок з відступом (${defTok.line}).`);
 
       const body = parseBlock(defTok.line);
-      return { type: 'ProcDef', fnName, params, warp: !!warp, body, line: startLine || defTok.line };
+      return { type: 'ProcDef', fnName, params, paramTypes, warp: !!warp, body, line: startLine || defTok.line };
     }
 
     function parseBlock(parentLine) {
@@ -861,6 +888,7 @@
     const declaredLocalLists = new Set();
     const procedures = {}; // fnName -> { proccode, paramNames, paramIds, warp }
     let activeProcedureParams = null; // Set of param names when compiling inside a ProcDef
+    let activeProcedureBoolParams = null; // subset of activeProcedureParams declared as `name: bool`
     let usesPen = false;
 
     const globalHost = stageTarget || target;
@@ -1096,6 +1124,15 @@
       return id;
     }
 
+    // Reads of a custom block parameter: boolean parameters use argument_reporter_boolean
+    function createArgReporter(expr, parentId) {
+      const opcode =
+        activeProcedureBoolParams && activeProcedureBoolParams.has(expr.name)
+          ? 'argument_reporter_boolean'
+          : 'argument_reporter_string_number';
+      return createBlock(opcode, parentId, {}, { VALUE: [expr.name, null] }, { line: expr.line });
+    }
+
     function compileInput(expr, parentId, defaultShadowType = 4) {
       if (!expr) return [1, [defaultShadowType, '']];
 
@@ -1113,13 +1150,7 @@
       }
       if (expr.type === 'Var') {
         if (!expr.isLocal && activeProcedureParams && activeProcedureParams.has(expr.name)) {
-          const argBlockId = createBlock(
-            'argument_reporter_string_number',
-            parentId,
-            {},
-            { VALUE: [expr.name, null] },
-            { line: expr.line }
-          );
+          const argBlockId = createArgReporter(expr, parentId);
           return [3, argBlockId, [defaultShadowType, '']];
         }
         const varId = ensureVar(expr.name, !!expr.isLocal);
@@ -1147,6 +1178,14 @@
           return [2, id];
         }
       }
+      if (
+        expr.type === 'Var' &&
+        !expr.isLocal &&
+        activeProcedureBoolParams &&
+        activeProcedureBoolParams.has(expr.name)
+      ) {
+        return [2, createArgReporter(expr, parentId)];
+      }
       if (expr.type === 'Var') {
         const id = createBlock('operator_equals', parentId);
         blocks[id].inputs = {
@@ -1167,13 +1206,7 @@
     function compileShadowedExpr(expr, parentId, shadowPayload) {
       if (expr.type === 'Var') {
         if (!expr.isLocal && activeProcedureParams && activeProcedureParams.has(expr.name)) {
-          const argBlockId = createBlock(
-            'argument_reporter_string_number',
-            parentId,
-            {},
-            { VALUE: [expr.name, null] },
-            { line: expr.line }
-          );
+          const argBlockId = createArgReporter(expr, parentId);
           return [3, argBlockId, shadowPayload];
         }
         const varId = ensureVar(expr.name, !!expr.isLocal);
@@ -1191,6 +1224,57 @@
       }
       const shadowId = createBlock(menuOpcode, parentId, {}, { [fieldName]: [defaultVal, null] }, { shadow: true });
       return compileShadowedExpr(expr, parentId, shadowId);
+    }
+
+    // Menu slot that holds a number (drum, note, instrument): a numeric literal fills the menu shadow,
+    // any other expression is plugged on top of a default menu shadow.
+    function compileNumMenuOrExpr(expr, menuOpcode, fieldName, defaultVal, parentId, what, line) {
+      let literal = null;
+      if (!expr) {
+        literal = defaultVal;
+      } else if (expr.type === 'Number') {
+        literal = String(expr.value);
+      } else if (expr.type === 'String') {
+        if (expr.value !== '' && Number.isFinite(Number(expr.value))) literal = String(Number(expr.value));
+        else {
+          throw new CompileError(`${what} має бути числом (рядок ${line}), а не текстом "${expr.value}".`, line);
+        }
+      }
+      if (literal !== null) return compileShadowMenu(menuOpcode, fieldName, literal, parentId);
+      const shadowId = createBlock(menuOpcode, parentId, {}, { [fieldName]: [defaultVal, null] }, { shadow: true });
+      return compileShadowedExpr(expr, parentId, shadowId);
+    }
+
+    // show_variable / hide_variable / show_list / hide_list keep a (hidden by default) monitor entry in project.json
+    function ensureMonitor(kind, name, id) {
+      if (!projectJson || !id) return;
+      if (!Array.isArray(projectJson.monitors)) projectJson.monitors = [];
+      if (projectJson.monitors.some((m) => m && m.id === id)) return;
+      const isList = kind === 'list';
+      const store = (isList ? target.lists : target.variables) || {};
+      const isLocal = !target.isStage && store[id] !== undefined;
+      const host = isLocal ? target : globalHost;
+      const entry = (isList ? host.lists : host.variables) || {};
+      const slot = projectJson.monitors.length % 12;
+      const monitor = {
+        id,
+        mode: isList ? 'list' : 'default',
+        opcode: isList ? 'data_listcontents' : 'data_variable',
+        params: isList ? { LIST: name } : { VARIABLE: name },
+        spriteName: isLocal ? target.name : null,
+        value: entry[id] ? (isList ? [...(entry[id][1] || [])] : entry[id][1]) : isList ? [] : 0,
+        width: 0,
+        height: 0,
+        x: 5,
+        y: 5 + slot * 26,
+        visible: false
+      };
+      if (!isList) {
+        monitor.sliderMin = 0;
+        monitor.sliderMax = 100;
+        monitor.isDiscrete = true;
+      }
+      projectJson.monitors.push(monitor);
     }
 
     function compileBroadcastInput(expr, parentId) {
@@ -1429,6 +1513,18 @@
             return createBlock('sensing_username', parentId, {}, {}, { line: expr.line });
           case 'loudness':
             return createBlock('sensing_loudness', parentId, {}, {}, { line: expr.line });
+          case 'tempo':
+            return createBlock('music_getTempo', parentId, {}, {}, { line: expr.line });
+          case 'language':
+            return createBlock('translate_getViewerLanguage', parentId, {}, {}, { line: expr.line });
+          case 'translate': {
+            const id = createBlock('translate_getTranslate', parentId, {}, {}, { line: expr.line });
+            blocks[id].inputs = {
+              WORDS: compileInput(a[0], id, 10),
+              LANGUAGE: compileMenuOrExpr(a[1], 'translate_menu_languages', 'languages', 'en', id)
+            };
+            return id;
+          }
           case 'list_item':
           case 'local_list_item': {
             const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
@@ -1643,7 +1739,17 @@
         const inputs = {};
         const argKinds = String(proc.proccode || '').match(/%[sb]/g) || [];
         proc.paramIds.forEach((pId, idx) => {
-          inputs[pId] = argKinds[idx] === '%b' ? compileBoolInput(a[idx], id) || [1, [10, '']] : compileInput(a[idx], id, 10);
+          if (argKinds[idx] === '%b') {
+            // a number / text literal in a boolean slot counts as true unless it is 0, "" or "false"
+            let argExpr = a[idx];
+            if (argExpr && (argExpr.type === 'Number' || argExpr.type === 'String')) {
+              const v = argExpr.value;
+              argExpr = { type: 'Bool', value: !(v === 0 || v === '' || v === '0' || String(v).toLowerCase() === 'false'), line: argExpr.line };
+            }
+            inputs[pId] = compileBoolInput(argExpr, id) || [1, [10, '']];
+          } else {
+            inputs[pId] = compileInput(a[idx], id, 10);
+          }
         });
         blocks[id].inputs = inputs;
         return id;
@@ -1671,7 +1777,11 @@
         set_volume: ['sound_setvolumeto', 'VOLUME', 4],
         change_volume: ['sound_changevolumeby', 'VOLUME', 4],
         wait: ['control_wait', 'DURATION', 4],
-        ask: ['sensing_askandwait', 'QUESTION', 10]
+        ask: ['sensing_askandwait', 'QUESTION', 10],
+        rest: ['music_restForBeats', 'BEATS', 4],
+        set_tempo: ['music_setTempo', 'TEMPO', 4],
+        change_tempo: ['music_changeTempo', 'TEMPO', 4],
+        speak: ['text2speech_speakAndWait', 'WORDS', 10]
       };
 
       if (mapSimple[stmt.name]) {
@@ -1967,6 +2077,7 @@
           const varId = ensureVar(varName, isLocal);
           blocks[id].opcode = stmt.name === 'show_variable' ? 'data_showvariable' : 'data_hidevariable';
           blocks[id].fields = { VARIABLE: [varName, varId] };
+          ensureMonitor('variable', varName, varId);
           return id;
         }
         case 'show_list':
@@ -1975,8 +2086,43 @@
           const listId = ensureList(listName);
           blocks[id].opcode = stmt.name === 'show_list' ? 'data_showlist' : 'data_hidelist';
           blocks[id].fields = { LIST: [listName, listId] };
+          ensureMonitor('list', listName, listId);
           return id;
         }
+        case 'play_drum':
+          blocks[id].opcode = 'music_playDrumForBeats';
+          blocks[id].inputs = {
+            DRUM: compileNumMenuOrExpr(a[0], 'music_menu_DRUM', 'DRUM', '1', id, 'Номер барабана', stmt.line),
+            BEATS: compileInput(a[1], id, 4)
+          };
+          return id;
+        case 'play_note':
+          blocks[id].opcode = 'music_playNoteForBeats';
+          blocks[id].inputs = {
+            NOTE: compileNumMenuOrExpr(a[0], 'note', 'NOTE', '60', id, 'Нота (MIDI-номер)', stmt.line),
+            BEATS: compileInput(a[1], id, 4)
+          };
+          return id;
+        case 'set_instrument':
+          blocks[id].opcode = 'music_setInstrument';
+          blocks[id].inputs = {
+            INSTRUMENT: compileNumMenuOrExpr(a[0], 'music_menu_INSTRUMENT', 'INSTRUMENT', '1', id, 'Номер інструмента', stmt.line)
+          };
+          return id;
+        case 'set_voice':
+          blocks[id].opcode = 'text2speech_setVoice';
+          blocks[id].inputs = {
+            VOICES: compileMenuOrExpr(a[0], 'text2speech_menu_voices', 'voices', 'ALTO', id, (v) =>
+              checkChoice(v, 'ttsVoice', stmt.line, (x) => x.toUpperCase())
+            )
+          };
+          return id;
+        case 'set_language':
+          blocks[id].opcode = 'text2speech_setLanguage';
+          blocks[id].inputs = {
+            LANGUAGE: compileMenuOrExpr(a[0], 'text2speech_menu_languages', 'languages', 'en', id)
+          };
+          return id;
         case 'list_add':
         case 'local_list_add': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
@@ -2068,13 +2214,15 @@
           );
         }
         const paramIds = node.params.map((p) => `arg_${node.fnName}_${p}`);
+        const paramTypes = node.params.map((_, i) => (node.paramTypes && node.paramTypes[i]) || 'any');
         const proccode =
           node.params.length > 0
-            ? `${node.fnName} ${node.params.map(() => '%s').join(' ')}`
+            ? `${node.fnName} ${paramTypes.map((t) => (t === 'bool' ? '%b' : '%s')).join(' ')}`
             : node.fnName;
         procedures[node.fnName] = {
           fnName: node.fnName,
           paramNames: node.params,
+          paramTypes,
           paramIds,
           proccode,
           warp: !!node.warp
@@ -2108,14 +2256,14 @@
               proccode: proc.proccode,
               argumentids: JSON.stringify(proc.paramIds),
               argumentnames: JSON.stringify(proc.paramNames),
-              argumentdefaults: JSON.stringify(proc.paramNames.map(() => '')),
+              argumentdefaults: JSON.stringify(proc.paramNames.map((_, i) => (proc.paramTypes[i] === 'bool' ? 'false' : ''))),
               warp: proc.warp ? 'true' : 'false'
             }
           }
         );
         proc.paramNames.forEach((pName, i) => {
           const argShadowId = createBlock(
-            'argument_reporter_string_number',
+            proc.paramTypes[i] === 'bool' ? 'argument_reporter_boolean' : 'argument_reporter_string_number',
             protoId,
             {},
             { VALUE: [pName, null] },
@@ -2126,8 +2274,10 @@
         blocks[defId].inputs = { custom_block: [1, protoId] };
 
         activeProcedureParams = new Set(proc.paramNames);
+        activeProcedureBoolParams = new Set(proc.paramNames.filter((_, i) => proc.paramTypes[i] === 'bool'));
         const firstBodyId = compileStmtList(node.body, defId);
         activeProcedureParams = null;
+        activeProcedureBoolParams = null;
 
         if (firstBodyId) {
           blocks[defId].next = firstBodyId;
@@ -2189,6 +2339,16 @@
         );
         blocks[hatId].inputs = {
           VALUE: compileInput(h.decArgs[1], hatId, 4)
+        };
+      } else if (h.decorator === 'when_touching') {
+        if (target.isStage) {
+          throw new CompileError(`@when_touching (рядок ${h.line}) доступний лише спрайтам: Сцена ні до чого не торкається.`, h.line);
+        }
+        const touchRaw = literalArg(h.decArgs[0], '_mouse_', "Об'єкт у @when_touching", h.line);
+        const touchVal = touchRaw === 'edge' ? '_edge_' : touchRaw === 'mouse' ? '_mouse_' : touchRaw;
+        hatId = createBlock('event_whentouchingobject', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
+        blocks[hatId].inputs = {
+          TOUCHINGOBJECTMENU: compileShadowMenu('event_touchingobjectmenu', 'TOUCHINGOBJECTMENU', touchVal, hatId)
         };
       } else if (h.decorator === 'when_cloned') {
         if (target.isStage) {
@@ -2341,18 +2501,20 @@
 
     if (projectJson) {
       if (!projectJson.extensions) projectJson.extensions = [];
-      if (usesPen) {
-        if (!projectJson.extensions.includes('pen')) {
-          projectJson.extensions.push('pen');
-        }
-      } else if (projectJson.extensions.includes('pen')) {
-        const anyTargetUsesPen = Array.isArray(projectJson.targets)
-          ? projectJson.targets.some((t) =>
-              Object.values((t && t.blocks) || {}).some((b) => b && typeof b.opcode === 'string' && b.opcode.startsWith('pen_'))
-            )
-          : false;
-        if (!anyTargetUsesPen) {
-          projectJson.extensions = projectJson.extensions.filter((ext) => ext !== 'pen');
+      for (const [extName, prefix] of Object.entries(EXTENSION_PREFIXES)) {
+        const usedHere = extName === 'pen' && usesPen;
+        const usedAnywhere =
+          usedHere ||
+          (Array.isArray(projectJson.targets)
+            ? projectJson.targets.some((t) =>
+                Object.values((t && t.blocks) || {}).some((b) => b && typeof b.opcode === 'string' && b.opcode.startsWith(prefix))
+              )
+            : false) ||
+          Object.values(blocks).some((b) => b && typeof b.opcode === 'string' && b.opcode.startsWith(prefix));
+        if (usedAnywhere) {
+          if (!projectJson.extensions.includes(extName)) projectJson.extensions.push(extName);
+        } else if (projectJson.extensions.includes(extName)) {
+          projectJson.extensions = projectJson.extensions.filter((ext) => ext !== extName);
         }
       }
     }

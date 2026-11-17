@@ -286,6 +286,7 @@ def catch_target():
     ['cat_events', '@when_message_received("msg")', 'doc_05'],
     ['cat_events', '@when_greater_than("timer", 5)', 'doc_06'],
     ['cat_events', '@when_cloned', 'doc_07'],
+    ['cat_events', '@when_touching("Sprite2")', 'doc_50'],
     ['cat_functions', 'def my_block(x, y):', 'doc_08'],
     ['cat_functions', '@warp', 'doc_09'],
     ['cat_motion', 'move(80) / turn_right(90) / turn_left(90)', 'doc_10'],
@@ -327,7 +328,12 @@ def catch_target():
     ['cat_lists', 'local_list("items")', 'doc_46'],
     ['cat_lists', 'list_add("bag", "ключ"), list_item("bag", 1)', 'doc_47'],
     ['cat_lists', 'list_index_of("bag", "ключ")', 'doc_48'],
-    ['cat_lists', 'show_list("bag") / hide_list("bag")', 'doc_49']
+    ['cat_lists', 'show_list("bag") / hide_list("bag")', 'doc_49'],
+    ['cat_functions', 'def jump(height, flag: bool):', 'doc_51'],
+    ['cat_music', 'play_drum(1, 0.25) / rest(0.25) / play_note(60, 0.5)', 'doc_52'],
+    ['cat_music', 'set_instrument(1) / set_tempo(120) / change_tempo(20) / tempo()', 'doc_53'],
+    ['cat_text2speech', 'speak("Hello") / set_voice("alto") / set_language("en")', 'doc_54'],
+    ['cat_translate', 'translate("hello", "es") / language()', 'doc_55']
   ];
 
   const state = {
@@ -397,7 +403,7 @@ def catch_target():
                 : sprites.length === 1
                 ? sprites[0].name
                 : null;
-            renderVarsWatch(t.vars, t.lists, t.localVars, t.localLists, t.actorName || t.spriteName || fallbackActor);
+            renderVarsWatch(t.vars, t.lists, t.localVars, t.localLists, t.actorName || t.spriteName || fallbackActor, t.hiddenMonitors);
           },
           onAsk: (question, submitFn) => {
             if (!askOverlay || !askInput) return;
@@ -452,12 +458,15 @@ def catch_target():
     return out;
   }
 
-  function renderVarsWatch(vars, lists, localVars, localLists, actorName) {
+  function renderVarsWatch(vars, lists, localVars, localLists, actorName, hiddenMonitors) {
     if (!varsWatch) return;
-    const varEntries = Object.entries(vars || {});
-    const listEntries = Object.entries(lists || {});
-    const localVarEntries = formatScopedEntries(localVars, actorName);
-    const localListEntries = formatScopedEntries(localLists, actorName);
+    // Monitors hidden by hide_variable / hide_list (or saved as invisible in project.json) are not listed
+    const hidden = new Set(Array.isArray(hiddenMonitors) ? hiddenMonitors : []);
+    const varEntries = Object.entries(vars || {}).filter(([k]) => !hidden.has(k));
+    const listEntries = Object.entries(lists || {}).filter(([k]) => !hidden.has(k));
+    const baseName = (label) => String(label).split('.').pop();
+    const localVarEntries = formatScopedEntries(localVars, actorName).filter(([label]) => !hidden.has(baseName(label)));
+    const localListEntries = formatScopedEntries(localLists, actorName).filter(([label]) => !hidden.has(baseName(label)));
 
     if (
       varEntries.length === 0 &&
@@ -513,7 +522,7 @@ def catch_target():
     const lines = String(code).split('\n');
     const kwRe = /\b(def|for|in|while|if|elif|else|pass|and|or|not|True|False|range|self)\b/g;
     const penRe = /\b(pen_clear|pen_stamp|pen_down|pen_up|set_pen_color|set_pen_param|change_pen_param|set_pen_size|change_pen_size)\b/g;
-    const apiRe = /\b(move|turn_right|turn_left|goto|goto_random|goto_mouse|glide|glide_to|set_x|set_y|change_x|change_y|point_in_direction|point_towards|if_on_edge_bounce|set_rotation_style|switch_backdrop|switch_backdrop_and_wait|next_backdrop|switch_costume|next_costume|say|think|show|hide|set_size|change_size|go_to_layer|change_layer|set_effect|change_effect|clear_effects|costume_number|costume_name|backdrop_number|backdrop_name|play_sound|play_sound_until_done|stop_all_sounds|set_volume|change_volume|volume|set_sound_effect|change_sound_effect|clear_sound_effects|wait|wait_until|stop|create_clone|delete_this_clone|ask|answer|reset_timer|timer|broadcast|broadcast_and_wait|x_position|y_position|direction|size|key_pressed|touching|touching_color|color_is_touching_color|distance_to|attribute_of|set_drag_mode|current_time|days_since_2000|username|loudness|mouse_x|mouse_y|mouse_down|random|join|letter_of|length_of|len|contains|round_num|round|math_op|abs|sqrt|sin|cos|tan|asin|acos|atan|ln|log|exp|pow10|floor|ceil|ceiling|list_add|list_delete|list_clear|list_insert|list_replace|list_item|list_length|list_contains|list_index_of|show_variable|hide_variable|show_list|hide_list|local_list|local_list_add|local_list_delete|local_list_clear|local_list_insert|local_list_replace|local_list_item|local_list_length|local_list_contains|local_list_index_of)\b/g;
+    const apiRe = /\b(move|turn_right|turn_left|goto|goto_random|goto_mouse|glide|glide_to|set_x|set_y|change_x|change_y|point_in_direction|point_towards|if_on_edge_bounce|set_rotation_style|switch_backdrop|switch_backdrop_and_wait|next_backdrop|switch_costume|next_costume|say|think|show|hide|set_size|change_size|go_to_layer|change_layer|set_effect|change_effect|clear_effects|costume_number|costume_name|backdrop_number|backdrop_name|play_sound|play_sound_until_done|stop_all_sounds|set_volume|change_volume|volume|set_sound_effect|change_sound_effect|clear_sound_effects|wait|wait_until|stop|create_clone|delete_this_clone|ask|answer|reset_timer|timer|broadcast|broadcast_and_wait|x_position|y_position|direction|size|key_pressed|touching|touching_color|color_is_touching_color|distance_to|attribute_of|set_drag_mode|current_time|days_since_2000|username|loudness|mouse_x|mouse_y|mouse_down|random|join|letter_of|length_of|len|contains|round_num|round|math_op|abs|sqrt|sin|cos|tan|asin|acos|atan|ln|log|exp|pow10|floor|ceil|ceiling|list_add|list_delete|list_clear|list_insert|list_replace|list_item|list_length|list_contains|list_index_of|show_variable|hide_variable|show_list|hide_list|local_list|local_list_add|local_list_delete|local_list_clear|local_list_insert|local_list_replace|local_list_item|local_list_length|local_list_contains|local_list_index_of|play_drum|rest|play_note|set_instrument|set_tempo|change_tempo|tempo|speak|set_voice|set_language|translate|language)\b/g;
 
     return lines
       .map((line) => {

@@ -5,6 +5,22 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.2.0] - 2026-11-17
+
+### Added
+- **Touching hat (`js/compiler.js`, `js/decompiler.js`, `js/preview.js`)**: `@when_touching("Sprite2" | "edge" | "mouse")` compiles to `event_whentouchingobject` with an `event_touchingobjectmenu` shadow, decompiles back to the same DSL and fires in `StagePreview` on the rising edge of touching.
+- **Music extension**: `play_drum`, `rest`, `play_note`, `set_instrument`, `set_tempo`, `change_tempo` and the `tempo()` reporter (`music_*` with `music_menu_DRUM`, `music_menu_INSTRUMENT` and `note` shadows); `"music"` is added to / removed from `projectJson.extensions` automatically. The preview has a small Web Audio synth (oscillator + noise drums) that respects the mute toggle and waits `beats × 60 / tempo` seconds.
+- **Text to Speech & Translate extensions**: `speak`, `set_voice`, `set_language`, `translate(text, lang)` and `language()` (`text2speech_*`, `translate_*`). The preview speaks through `speechSynthesis` when available (respecting mute); `translate()` returns the text unchanged because the preview never uses the network.
+- **Boolean custom-block arguments**: `def jump(height, flag: bool):` compiles to a `%b` argument with `argument_reporter_boolean`, decompiles back to `flag: bool`, and the preview coerces such arguments to booleans.
+- **Monitors**: `show_variable` / `hide_variable` / `show_list` / `hide_list` now keep a hidden monitor entry (id, `data_variable` / `data_listcontents`, sprite binding, default position) in `projectJson.monitors`; the existing orphan cleanup removes them with their variable. The IDE variable watch hides names hidden this way.
+- **IDE (`index.html`, `en/`, `ru/`, `js/app.js`, `js/i18n.js`, `style.css`)**: new Music, Text to Speech and Translate palette categories, `@when_touching` and `: bool` palette entries, API reference rows and uk/en/ru labels.
+- **Docs (`docs/DSL_REFERENCE.md`)**: new sections 12 (Music) and 13 (Text to Speech & Translate); URL parameters moved to section 14.
+- **Tests (`test/test_roundtrip.js`)**: Suite 14 covers compile / decompile / second-round idempotency, extension bookkeeping, monitors and the preview runtime of all Stage 5 blocks; the file now has 14 test sections.
+
+### Changed
+- Suite 13 now uses `makeymakey_*` / `videoSensing_*` opcodes as the "DSL cannot express this" examples, because `event_whentouchingobject` and `music_*` are supported blocks now.
+- Extension bookkeeping in the compiler is generic (`pen`, `music`, `text2speech`, `translate`) and based on the opcodes present in any target.
+
 ## [1.1.0] - 2026-11-17
 
 ### Fixed

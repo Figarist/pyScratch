@@ -36,6 +36,9 @@
       this.mouseY = 0;
       this.mouseDown = false;
       this.muted = false;
+      this.musicTempo = 60;
+      this.ttsVoice = 'ALTO';
+      this.ttsLang = 'en';
       this.startTime = Date.now();
       this.answerValue = '';
       this.pendingAskResolver = null;
@@ -194,6 +197,169 @@
         }
       }
       this._activeAudioNodes.clear();
+    }
+
+    _cancelSpeech() {
+      try {
+        if (typeof window !== 'undefined' && window.speechSynthesis && typeof window.speechSynthesis.cancel === 'function') {
+          window.speechSynthesis.cancel();
+        }
+      } catch (_) {}
+    }
+
+    // --- Music extension: a tiny oscillator / noise synth (beats are timed by the project tempo) ---
+    _beatsToMs(beats) {
+      const b = Math.max(0, Number(beats) || 0);
+      return (b * 60000) / (this.musicTempo || 60);
+    }
+
+    _setTempo(bpm) {
+      const v = Number(bpm);
+      this.musicTempo = Math.max(20, Math.min(500, Number.isFinite(v) ? v : 60));
+    }
+
+    _playNoteSynth(midi, secs, actor) {
+      if (this.muted) return;
+      try {
+        const ctx = this._getAudioContext();
+        if (!ctx) return;
+        const waves = [
+          'sine', 'triangle', 'square', 'triangle', 'sawtooth', 'sine', 'triangle', 'sawtooth', 'sawtooth', 'square',
+          'sawtooth', 'sine', 'sine', 'square', 'sine', 'sine', 'sine', 'triangle', 'triangle', 'square', 'sine'
+        ];
+        const inst = Math.max(1, Math.min(21, Math.round(Number(actor && actor.instrument) || 1)));
+        const note = Math.max(0, Math.min(130, Number(midi) || 0));
+        const vol = actor && actor.volume !== undefined ? Math.max(0, Math.min(1, actor.volume / 100)) : 1;
+        const now = ctx.currentTime || 0;
+        const dur = Math.max(0.06, secs);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = waves[inst - 1];
+        osc.frequency.setValueAtTime(440 * Math.pow(2, (note - 69) / 12), now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.16 * vol + 0.0001, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        this._activeAudioNodes.add(osc);
+        osc.onended = () => {
+          this._activeAudioNodes.delete(osc);
+          try { osc.disconnect(); } catch (_) {}
+          try { gain.disconnect(); } catch (_) {}
+        };
+        osc.start(now);
+        osc.stop(now + dur + 0.02);
+      } catch (_) {}
+    }
+
+    _playDrumSynth(drum, actor) {
+      if (this.muted) return;
+      try {
+        const ctx = this._getAudioContext();
+        if (!ctx) return;
+        const id = Math.max(1, Math.min(18, Math.round(Number(drum) || 1)));
+        // [tone start Hz, tone end Hz, noise high-pass Hz (0 = none), length in seconds]
+        const kit = {
+          1: [180, 120, 1200, 0.18], 2: [120, 45, 0, 0.25], 3: [900, 700, 0, 0.05], 4: [0, 0, 5000, 0.9],
+          5: [0, 0, 7000, 0.4], 6: [0, 0, 8000, 0.08], 7: [0, 0, 6000, 0.2], 8: [0, 0, 1500, 0.15],
+          9: [2500, 2500, 0, 0.06], 10: [1000, 800, 0, 0.08], 11: [560, 540, 0, 0.3], 12: [3000, 3000, 0, 0.6],
+          13: [330, 280, 0, 0.18], 14: [200, 160, 0, 0.25], 15: [0, 0, 9000, 0.1], 16: [0, 0, 4000, 0.25],
+          17: [0, 0, 3000, 0.5], 18: [400, 250, 0, 0.3]
+        };
+        const [f0, f1, hp, len] = kit[id];
+        const vol = actor && actor.volume !== undefined ? Math.max(0, Math.min(1, actor.volume / 100)) : 1;
+        const now = ctx.currentTime || 0;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.2 * vol + 0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + len);
+        gain.connect(ctx.destination);
+        const nodes = [];
+        if (f0 > 0) {
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f0, now);
+          osc.frequency.exponentialRampToValueAtTime(Math.max(1, f1), now + len);
+          osc.connect(gain);
+          osc.start(now);
+          osc.stop(now + len + 0.02);
+          nodes.push(osc);
+        }
+        if (hp > 0 && typeof ctx.createBuffer === 'function' && typeof ctx.createBufferSource === 'function') {
+          const frames = Math.max(1, Math.floor((ctx.sampleRate || 44100) * len));
+          const buf = ctx.createBuffer(1, frames, ctx.sampleRate || 44100);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'highpass';
+          filter.frequency.setValueAtTime(hp, now);
+          src.connect(filter);
+          filter.connect(gain);
+          src.start(now);
+          nodes.push(src);
+        }
+        for (const n of nodes) this._activeAudioNodes.add(n);
+        const last = nodes[nodes.length - 1];
+        if (last) {
+          last.onended = () => {
+            for (const n of nodes) {
+              this._activeAudioNodes.delete(n);
+              try { n.disconnect(); } catch (_) {}
+            }
+            try { gain.disconnect(); } catch (_) {}
+          };
+        }
+      } catch (_) {}
+    }
+
+    // --- Text to Speech extension: browser speechSynthesis when available (otherwise a silent no-op) ---
+    async _speak(text, scriptCtx) {
+      const str = String(text === undefined || text === null ? '' : text);
+      if (this.muted || !str) return;
+      if (typeof window === 'undefined') return;
+      const synth = window.speechSynthesis;
+      const Utter = window.SpeechSynthesisUtterance || (typeof SpeechSynthesisUtterance !== 'undefined' ? SpeechSynthesisUtterance : null);
+      if (!synth || !Utter || typeof synth.speak !== 'function') return;
+      const voices = {
+        ALTO: [1, 1],
+        TENOR: [0.7, 0.95],
+        SQUEAK: [1.9, 1.15],
+        GIANT: [0.2, 0.75],
+        KITTEN: [1.6, 1.1]
+      };
+      const [pitch, rate] = voices[String(this.ttsVoice).toUpperCase()] || voices.ALTO;
+      await new Promise((resolve) => {
+        let done = false;
+        let poll = null;
+        let timer = null;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          if (poll) clearInterval(poll);
+          if (timer) clearTimeout(timer);
+          resolve();
+        };
+        try {
+          const u = new Utter(str);
+          u.lang = String(this.ttsLang || 'en');
+          u.pitch = pitch;
+          u.rate = rate;
+          u.onend = finish;
+          u.onerror = finish;
+          synth.speak(u);
+        } catch (_) {
+          finish();
+          return;
+        }
+        timer = setTimeout(finish, Math.max(3000, str.length * 150));
+        poll = setInterval(() => {
+          if (scriptCtx && scriptCtx.isStopped()) {
+            this._cancelSpeech();
+            finish();
+          }
+        }, 100);
+      });
     }
 
     playSynthSound(soundName, actor = this.sprite) {
@@ -426,6 +592,10 @@
       this.startTime = Date.now();
       this._clearGreaterThanWatcher();
       this._stopAllSounds();
+      this._cancelSpeech();
+      this.musicTempo = 60;
+      this.ttsVoice = 'ALTO';
+      this.ttsLang = 'en';
       this._draggingActor = null;
       this._activeBroadcasts = new WeakMap();
       this._activeKeyHandlers = new WeakMap();
@@ -820,7 +990,9 @@
     _startGreaterThanWatcher(myRunId) {
       this._clearGreaterThanWatcher();
       const hasGt = this.actors.some(
-        (a) => Array.isArray(a.ast) && a.ast.some((h) => h.type === 'Handler' && h.decorator === 'when_greater_than')
+        (a) =>
+          Array.isArray(a.ast) &&
+          a.ast.some((h) => h.type === 'Handler' && (h.decorator === 'when_greater_than' || h.decorator === 'when_touching'))
       );
       if (!hasGt) return;
 
@@ -838,7 +1010,23 @@
             prevAbove.set(actor, actorMap);
           }
           for (const h of actor.ast || []) {
-            if (h.type !== 'Handler' || h.decorator !== 'when_greater_than') continue;
+            if (h.type !== 'Handler') continue;
+            if (h.decorator === 'when_touching') {
+              // Edge-triggered hat: the script starts when the sprite begins to touch the object
+              if (actor.isStage) continue;
+              const dest = h.decArgs && h.decArgs[0] ? String(this.evalExpr(h.decArgs[0], actor, {})) : 'mouse';
+              const touchingNow =
+                !!actor.visible &&
+                Boolean(this.evalExpr({ type: 'Call', name: 'touching', args: [{ type: 'String', value: dest }] }, actor, {}));
+              const wasTouching = actorMap.get(h) || false;
+              actorMap.set(h, touchingNow);
+              if (touchingNow && !wasTouching) {
+                const scriptCtx = this._createScriptCtx(actor, myRunId);
+                this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx);
+              }
+              continue;
+            }
+            if (h.decorator !== 'when_greater_than') continue;
             const arg0 = h.decArgs && h.decArgs[0];
             const sensor = arg0
               ? arg0.type === 'Var' && (arg0.name === 'timer' || arg0.name === 'loudness')
@@ -1357,6 +1545,9 @@
             case 'mouse_down': return this.mouseDown;
             case 'timer': return Number(((Date.now() - this.startTime) / 1000).toFixed(2));
             case 'loudness': return 0;
+            case 'tempo': return this.musicTempo;
+            case 'language': return 'en';
+            case 'translate': return String(evalArg(0));
             case 'username': return 'player';
             case 'days_since_2000':
               return (Date.now() - Date.UTC(2000, 0, 1, 0, 0, 0)) / 86400000;
@@ -1614,6 +1805,12 @@
       actor.y = clampedY;
     }
 
+    _toBoolean(v) {
+      if (typeof v === 'string') return !(v === '' || v === '0' || v.toLowerCase() === 'false');
+      if (typeof v === 'number') return v !== 0 && !Number.isNaN(v);
+      return Boolean(v);
+    }
+
     sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -1766,7 +1963,8 @@
         const proc = actor.procedures[stmt.name];
         const childScope = { ...localScope };
         proc.params.forEach((pName, idx) => {
-          childScope[pName] = arg(idx);
+          const v = arg(idx);
+          childScope[pName] = proc.paramTypes && proc.paramTypes[idx] === 'bool' ? this._toBoolean(v) : v;
         });
         const isWarp = Boolean(warpMode || proc.warp);
         const res = await this.execBlock(proc.body, myRunId, actor, childScope, isWarp, scriptCtx);
@@ -2104,6 +2302,45 @@
         case 'clear_sound_effects':
           actor.soundEffects = { pitch: 0, pan: 0 };
           break;
+        case 'play_drum': {
+          this._playDrumSynth(arg(0), actor);
+          const ok = await this._sleepCancellable(this._beatsToMs(arg(1)), scriptCtx);
+          if (!ok) return 'RETURN_SCRIPT';
+          break;
+        }
+        case 'rest': {
+          const ok = await this._sleepCancellable(this._beatsToMs(arg(0)), scriptCtx);
+          if (!ok) return 'RETURN_SCRIPT';
+          break;
+        }
+        case 'play_note': {
+          const ms = this._beatsToMs(arg(1));
+          this._playNoteSynth(arg(0), ms / 1000, actor);
+          const ok = await this._sleepCancellable(ms, scriptCtx);
+          if (!ok) return 'RETURN_SCRIPT';
+          break;
+        }
+        case 'set_instrument':
+          actor.instrument = Math.max(1, Math.min(21, Math.round(Number(arg(0))) || 1));
+          break;
+        case 'set_tempo':
+          this._setTempo(arg(0));
+          break;
+        case 'change_tempo':
+          this._setTempo(this.musicTempo + (Number(arg(0)) || 0));
+          break;
+        case 'speak':
+          await this._speak(arg(0), scriptCtx);
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
+          break;
+        case 'set_voice': {
+          const v = String(arg(0)).toUpperCase();
+          if (['ALTO', 'TENOR', 'SQUEAK', 'GIANT', 'KITTEN'].includes(v)) this.ttsVoice = v;
+          break;
+        }
+        case 'set_language':
+          this.ttsLang = String(arg(0)) || 'en';
+          break;
         case 'set_volume':
           actor.volume = Math.max(0, Math.min(100, Number(arg(0))));
           break;
@@ -2293,6 +2530,7 @@
           this.isRunning = false;
           this.runId++;
           this._stopAllSounds();
+          this._cancelSpeech();
           this._clearGreaterThanWatcher();
           if (this.pendingAskResolver) {
             this.pendingAskResolver('');

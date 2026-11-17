@@ -63,6 +63,12 @@
   --sc-myblocks-border: #FF3355;
   --sc-pen: #0FBD8C;
   --sc-pen-border: #0B8E69;
+  --sc-music: #D65CD6;
+  --sc-music-border: #B84BB8;
+  --sc-text2speech: #6C8EF5;
+  --sc-text2speech-border: #4A6BD0;
+  --sc-translate: #29BEB8;
+  --sc-translate-border: #1E968F;
 
   /* Radii & Shadows */
   --sc-radius-sm: 4px;               /* 0.25rem */
@@ -598,6 +604,9 @@ button.danger:hover {
 [data-category="variables"], [data-group="variables"] { --cat: var(--sc-variables); --cat-border: var(--sc-variables-border); }
 [data-category="myblocks"], [data-group="myblocks"]   { --cat: var(--sc-myblocks);  --cat-border: var(--sc-myblocks-border); }
 [data-category="pen"], [data-group="pen"]             { --cat: var(--sc-pen);       --cat-border: var(--sc-pen-border); }
+[data-category="music"], [data-group="music"]         { --cat: var(--sc-music);     --cat-border: var(--sc-music-border); }
+[data-category="text2speech"], [data-group="text2speech"] { --cat: var(--sc-text2speech); --cat-border: var(--sc-text2speech-border); }
+[data-category="translate"], [data-group="translate"] { --cat: var(--sc-translate); --cat-border: var(--sc-translate-border); }
 
 /* Palette flyout (insertable snippets, styled as Scratch blocks) */
 .flyout {
@@ -1302,6 +1311,9 @@ body.stage-small .stage-area {
 }
 
 .scratch-block.pen     { background: var(--sc-pen);       border-color: var(--sc-pen-border);       color: #FFFFFF; }
+.scratch-block.music   { background: var(--sc-music);     border-color: var(--sc-music-border);     color: #FFFFFF; }
+.scratch-block.text2speech { background: var(--sc-text2speech); border-color: var(--sc-text2speech-border); color: #FFFFFF; }
+.scratch-block.translate { background: var(--sc-translate); border-color: var(--sc-translate-border); color: #FFFFFF; }
 .scratch-block.looks   { background: var(--sc-looks);     border-color: var(--sc-looks-border);     color: #FFFFFF; }
 .scratch-block.sound   { background: var(--sc-sound);     border-color: var(--sc-sound-border);     color: #FFFFFF; }
 .scratch-block.control { background: var(--sc-control);   border-color: var(--sc-control-border);   color: #FFFFFF; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); }

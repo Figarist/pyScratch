@@ -1070,9 +1070,9 @@ def cancel_other():
       c.sprite.blocks = {
         b_1: { opcode: 'event_whenflagclicked', next: 'b_2', parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 10, y: 10 },
         b_2: { opcode: 'motion_movesteps', next: null, parent: 'b_1', inputs: { STEPS: [1, [4, '10']] }, fields: {}, shadow: false, topLevel: false },
-        b_3: { opcode: 'event_whentouchingobject', next: 'b_4', parent: null, inputs: { TOUCHINGOBJECTMENU: [1, 'b_5'] }, fields: {}, shadow: false, topLevel: true, x: 300, y: 300 },
-        b_4: { opcode: 'music_playNoteForBeats', next: null, parent: 'b_3', inputs: { NOTE: [1, [4, '60']], BEATS: [1, [4, '0.25']] }, fields: {}, shadow: false, topLevel: false },
-        b_5: { opcode: 'event_touchingobjectmenu', next: null, parent: 'b_3', inputs: {}, fields: { TOUCHINGOBJECTMENU: ['_mouse_', null] }, shadow: true, topLevel: false }
+        b_3: { opcode: 'makeymakey_whenMakeyKeyPressed', next: 'b_4', parent: null, inputs: { KEY: [1, 'b_5'] }, fields: {}, shadow: false, topLevel: true, x: 300, y: 300 },
+        b_4: { opcode: 'videoSensing_videoToggle', next: null, parent: 'b_3', inputs: { NOTE: [1, [4, '60']], BEATS: [1, [4, '0.25']] }, fields: {}, shadow: false, topLevel: false },
+        b_5: { opcode: 'makeymakey_menu_KEY', next: null, parent: 'b_3', inputs: {}, fields: { KEY: ['_mouse_', null] }, shadow: true, topLevel: false }
       };
       c.sprite.comments = {
         cm_dead: { blockId: 'b_2', x: 0, y: 0, width: 100, height: 100, minimized: false, text: 'gone' },
@@ -1081,20 +1081,20 @@ def cancel_other():
       };
       const code = decompileTarget(c.sprite, c.stage);
       assert(code.includes('@when_flag_clicked') && code.includes('move(10)'), 'supported script still decompiles');
-      assert(code.includes('event_whentouchingobject'), 'unsupported script must be mentioned in a comment');
+      assert(code.includes('makeymakey_whenMakeyKeyPressed'), 'unsupported script must be mentioned in a comment');
       assert(!code.includes('невідомий блок'), 'unsupported script must not be half-rendered');
       for (let round = 0; round < 3; round++) {
         compileToScratch(code, c.sprite, c.stage, c.json);
         const o = ops(c.sprite);
-        assert.strictEqual(o.filter((x) => x === 'music_playNoteForBeats').length, 1, 'raw script kept exactly once (round ' + round + ')');
-        assert.strictEqual(o.filter((x) => x === 'event_whentouchingobject').length, 1, 'raw hat kept exactly once');
+        assert.strictEqual(o.filter((x) => x === 'videoSensing_videoToggle').length, 1, 'raw script kept exactly once (round ' + round + ')');
+        assert.strictEqual(o.filter((x) => x === 'makeymakey_whenMakeyKeyPressed').length, 1, 'raw hat kept exactly once');
         assert.strictEqual(o.filter((x) => x === 'motion_movesteps').length, 1, 'compiled script not duplicated');
       }
-      const rawHatId = Object.keys(c.sprite.blocks).find((k) => c.sprite.blocks[k].opcode === 'event_whentouchingobject');
+      const rawHatId = Object.keys(c.sprite.blocks).find((k) => c.sprite.blocks[k].opcode === 'makeymakey_whenMakeyKeyPressed');
       const rawHat = c.sprite.blocks[rawHatId];
       assert.notStrictEqual(c.sprite.blocks[rawHat.next].opcode, undefined, 'raw next link resolves');
       assert.strictEqual(c.sprite.blocks[rawHat.next].parent, rawHatId, 'raw parent link follows the id remap');
-      assert.strictEqual(c.sprite.blocks[rawHat.inputs.TOUCHINGOBJECTMENU[1]].opcode, 'event_touchingobjectmenu', 'raw shadow input follows id remap');
+      assert.strictEqual(c.sprite.blocks[rawHat.inputs.KEY[1]].opcode, 'makeymakey_menu_KEY', 'raw shadow input follows id remap');
       const flagHat = Object.values(c.sprite.blocks).find((b) => b.opcode === 'event_whenflagclicked');
       assert(flagHat && flagHat.next && c.sprite.blocks[flagHat.next].opcode === 'motion_movesteps', 'compiled script intact next to raw');
       const commentTexts = Object.values(c.sprite.comments).map((cm) => cm.text).sort();
@@ -1110,10 +1110,10 @@ def cancel_other():
         d1: { opcode: 'procedures_definition', next: 'd2', parent: null, inputs: { custom_block: [1, 'p1'] }, fields: {}, shadow: false, topLevel: true, x: 0, y: 0 },
         p1: { opcode: 'procedures_prototype', next: null, parent: 'd1', inputs: {}, fields: {}, shadow: true, topLevel: false,
           mutation: { tagName: 'mutation', children: [], proccode: 'jingle %s', argumentids: '["a1"]', argumentnames: '["n"]', argumentdefaults: '[""]', warp: 'false' } },
-        d2: { opcode: 'music_setTempo', next: null, parent: 'd1', inputs: { TEMPO: [1, [4, '90']] }, fields: {}, shadow: false, topLevel: false }
+        d2: { opcode: 'videoSensing_setVideoTransparency', next: null, parent: 'd1', inputs: { TEMPO: [1, [4, '90']] }, fields: {}, shadow: false, topLevel: false }
       };
       compileToScratch('@when_flag_clicked\ndef main():\n    jingle(3)\n', c.sprite, c.stage, c.json);
-      assert(ops(c.sprite).includes('music_setTempo'), 'raw procedure body preserved');
+      assert(ops(c.sprite).includes('videoSensing_setVideoTransparency'), 'raw procedure body preserved');
       const call = Object.values(c.sprite.blocks).find((b) => b.opcode === 'procedures_call');
       assert(call && call.mutation.proccode === 'jingle %s', 'call to a raw custom block compiles');
       assert(compileErr('def jingle(n):\n    move(n)\n') === null, 'sanity: plain def compiles on a fresh sprite');
@@ -1276,7 +1276,252 @@ def cancel_other():
     }
   }
 
-  console.log('ALL 13 TEST SUITES PASSED SUCCESSFULLY!');
+
+  console.log('--- 14. Testing Stage 5 Blocks (when_touching, Music, boolean args, monitors, Text to Speech, Translate) ---');
+  {
+    const mk = () => {
+      const proj = createDefaultProject();
+      return { json: proj.projectJson, stage: proj.projectJson.targets[0], sprite: proj.projectJson.targets[1] };
+    };
+    const compileErr = (src, onStage = false) => {
+      const c = mk();
+      try {
+        compileToScratch(src, onStage ? c.stage : c.sprite, c.stage, c.json);
+      } catch (e) {
+        return e;
+      }
+      return null;
+    };
+    const byOp = (t, op) => Object.values(t.blocks).filter((b) => b.opcode === op);
+    // compile -> decompile -> compile -> decompile must be a fixed point
+    const roundTrip = (src, c = mk()) => {
+      compileToScratch(src, c.sprite, c.stage, c.json);
+      const dec1 = decompileTarget(c.sprite, c.stage);
+      const c2 = mk();
+      compileToScratch(dec1, c2.sprite, c2.stage, c2.json);
+      const dec2 = decompileTarget(c2.sprite, c2.stage);
+      assert.strictEqual(dec2, dec1, 'second round-trip must be identical');
+      return { c, dec1 };
+    };
+
+    // 14.1 @when_touching hat with the event_touchingobjectmenu shadow
+    {
+      const { c, dec1 } = roundTrip('@when_touching("Sprite2")\ndef on_touch():\n    move(10)\n\n@when_touching("edge")\ndef on_edge():\n    turn_right(15)\n\n@when_touching("mouse")\ndef on_mouse():\n    hide()\n');
+      const hats = byOp(c.sprite, 'event_whentouchingobject');
+      assert.strictEqual(hats.length, 3, 'three touching hats');
+      const menu = c.sprite.blocks[hats[0].inputs.TOUCHINGOBJECTMENU[1]];
+      assert.strictEqual(menu.opcode, 'event_touchingobjectmenu');
+      assert(menu.shadow === true && menu.fields.TOUCHINGOBJECTMENU[0] === 'Sprite2', 'menu shadow carries the sprite name');
+      assert.deepStrictEqual(hats.map((h) => c.sprite.blocks[h.inputs.TOUCHINGOBJECTMENU[1]].fields.TOUCHINGOBJECTMENU[0]), ['Sprite2', '_edge_', '_mouse_']);
+      assert(dec1.includes('@when_touching("Sprite2")') && dec1.includes('@when_touching("edge")') && dec1.includes('@when_touching("mouse")'), dec1);
+      assert(!dec1.includes('збережено без змін'), 'touching hats are no longer preserved raw');
+      assert(compileErr('@when_touching("edge")\ndef h():\n    pass\n', true) instanceof CompileError, 'sprite-only hat');
+      assert(formatBlockUk(Object.keys(c.sprite.blocks).find((k) => c.sprite.blocks[k] === hats[0]), c.sprite.blocks).label.startsWith('Коли торкається'));
+    }
+
+    // 14.2 Music extension: menu shadows, note shadow block, extension bookkeeping
+    {
+      const src = '@when_flag_clicked\ndef main():\n    set_instrument(3)\n    set_tempo(120)\n    change_tempo(-20)\n    play_drum(2, 0.25)\n    rest(0.5)\n    play_note(64, 1)\n    play_note(tempo(), 0.5)\n';
+      const { c, dec1 } = roundTrip(src);
+      assert(c.json.extensions.includes('music'), 'music extension registered');
+      const drum = byOp(c.sprite, 'music_playDrumForBeats')[0];
+      const drumMenu = c.sprite.blocks[drum.inputs.DRUM[1]];
+      assert(drumMenu.opcode === 'music_menu_DRUM' && drumMenu.shadow && drumMenu.fields.DRUM[0] === '2', 'drum menu shadow');
+      assert.strictEqual(drum.inputs.BEATS[1][1], '0.25');
+      const inst = byOp(c.sprite, 'music_setInstrument')[0];
+      assert.strictEqual(c.sprite.blocks[inst.inputs.INSTRUMENT[1]].opcode, 'music_menu_INSTRUMENT');
+      const notes = byOp(c.sprite, 'music_playNoteForBeats');
+      const noteShadow = c.sprite.blocks[notes[0].inputs.NOTE[1]];
+      assert(noteShadow.opcode === 'note' && noteShadow.shadow && noteShadow.fields.NOTE[0] === '64', 'note shadow block');
+      assert.strictEqual(notes[1].inputs.NOTE[0], 3, 'reporter plugged over the note shadow');
+      assert.strictEqual(c.sprite.blocks[notes[1].inputs.NOTE[1]].opcode, 'music_getTempo');
+      assert.strictEqual(byOp(c.sprite, 'music_setTempo')[0].inputs.TEMPO[1][1], '120');
+      assert.strictEqual(byOp(c.sprite, 'music_changeTempo')[0].inputs.TEMPO[1][1], '-20');
+      assert(byOp(c.sprite, 'music_restForBeats').length === 1);
+      for (const line of ['set_instrument(3)', 'set_tempo(120)', 'change_tempo(-20)', 'play_drum(2, 0.25)', 'rest(0.5)', 'play_note(64, 1)', 'tempo()']) {
+        assert(dec1.includes(line), 'decompiled DSL contains ' + line + '\n' + dec1);
+      }
+      assert(compileErr('@when_flag_clicked\ndef m():\n    play_note("do", 1)\n') instanceof CompileError, 'non-numeric note literal rejected');
+      for (const bl of Object.keys(c.sprite.blocks).filter((k) => !c.sprite.blocks[k].shadow)) {
+        const fb = formatBlockUk(bl, c.sprite.blocks);
+        assert(fb.label && fb.label !== c.sprite.blocks[bl].opcode, 'Ukrainian label for ' + c.sprite.blocks[bl].opcode);
+      }
+      // removing the blocks drops the extension again (pen stays untouched)
+      compileToScratch('@when_flag_clicked\ndef main():\n    pen_down()\n', c.sprite, c.stage, c.json);
+      assert(!c.json.extensions.includes('music') && c.json.extensions.includes('pen'), 'music extension removed when unused');
+    }
+
+    // 14.3 Boolean arguments of custom blocks
+    {
+      const src = 'def jump(height, flag: bool):\n    if flag:\n        change_y(height)\n    else:\n        say(height)\n\n@warp\ndef flip(ok: bool):\n    say(ok)\n\n@when_flag_clicked\ndef main():\n    jump(10, True)\n    jump(5, touching("edge"))\n    flip(False)\n';
+      const { c, dec1 } = roundTrip(src);
+      const protos = byOp(c.sprite, 'procedures_prototype');
+      const jumpProto = protos.find((b) => b.mutation.proccode.startsWith('jump'));
+      assert.strictEqual(jumpProto.mutation.proccode, 'jump %s %b');
+      assert.strictEqual(jumpProto.mutation.argumentdefaults, JSON.stringify(['', 'false']));
+      const protoArgs = Object.values(jumpProto.inputs).map((inp) => c.sprite.blocks[inp[1]].opcode);
+      assert.deepStrictEqual(protoArgs, ['argument_reporter_string_number', 'argument_reporter_boolean']);
+      const ifBlock = byOp(c.sprite, 'control_if_else')[0];
+      const cond = c.sprite.blocks[ifBlock.inputs.CONDITION[1]];
+      assert(cond.opcode === 'argument_reporter_boolean' && cond.fields.VALUE[0] === 'flag', 'bool param read as argument_reporter_boolean');
+      const sayArg = byOp(c.sprite, 'looks_say').map((b) => c.sprite.blocks[b.inputs.MESSAGE[1]]).find((b) => b && b.opcode === 'argument_reporter_boolean');
+      assert(sayArg, 'bool param in a value slot is still a boolean reporter');
+      const calls = byOp(c.sprite, 'procedures_call').filter((b) => b.mutation.proccode.startsWith('jump'));
+      assert.strictEqual(calls.length, 2);
+      assert.strictEqual(calls[0].inputs.arg_jump_flag[0], 2, 'boolean slot holds a boolean block');
+      assert.strictEqual(c.sprite.blocks[calls[1].inputs.arg_jump_flag[1]].opcode, 'sensing_touchingobject');
+      assert(dec1.includes('def jump(height, flag: bool):') && dec1.includes('def flip(ok: bool):'), dec1);
+      assert(dec1.includes('@warp\ndef flip'), 'warp preserved with bool arg');
+      assert(compileErr('def f(a: int):\n    pass\n') instanceof CompileError, 'only bool annotation is supported');
+      // empty boolean slot of an imported project decompiles as False and compiles again
+      const imp = mk();
+      compileToScratch('def f(a: bool):\n    pass\n\n@when_flag_clicked\ndef m():\n    f(True)\n', imp.sprite, imp.stage, imp.json);
+      const call = byOp(imp.sprite, 'procedures_call')[0];
+      delete call.inputs.arg_f_a;
+      const impCode = decompileTarget(imp.sprite, imp.stage);
+      assert(impCode.includes('f(False)'), impCode);
+      compileToScratch(impCode, imp.sprite, imp.stage, imp.json);
+      // preview: boolean parameters are coerced to booleans
+      const simB = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+      await simB.runAst(parse(tokenize('def mark(flag: bool):\n    if flag:\n        yes = 1\n    else:\n        no = 1\n\n@when_flag_clicked\ndef main():\n    mark("false")\n    mark(1)\n')));
+      assert.strictEqual(simB.vars.yes, 1);
+      assert.strictEqual(simB.vars.no, 1);
+    }
+
+    // 14.4 Variable / list monitors
+    {
+      const c = mk();
+      compileToScratch('@when_flag_clicked\ndef main():\n    score = 0\n    self.hp = 5\n    show_variable("score")\n    show_variable(self.hp)\n    hide_variable("score")\n    list_add("bag", 1)\n    show_list("bag")\n    hide_list("bag")\n', c.sprite, c.stage, c.json);
+      assert.strictEqual(c.json.monitors.length, 3, 'one monitor per variable / list, no duplicates');
+      const scoreId = Object.keys(c.stage.variables).find((k) => c.stage.variables[k][0] === 'score');
+      const hpId = Object.keys(c.sprite.variables).find((k) => c.sprite.variables[k][0] === 'hp');
+      const bagId = Object.keys(c.stage.lists).find((k) => c.stage.lists[k][0] === 'bag');
+      const mScore = c.json.monitors.find((m) => m.id === scoreId);
+      const mHp = c.json.monitors.find((m) => m.id === hpId);
+      const mBag = c.json.monitors.find((m) => m.id === bagId);
+      assert(mScore && mScore.opcode === 'data_variable' && mScore.params.VARIABLE === 'score' && mScore.spriteName === null && mScore.visible === false, 'global variable monitor');
+      assert(mHp && mHp.spriteName === 'Sprite1' && mHp.value === 0, 'sprite-local variable monitor is bound to its sprite');
+      assert(mBag && mBag.opcode === 'data_listcontents' && mBag.mode === 'list' && mBag.params.LIST === 'bag' && Array.isArray(mBag.value), 'list monitor');
+      assert(c.json.monitors.every((m) => Number.isFinite(m.x) && Number.isFinite(m.y)), 'default positions');
+      // an existing monitor is kept as is
+      mScore.visible = true;
+      mScore.x = 99;
+      compileToScratch('@when_flag_clicked\ndef main():\n    score = 0\n    self.hp = 5\n    show_variable("score")\n    show_variable(self.hp)\n    list_add("bag", 1)\n    show_list("bag")\n', c.sprite, c.stage, c.json);
+      assert.strictEqual(c.json.monitors.length, 3);
+      assert(c.json.monitors.find((m) => m.id === scoreId).visible === true && c.json.monitors.find((m) => m.id === scoreId).x === 99, 'existing monitor untouched');
+      // dropping a variable removes its monitor, the others stay
+      compileToScratch('@when_flag_clicked\ndef main():\n    show_variable("score")\n    self.hp = 5\n    show_variable(self.hp)\n', c.sprite, c.stage, c.json);
+      assert(!c.json.monitors.some((m) => m.id === bagId), 'monitor of the removed list is cleaned up');
+      assert(c.json.monitors.some((m) => m.id === scoreId) && c.json.monitors.some((m) => m.id === hpId));
+      const { dec1 } = roundTrip('@when_flag_clicked\ndef main():\n    score = 1\n    show_variable("score")\n    hide_variable("score")\n    list_add("bag", 1)\n    show_list("bag")\n    hide_list("bag")\n');
+      for (const line of ['show_variable("score")', 'hide_variable("score")', 'show_list("bag")', 'hide_list("bag")']) assert(dec1.includes(line), line);
+      // preview: hidden monitors recorded in project.json start hidden, show_variable reveals them
+      const pj = mk();
+      compileToScratch('@when_flag_clicked\ndef main():\n    score = 1\n    show_variable("score")\n', pj.sprite, pj.stage, pj.json);
+      const simM = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+      simM.projectJson = pj.json;
+      simM.reset();
+      assert(simM.hiddenMonitors.has('score'), 'generated monitor is initially hidden');
+      await simM.runAst(parse(tokenize('@when_flag_clicked\ndef main():\n    score = 1\n    show_variable("score")\n')));
+      assert(simM.visibleMonitors.has('score') && !simM.hiddenMonitors.has('score'));
+    }
+
+    // 14.5 Text to Speech + Translate
+    {
+      const src = '@when_flag_clicked\ndef main():\n    set_voice("giant")\n    set_language("es")\n    speak("Hola")\n    say(translate("hello", "fr"))\n    say(language())\n';
+      const { c, dec1 } = roundTrip(src);
+      assert(c.json.extensions.includes('text2speech') && c.json.extensions.includes('translate'), 'both extensions registered');
+      const voice = byOp(c.sprite, 'text2speech_setVoice')[0];
+      const vMenu = c.sprite.blocks[voice.inputs.VOICES[1]];
+      assert(vMenu.opcode === 'text2speech_menu_voices' && vMenu.fields.voices[0] === 'GIANT' && vMenu.shadow, 'voice menu shadow (upper-cased)');
+      const lang = byOp(c.sprite, 'text2speech_setLanguage')[0];
+      const lMenu = c.sprite.blocks[lang.inputs.LANGUAGE[1]];
+      assert(lMenu.opcode === 'text2speech_menu_languages' && lMenu.fields.languages[0] === 'es');
+      assert.strictEqual(byOp(c.sprite, 'text2speech_speakAndWait')[0].inputs.WORDS[1][1], 'Hola');
+      const tr = byOp(c.sprite, 'translate_getTranslate')[0];
+      assert.strictEqual(c.sprite.blocks[tr.inputs.LANGUAGE[1]].opcode, 'translate_menu_languages');
+      assert.strictEqual(c.sprite.blocks[tr.inputs.LANGUAGE[1]].fields.languages[0], 'fr');
+      assert(byOp(c.sprite, 'translate_getViewerLanguage').length === 1);
+      for (const line of ['set_voice("giant")', 'set_language("es")', 'speak("Hola")', 'translate("hello", "fr")', 'language()']) assert(dec1.includes(line), line + '\n' + dec1);
+      assert(compileErr('@when_flag_clicked\ndef m():\n    set_voice("robot")\n') instanceof CompileError, 'unknown voice rejected');
+      compileToScratch('@when_flag_clicked\ndef main():\n    pass\n', c.sprite, c.stage, c.json);
+      assert(!c.json.extensions.includes('text2speech') && !c.json.extensions.includes('translate'), 'extensions dropped when unused');
+      // Stage scripts may use music / speech blocks as well
+      assert(compileErr('@when_flag_clicked\ndef m():\n    play_note(60, 1)\n    speak("x")\n', true) === null);
+    }
+
+    // 14.6 Preview runtime
+    {
+      const sim14 = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+      await sim14.runAst(parse(tokenize(`
+@when_flag_clicked
+def main():
+    goto(0, 0)
+    wait(0.12)
+    goto(239, 0)
+    wait(0.12)
+    goto(0, 0)
+    wait(0.12)
+    goto(239, 0)
+    wait(0.12)
+
+@when_touching("edge")
+def hit():
+    hits += 1
+`)));
+      assert.strictEqual(sim14.vars.hits, 2, 'when_touching fires once per rising edge, got ' + sim14.vars.hits);
+
+      const simMusic = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+      const t0 = Date.now();
+      await simMusic.runAst(parse(tokenize(`
+@when_flag_clicked
+def main():
+    set_tempo(500)
+    set_instrument(4)
+    play_note(60, 1)
+    play_drum(1, 0.5)
+    rest(0.5)
+    a = tempo()
+    change_tempo(1000)
+    b = tempo()
+    set_tempo(1)
+    c = tempo()
+    set_tempo(500)
+    heard = translate("hola", "en")
+    lang = language()
+    set_voice("kitten")
+    set_language("de")
+    speak("ignored without speech synthesis")
+`)));
+      const elapsed = Date.now() - t0;
+      assert(elapsed >= 150 && elapsed < 1500, 'music waits (1 + 0.5 + 0.5 beats at 500 bpm = 240ms), took ' + elapsed);
+      assert.strictEqual(simMusic.vars.a, 500);
+      assert.strictEqual(simMusic.vars.b, 500, 'tempo clamps to 500');
+      assert.strictEqual(simMusic.vars.c, 20, 'tempo clamps to 20');
+      assert.strictEqual(simMusic.vars.heard, 'hola', 'translate returns the text unchanged');
+      assert.strictEqual(simMusic.vars.lang, 'en');
+      assert.strictEqual(simMusic.sprite.instrument, 4);
+      assert.strictEqual(simMusic.ttsVoice, 'KITTEN');
+      assert.strictEqual(simMusic.ttsLang, 'de');
+
+      // speechSynthesis is used when present and skipped while muted
+      const spoken = [];
+      const prevWin = global.window;
+      global.window = {
+        addEventListener() {},
+        speechSynthesis: { speak: (u) => { spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 5); }, cancel() {} },
+        SpeechSynthesisUtterance: function (text) { this.text = text; }
+      };
+      const simTts = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+      await simTts.runAst(parse(tokenize('@when_flag_clicked\ndef main():\n    speak("one")\n')));
+      simTts.muted = true;
+      await simTts.runAst(parse(tokenize('@when_flag_clicked\ndef main():\n    speak("two")\n')));
+      global.window = prevWin;
+      assert.deepStrictEqual(spoken, ['one'], 'speak uses speechSynthesis and respects mute');
+    }
+  }
+
+  console.log('ALL 14 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {

@@ -52,7 +52,7 @@ The compiler rejects values Scratch would silently ignore, with a Ukrainian `Com
 - Calling a custom block with the wrong number of arguments is a `CompileError`.
 
 ### Imported Projects: Scripts the DSL Cannot Express
-When an imported `.sb3` contains top-level scripts with opcodes the decompiler does not know (unknown hats, extension blocks such as `music_*`, loose block stacks, …), `decompileTarget` does not render them; it prints a `# [збережено без змін] …` comment instead. On every recompile `compileToScratch` keeps those scripts verbatim: their blocks are merged back into `target.blocks` (ids that collide with generated ids are renamed to `raw_<id>`, with `parent`/`next`/inputs/comment links rewritten), their variables/lists/broadcasts are protected from orphan cleanup, and custom blocks defined inside such scripts remain callable from DSL code. They cannot be edited or deleted from the code editor. Comments attached to regenerated blocks are dropped (workspace comments and comments on preserved scripts are kept), and monitors of variables/lists removed by the cleanup are removed from `project.monitors`.
+When an imported `.sb3` contains top-level scripts with opcodes the decompiler does not know (unknown hats, extension blocks such as `videoSensing_*` or `makeymakey_*`, loose block stacks, …), `decompileTarget` does not render them; it prints a `# [збережено без змін] …` comment instead. On every recompile `compileToScratch` keeps those scripts verbatim: their blocks are merged back into `target.blocks` (ids that collide with generated ids are renamed to `raw_<id>`, with `parent`/`next`/inputs/comment links rewritten), their variables/lists/broadcasts are protected from orphan cleanup, and custom blocks defined inside such scripts remain callable from DSL code. They cannot be edited or deleted from the code editor. Comments attached to regenerated blocks are dropped (workspace comments and comments on preserved scripts are kept), and monitors of variables/lists removed by the cleanup are removed from `project.monitors`.
 
 ---
 
@@ -70,6 +70,7 @@ Event decorators must precede a zero-parameter function (`def name():`), except 
 | `@when_message_received(msg)` | `event_whenbroadcastreceived` | Field `BROADCAST_OPTION` (`"message1"` default) | Registers `msg` in Stage `broadcasts`. Re-broadcasting restarts still-running handlers on each actor in `StagePreview`. |
 | `@when_greater_than(sensor, val)` | `event_whengreaterthan` | Field `WHENGREATERTHANMENU` (`"TIMER"` \| `"LOUDNESS"`), input `VALUE` | Edge-triggered hat firing when `sensor > val`. In `StagePreview`, `"timer"` polls every 50ms (`"loudness"` evaluates to `0`). |
 | `@when_cloned` | `control_start_as_clone` | — | Executes inside each newly created clone with inherited local state. |
+| `@when_touching(obj)` | `event_whentouchingobject` | Input `TOUCHINGOBJECTMENU` (shadow `event_touchingobjectmenu`, field `TOUCHINGOBJECTMENU`) | `obj` is `"edge"` (`"_edge_"`), `"mouse"` (`"_mouse_"`, default) or a sprite name; the raw `"_edge_"` / `"_mouse_"` spellings are accepted too. Sprite-only (`CompileError` on the Stage). Edge-triggered: in `StagePreview` the script starts when the sprite *begins* touching the object (polled every 50 ms, hidden sprites never touch). Decompiles back to `@when_touching("edge")`. |
 
 ### Broadcast Statements (`Events`)
 
@@ -102,7 +103,8 @@ def jump():
 | --- | --- | --- | --- |
 | `def name(p1, p2):` | `procedures_definition` + `procedures_prototype` + `argument_reporter_string_number` | `proccode`: `"name %s %s"` (or `"name"` if 0 params), `argumentids`, `argumentnames`, `argumentdefaults`, `warp: "false"` | Two-pass compilation allows calling procedures defined later in the script. |
 | `@warp` + `def name(p1, p2):` | `procedures_definition` + `procedures_prototype` + `argument_reporter_string_number` | Same as above with `warp: "true"` | "Run without screen refresh": executes synchronously in `StagePreview` without 16ms frame yields (500ms safety yield). |
-| `name(v1, v2)` | `procedures_call` | `proccode`, `argumentids`, `warp: "true" \| "false"`; inputs keyed by `paramId` | Statement-only (Scratch custom blocks do not return values). `stop("this script")` inside a procedure exits the caller script as well. |
+| `def name(a, flag: bool):` | `procedures_definition` + `procedures_prototype` + `argument_reporter_string_number` / `argument_reporter_boolean` | `proccode`: `"name %s %b"`, `argumentdefaults`: `""` for text/number and `"false"` for boolean | A parameter annotated `: bool` becomes a Scratch **boolean argument** (`%b`, hexagonal slot). Reading `flag` inside the body emits `argument_reporter_boolean` (usable in `if`/`while` conditions and in value slots). `bool` is the only supported annotation; any other type is a `CompileError`. The decompiler prints `%b` arguments back as `name: bool`, and an empty boolean slot of an imported project as `False`. |
+| `name(v1, v2)` | `procedures_call` | `proccode`, `argumentids`, `warp: "true" \| "false"`; inputs keyed by `paramId` | Statement-only (Scratch custom blocks do not return values). `stop("this script")` inside a procedure exits the caller script as well. For `%b` parameters pass a condition (`touching("edge")`, `True`, `a < b`); a number or text literal counts as true unless it is `0`, `""` or `"false"`. In `StagePreview` a boolean parameter is coerced to `True`/`False` on entry. |
 
 ```python
 @warp
@@ -367,7 +369,7 @@ def quiz():
 | `var -= expr` / `self.var -= expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Negates numeric literal directly (`-25`) or wraps `expr` in `operator_subtract(0, expr)`. |
 | `var *= expr` / `self.var *= expr` | `data_setvariableto` + `operator_multiply` | Field `VARIABLE`, `VALUE` = `var * expr` | Desugared at parse time into assignment with multiplication. |
 | `var /= expr` / `self.var /= expr` | `data_setvariableto` + `operator_divide` | Field `VARIABLE`, `VALUE` = `var / expr` | Desugared at parse time into assignment with division. |
-| `show_variable(v)` / `hide_variable(v)` | `data_showvariable` / `data_hidevariable` | Field `VARIABLE` | Pass `"name"` for global or `self.var` for sprite-local. Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview`. |
+| `show_variable(v)` / `hide_variable(v)` | `data_showvariable` / `data_hidevariable` | Field `VARIABLE` | Pass `"name"` for global or `self.var` for sprite-local. Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview`. The compiler also adds a hidden monitor entry (`visible: false`, `mode: "default"`, `opcode: "data_variable"`, `params.VARIABLE`, `spriteName` = `null` for globals or the sprite name for `self.var`, default position `x: 5`, `y: 5 + 26·n`) to `projectJson.monitors`, keyed by the variable id; existing monitors are never modified, and monitors of variables removed by the orphan cleanup are deleted. |
 
 ### Lists (1-Based Indexing)
 
@@ -385,7 +387,7 @@ Every global `list_*` helper has a sprite-local counterpart `local_list_*` that 
 | `list_length(list)` | `local_list_length(list)` | `data_lengthoflist` | Field `LIST` | Reporter returning number of items in `list`. |
 | `list_contains(list, item)` | `local_list_contains(list, item)` | `data_listcontainsitem` | Field `LIST`, input `ITEM` | Boolean reporter checking whether `list` contains `item` (case-insensitive). |
 | `list_index_of(list, item)` | `local_list_index_of(list, item)` | `data_itemnumoflist` | Field `LIST`, input `ITEM` | Reporter returning 1-based index of `item` in `list` (`0` if not found). |
-| `show_list(list)` / `hide_list(list)` | — | `data_showlist` / `data_hidelist` | Field `LIST` | Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview` (works with local lists declared via `local_list(list)`). |
+| `show_list(list)` / `hide_list(list)` | — | `data_showlist` / `data_hidelist` | Field `LIST` | Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview` (works with local lists declared via `local_list(list)`). Adds a hidden `data_listcontents` monitor (`mode: "list"`) to `projectJson.monitors` exactly like `show_variable`. The IDE's variable watch panel hides names that are hidden this way. |
 
 > **Note**: The first argument (`list`) to all `list_*` / `local_list_*` functions should be a string literal naming the Scratch list (e.g., `"inventory"`).
 
@@ -472,7 +474,61 @@ def math_demo():
 
 ---
 
-## 12. Browser IDE URL Query Parameters
+## 12. Music Extension (`music_*`)
+
+Using any music block appends `"music"` to `projectJson.extensions` (and removes it again when no target uses `music_*` any more). Drum, note and instrument arguments accept a number literal (placed into the menu shadow block) or any reporter expression (plugged over a default menu shadow). A non-numeric text literal is a `CompileError`.
+
+| Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
+| --- | --- | --- | --- |
+| `play_drum(drum, beats)` | `music_playDrumForBeats` | `DRUM` (shadow `music_menu_DRUM`, field `DRUM`), `BEATS` | `drum` is `1`–`18` (1 snare, 2 bass, 3 side stick, 4 crash, 5 open hi-hat, 6 closed hi-hat, 7 tambourine, 8 hand clap, 9 claves, 10 wood block, 11 cowbell, 12 triangle, 13 bongo, 14 conga, 15 cabasa, 16 guiro, 17 vibraslap, 18 cuica). |
+| `rest(beats)` | `music_restForBeats` | `BEATS` | Silent wait. |
+| `play_note(note, beats)` | `music_playNoteForBeats` | `NOTE` (shadow block `note`, field `NOTE`), `BEATS` | `note` is a MIDI number (`60` = middle C, clamped to `0`–`130` in `StagePreview`). |
+| `set_instrument(n)` | `music_setInstrument` | `INSTRUMENT` (shadow `music_menu_INSTRUMENT`, field `INSTRUMENT`) | `1`–`21` (piano, electric piano, organ, guitar, electric guitar, bass, pizzicato, cello, trombone, clarinet, saxophone, flute, wooden flute, bassoon, choir, vibraphone, music box, steel drum, marimba, synth lead, synth pad). Per sprite. |
+| `set_tempo(bpm)` | `music_setTempo` | `TEMPO` | Beats per minute; clamped to `20`–`500` in `StagePreview`. |
+| `change_tempo(delta)` | `music_changeTempo` | `TEMPO` | Adds `delta` to the tempo (same clamp). |
+| `tempo()` | `music_getTempo` | — | Reporter: current tempo (default `60`). |
+
+> **Simulator note**: `StagePreview` plays notes with a Web Audio oscillator (the waveform depends on the instrument) and drums with oscillators / filtered noise, scaled by the sprite volume. The mute toggle silences them, but the script still waits `beats × 60 / tempo` seconds like in Scratch. Without Web Audio (headless tests) only the waiting happens. `stop` cancels pending waits.
+
+```python
+@when_flag_clicked
+def melody():
+    set_instrument(4)
+    set_tempo(120)
+    for i in range(4):
+        play_note(60 + i * 2, 0.5)
+    rest(0.5)
+    play_drum(2, 0.25)
+```
+
+---
+
+## 13. Text to Speech & Translate (`text2speech_*`, `translate_*`)
+
+Using these blocks appends `"text2speech"` / `"translate"` to `projectJson.extensions` (removed again when unused). They work on sprites and on the Stage.
+
+| Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
+| --- | --- | --- | --- |
+| `speak(text)` | `text2speech_speakAndWait` | `WORDS` | Speaks `text` and waits until it is finished. |
+| `set_voice(voice)` | `text2speech_setVoice` | `VOICES` (shadow `text2speech_menu_voices`, field `voices`) | `"alto"` (default), `"tenor"`, `"squeak"`, `"giant"`, `"kitten"` (case-insensitive, stored upper-case, decompiled lower-case); other literals are a `CompileError`. |
+| `set_language(lang)` | `text2speech_setLanguage` | `LANGUAGE` (shadow `text2speech_menu_languages`, field `languages`) | Scratch language code such as `"en"`, `"es"`, `"ru"`, `"zh-cn"`, `"pt-br"` (not validated). |
+| `translate(text, lang)` | `translate_getTranslate` | `WORDS`, `LANGUAGE` (shadow `translate_menu_languages`, field `languages`) | Reporter returning the translated text. |
+| `language()` | `translate_getViewerLanguage` | — | Reporter: the viewer's language code. |
+
+> **Simulator note**: `speak()` uses the browser's `speechSynthesis` (pitch / rate follow the voice, `lang` follows `set_language`) and waits for the end of the utterance; it is skipped when the mute toggle is on or the browser has no speech synthesis. There is no network access: `translate(text, lang)` returns `text` **unchanged** and `language()` returns `"en"` in `StagePreview` (real translation only happens in Scratch).
+
+```python
+@when_flag_clicked
+def talk():
+    set_voice("kitten")
+    set_language("es")
+    speak("Hola")
+    say(translate("Hello", "es"), 2)
+```
+
+---
+
+## 14. Browser IDE URL Query Parameters
 
 The web application ([`index.html`](../index.html) / [`js/app.js`](../js/app.js)) parses `window.location.search` on startup to support iframe embeds, lesson deep-links, and shareable programs:
 

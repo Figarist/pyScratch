@@ -27,6 +27,11 @@
     return sanitizeIdent(base, 'custom_block');
   }
 
+  // Argument kinds of a custom block in declaration order: '%s' (text/number) or '%b' (boolean)
+  function procArgKinds(proccode) {
+    return String(proccode || '').match(/%[sb]/g) || [];
+  }
+
   function createBlockReader(blocks, target = null, stageTarget = null, onUnknown = null) {
     function isLocalVar(varName, varId) {
       if (!target || target.isStage || !target.variables) return false;
@@ -129,6 +134,37 @@
         return formatVarName(val[1], val[2]);
       }
       return JSON.stringify(fallback);
+    }
+
+    // Menu slot holding a number (drum / note / instrument): numeric menu values are printed as numbers
+    function readNumMenuOrExpr(block, inputName, fieldName, fallback) {
+      const inp = block && block.inputs ? block.inputs[inputName] : null;
+      const val = inp ? inp[1] : null;
+      if (typeof val === 'string' && blocks[val]) {
+        const child = blocks[val];
+        if (child.shadow) {
+          const raw = readField(child, fieldName, fallback);
+          const n = Number(raw);
+          return raw !== '' && Number.isFinite(n) ? String(n) : String(fallback);
+        }
+        return decompileReporter(val);
+      }
+      if (Array.isArray(val) && val[0] === 12) return formatVarName(val[1], val[2]);
+      if (Array.isArray(val) && val[0] >= 4 && val[0] <= 8) return readInput(block, inputName);
+      return String(fallback);
+    }
+
+    // Menu slot with a lowercase-normalised literal (the compiler upper-cases it again)
+    function readLowerMenuOrExpr(block, inputName, fieldName, fallback) {
+      const out = readMenuOrExpr(block, inputName, fieldName, fallback);
+      if (out.startsWith('"')) {
+        try {
+          return JSON.stringify(String(JSON.parse(out)).toLowerCase());
+        } catch (_) {
+          return out;
+        }
+      }
+      return out;
     }
 
     const activeReporters = new Set();
@@ -253,6 +289,12 @@
           return 'username()';
         case 'sensing_loudness':
           return 'loudness()';
+        case 'music_getTempo':
+          return 'tempo()';
+        case 'translate_getViewerLanguage':
+          return 'language()';
+        case 'translate_getTranslate':
+          return `translate(${readInput(b, 'WORDS')}, ${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')})`;
         case 'data_itemoflist': {
           const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
           const fn = isLocalList(listName, listId) ? 'local_list_item' : 'list_item';
@@ -287,6 +329,8 @@
       readFieldWithId,
       readInput,
       readMenuOrExpr,
+      readNumMenuOrExpr,
+      readLowerMenuOrExpr,
       decompileReporter,
       isLocalVar,
       isLocalList,
@@ -324,6 +368,8 @@
       readFieldWithId,
       readInput,
       readMenuOrExpr,
+      readNumMenuOrExpr,
+      readLowerMenuOrExpr,
       isLocalVar,
       isLocalList,
       formatVarName
@@ -576,6 +622,34 @@
             lines.push(`${pad}delete_this_clone()`);
             break;
 
+          case 'music_playDrumForBeats':
+            lines.push(`${pad}play_drum(${readNumMenuOrExpr(b, 'DRUM', 'DRUM', 1)}, ${readInput(b, 'BEATS')})`);
+            break;
+          case 'music_restForBeats':
+            lines.push(`${pad}rest(${readInput(b, 'BEATS')})`);
+            break;
+          case 'music_playNoteForBeats':
+            lines.push(`${pad}play_note(${readNumMenuOrExpr(b, 'NOTE', 'NOTE', 60)}, ${readInput(b, 'BEATS')})`);
+            break;
+          case 'music_setInstrument':
+            lines.push(`${pad}set_instrument(${readNumMenuOrExpr(b, 'INSTRUMENT', 'INSTRUMENT', 1)})`);
+            break;
+          case 'music_setTempo':
+            lines.push(`${pad}set_tempo(${readInput(b, 'TEMPO')})`);
+            break;
+          case 'music_changeTempo':
+            lines.push(`${pad}change_tempo(${readInput(b, 'TEMPO')})`);
+            break;
+          case 'text2speech_speakAndWait':
+            lines.push(`${pad}speak(${readInput(b, 'WORDS')})`);
+            break;
+          case 'text2speech_setVoice':
+            lines.push(`${pad}set_voice(${readLowerMenuOrExpr(b, 'VOICES', 'voices', 'ALTO')})`);
+            break;
+          case 'text2speech_setLanguage':
+            lines.push(`${pad}set_language(${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')})`);
+            break;
+
           case 'sensing_askandwait':
             lines.push(`${pad}ask(${readInput(b, 'QUESTION')})`);
             break;
@@ -663,7 +737,10 @@
             } catch (_) {
               argIds = [];
             }
-            const callArgs = argIds.map((id) => readInput(b, id));
+            const kinds = procArgKinds(mut.proccode);
+            const callArgs = argIds.map((id, i) =>
+              kinds[i] === '%b' && !(b.inputs && b.inputs[id] && b.inputs[id][1]) ? 'False' : readInput(b, id)
+            );
             lines.push(`${pad}${fnName}(${callArgs.join(', ')})`);
             break;
           }
@@ -755,9 +832,9 @@
           argNames = [];
         }
         const isWarp = mut.warp === 'true' || mut.warp === true;
-        parts.push(
-          isWarp ? `@warp\ndef ${fnName}(${argNames.join(', ')}):` : `def ${fnName}(${argNames.join(', ')}):`
-        );
+        const argKinds = procArgKinds(mut.proccode);
+        const argDecls = argNames.map((n, i) => (argKinds[i] === '%b' ? `${n}: bool` : n)).join(', ');
+        parts.push(isWarp ? `@warp\ndef ${fnName}(${argDecls}):` : `def ${fnName}(${argDecls}):`);
         const bodyLines = hat.next ? decompileChain(hat.next, 1) : ['    pass'];
         parts.push(bodyLines.join('\n') + '\n');
         return;
@@ -790,6 +867,16 @@
         const val = readInput(hat, 'VALUE');
         dec = `@when_greater_than(${JSON.stringify(sensor)}, ${val})`;
         fnName = `on_${sanitizeIdent(sensor)}_gt_${handlerIndex}`;
+      } else if (hat.opcode === 'event_whentouchingobject') {
+        const dest = readMenuOrExpr(hat, 'TOUCHINGOBJECTMENU', 'TOUCHINGOBJECTMENU', 'mouse');
+        let destName = 'mouse';
+        try {
+          destName = String(JSON.parse(dest));
+        } catch (_) {
+          /* expression in a hat slot: keep default name */
+        }
+        dec = `@when_touching(${dest})`;
+        fnName = `on_touching_${sanitizeIdent(destName)}`;
       } else if (hat.opcode === 'control_start_as_clone') {
         dec = '@when_cloned';
         fnName = `on_clone_${handlerIndex}`;
@@ -811,13 +898,16 @@
   function formatBlockUk(blockId, blocks) {
     const b = blocks[blockId];
     if (!b) return { label: 'невідомий блок', category: 'motion' };
-    const { readField, readInput, readMenuOrExpr } = createBlockReader(blocks);
+    const { readField, readInput, readMenuOrExpr, readNumMenuOrExpr } = createBlockReader(blocks);
 
     let category = 'motion';
     if (b.opcode.startsWith('event_')) category = 'events';
     else if (b.opcode.startsWith('looks_')) category = 'looks';
     else if (b.opcode.startsWith('sound_')) category = 'sound';
     else if (b.opcode.startsWith('pen_')) category = 'pen';
+    else if (b.opcode.startsWith('music_') || b.opcode === 'note') category = 'music';
+    else if (b.opcode.startsWith('text2speech_')) category = 'text2speech';
+    else if (b.opcode.startsWith('translate_')) category = 'translate';
     else if (b.opcode.startsWith('control_')) category = 'control';
     else if (b.opcode.startsWith('sensing_')) category = 'sensing';
     else if (b.opcode.startsWith('operator_')) category = 'operators';
@@ -855,6 +945,45 @@
         break;
       case 'control_start_as_clone':
         label = 'Коли я починаю як клон';
+        break;
+      case 'event_whentouchingobject':
+        label = `Коли торкається [${readMenuOrExpr(b, 'TOUCHINGOBJECTMENU', 'TOUCHINGOBJECTMENU', 'mouse')}]`;
+        break;
+      case 'music_playDrumForBeats':
+        label = `Барабан (${readNumMenuOrExpr(b, 'DRUM', 'DRUM', 1)}) (${readInput(b, 'BEATS')}) тактів`;
+        break;
+      case 'music_restForBeats':
+        label = `Пауза (${readInput(b, 'BEATS')}) тактів`;
+        break;
+      case 'music_playNoteForBeats':
+        label = `Зіграти ноту (${readNumMenuOrExpr(b, 'NOTE', 'NOTE', 60)}) (${readInput(b, 'BEATS')}) тактів`;
+        break;
+      case 'music_setInstrument':
+        label = `Встановити інструмент (${readNumMenuOrExpr(b, 'INSTRUMENT', 'INSTRUMENT', 1)})`;
+        break;
+      case 'music_setTempo':
+        label = `Встановити темп (${readInput(b, 'TEMPO')})`;
+        break;
+      case 'music_changeTempo':
+        label = `Змінити темп на (${readInput(b, 'TEMPO')})`;
+        break;
+      case 'music_getTempo':
+        label = 'Темп';
+        break;
+      case 'text2speech_speakAndWait':
+        label = `Сказати (${readInput(b, 'WORDS')})`;
+        break;
+      case 'text2speech_setVoice':
+        label = `Встановити голос [${readMenuOrExpr(b, 'VOICES', 'voices', 'ALTO')}]`;
+        break;
+      case 'text2speech_setLanguage':
+        label = `Встановити мову [${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')}]`;
+        break;
+      case 'translate_getTranslate':
+        label = `Перекласти (${readInput(b, 'WORDS')}) на [${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')}]`;
+        break;
+      case 'translate_getViewerLanguage':
+        label = 'Мова';
         break;
       case 'procedures_definition': {
         const protoId = b.inputs && b.inputs.custom_block ? b.inputs.custom_block[1] : null;
