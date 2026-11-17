@@ -33,7 +33,9 @@
     acos: 'acos',
     atan: 'atan',
     ln: 'ln',
-    log: 'log'
+    log: 'log',
+    exp: 'e ^',
+    pow10: '10 ^'
   };
 
   // --- 1. TOKENIZER ---
@@ -164,7 +166,7 @@
           continue;
         }
 
-        if ('():,@[]'.includes(ch)) {
+        if ('():,@[].'.includes(ch)) {
           tokens.push({ type: 'PUNCT', value: ch, line: lineNum });
           pos++;
           continue;
@@ -225,6 +227,15 @@
     function parseHandler() {
       const atTok = expect('PUNCT', '@');
       const decName = expect('IDENT', undefined, `Очікувалась назва події після @ у рядку ${atTok.line}.`).value;
+      if (decName === 'warp') {
+        if (peek().type === 'PUNCT' && peek().value === '(') {
+          next();
+          expect('PUNCT', ')', `Декоратор @warp не приймає аргументів у рядку ${atTok.line}.`);
+        }
+        expect('NEWLINE', undefined, `Після декоратора @warp має бути перехід на новий рядок (${atTok.line}).`);
+        skipNewlines();
+        return parseCustomProcedure(true, atTok.line);
+      }
       const decArgs = [];
       if (peek().type === 'PUNCT' && peek().value === '(') {
         next();
@@ -251,8 +262,8 @@
       return { type: 'Handler', decorator: decName, decArgs, fnName, body, line: atTok.line };
     }
 
-    function parseCustomProcedure() {
-      const defTok = expect('KW', 'def');
+    function parseCustomProcedure(warp = false, startLine = null) {
+      const defTok = expect('KW', 'def', `Після @warp очікується "def назва(...):" у рядку ${peek().line}.`);
       const fnName = expect('IDENT', undefined, `Очікувалась назва функції після def у рядку ${defTok.line}.`).value;
       expect('PUNCT', '(', `Очікувалась "(" після ${fnName} у рядку ${defTok.line}.`);
       const params = [];
@@ -268,7 +279,7 @@
       expect('NEWLINE', undefined, `Після ":" потрібен новий рядок з відступом (${defTok.line}).`);
 
       const body = parseBlock(defTok.line);
-      return { type: 'ProcDef', fnName, params, body, line: defTok.line };
+      return { type: 'ProcDef', fnName, params, warp: !!warp, body, line: startLine || defTok.line };
     }
 
     function parseBlock(parentLine) {
@@ -365,41 +376,54 @@
         return parseIfChain(tok.line);
       }
 
-      // Assignment or Function Call
+      // Assignment or Function Call (including self.var local variables)
       if (tok.type === 'IDENT') {
         const idTok = next();
+        let targetName = idTok.value;
+        let isLocal = false;
+        if (peek().type === 'PUNCT' && peek().value === '.') {
+          if (idTok.value !== 'self') {
+            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line);
+          }
+          next();
+          const attrTok = expect('IDENT', undefined, `Очікувалась назва локальної змінної після "self." у рядку ${tok.line}.`);
+          targetName = attrTok.value;
+          isLocal = true;
+        }
         if (peek().type === 'OP' && ['=', '+=', '-=', '*=', '/='].includes(peek().value)) {
           const op = next().value;
           const value = parseExpr();
           expect('NEWLINE', undefined);
+          const localProp = isLocal ? { isLocal: true } : {};
           if (op === '=') {
-            return { type: 'Assign', name: idTok.value, value, line: tok.line };
+            return { type: 'Assign', name: targetName, ...localProp, value, line: tok.line };
           }
           if (op === '+=') {
-            return { type: 'ChangeVar', name: idTok.value, value, line: tok.line };
+            return { type: 'ChangeVar', name: targetName, ...localProp, value, line: tok.line };
           }
           if (op === '-=') {
             const negVal =
               value.type === 'Number'
                 ? { type: 'Number', value: -value.value, line: tok.line }
                 : { type: 'UnaryOp', op: '-', expr: value, line: tok.line };
-            return { type: 'ChangeVar', name: idTok.value, value: negVal, line: tok.line };
+            return { type: 'ChangeVar', name: targetName, ...localProp, value: negVal, line: tok.line };
           }
           const binOp = op === '*=' ? '*' : '/';
           return {
             type: 'Assign',
-            name: idTok.value,
+            name: targetName,
+            ...localProp,
             value: {
               type: 'BinOp',
               op: binOp,
-              left: { type: 'Var', name: idTok.value, line: tok.line },
+              left: { type: 'Var', name: targetName, ...localProp, line: tok.line },
               right: value,
               line: tok.line
             },
             line: tok.line
           };
         }
-        if (peek().type === 'PUNCT' && peek().value === '(') {
+        if (!isLocal && peek().type === 'PUNCT' && peek().value === '(') {
           const args = parseArgList(tok.line);
           expect('NEWLINE', undefined);
           return { type: 'Call', name: idTok.value, args, line: tok.line };
@@ -529,6 +553,14 @@
       }
       if (tok.type === 'IDENT') {
         next();
+        if (peek().type === 'PUNCT' && peek().value === '.') {
+          if (tok.value !== 'self') {
+            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line);
+          }
+          next();
+          const attrTok = expect('IDENT', undefined, `Очікувалась назва локальної змінної після "self." у рядку ${tok.line}.`);
+          return { type: 'Var', name: attrTok.value, isLocal: true, line: tok.line };
+        }
         if (peek().type === 'PUNCT' && peek().value === '(') {
           const args = parseArgList(tok.line);
           return { type: 'Call', name: tok.value, args, line: tok.line };
@@ -550,14 +582,33 @@
     const genId = () => 'b_' + idCounter++;
     const blocks = {};
     const variables = {};
+    const localVariables = {};
     const lists = {};
-    const procedures = {}; // fnName -> { proccode, paramNames, paramIds }
+    const localLists = {};
+    const declaredLocalLists = new Set();
+    const procedures = {}; // fnName -> { proccode, paramNames, paramIds, warp }
     let activeProcedureParams = null; // Set of param names when compiling inside a ProcDef
     let usesPen = false;
 
     const globalHost = stageTarget || target;
 
-    function ensureVar(name) {
+    function ensureLocalVar(name) {
+      const host = target.isStage ? globalHost : target;
+      if (localVariables[name]) return localVariables[name];
+      const localMatch = Object.entries(host.variables || {}).find(([, v]) => v[0] === name);
+      if (localMatch) {
+        localVariables[name] = localMatch[0];
+        return localMatch[0];
+      }
+      const varId = (target.isStage ? 'v_' : 'lv_') + name + '_' + idCounter++;
+      localVariables[name] = varId;
+      if (!host.variables) host.variables = {};
+      host.variables[varId] = [name, 0];
+      return varId;
+    }
+
+    function ensureVar(name, isLocal = false) {
+      if (isLocal) return ensureLocalVar(name);
       if (variables[name]) return variables[name];
       // Check target local variables first, then stage global variables
       const localMatch = Object.entries(target.variables || {}).find(([, v]) => v[0] === name);
@@ -578,7 +629,23 @@
       return varId;
     }
 
-    function ensureList(name) {
+    function ensureLocalList(name) {
+      const host = target.isStage ? globalHost : target;
+      if (localLists[name]) return localLists[name];
+      const localMatch = Object.entries(host.lists || {}).find(([, v]) => v[0] === name);
+      if (localMatch) {
+        localLists[name] = localMatch[0];
+        return localMatch[0];
+      }
+      const listId = (target.isStage ? 'l_' : 'll_') + name + '_' + idCounter++;
+      localLists[name] = listId;
+      if (!host.lists) host.lists = {};
+      host.lists[listId] = [name, []];
+      return listId;
+    }
+
+    function ensureList(name, isLocal = false) {
+      if (isLocal || declaredLocalLists.has(name)) return ensureLocalList(name);
       if (lists[name]) return lists[name];
       const localMatch = Object.entries(target.lists || {}).find(([, v]) => v[0] === name);
       if (localMatch) {
@@ -654,7 +721,7 @@
         return [1, [10, expr.value ? 'true' : 'false']];
       }
       if (expr.type === 'Var') {
-        if (activeProcedureParams && activeProcedureParams.has(expr.name)) {
+        if (!expr.isLocal && activeProcedureParams && activeProcedureParams.has(expr.name)) {
           const argBlockId = createBlock(
             'argument_reporter_string_number',
             parentId,
@@ -664,7 +731,7 @@
           );
           return [3, argBlockId, [defaultShadowType, '']];
         }
-        const varId = ensureVar(expr.name);
+        const varId = ensureVar(expr.name, !!expr.isLocal);
         return [3, [12, expr.name, varId], [defaultShadowType, '0']];
       }
 
@@ -706,18 +773,43 @@
       return [1, id];
     }
 
-    function compileMenuOrExpr(expr, menuOpcode, fieldName, defaultVal, parentId) {
+    function compileShadowedExpr(expr, parentId, shadowPayload) {
+      if (expr.type === 'Var') {
+        if (!expr.isLocal && activeProcedureParams && activeProcedureParams.has(expr.name)) {
+          const argBlockId = createBlock(
+            'argument_reporter_string_number',
+            parentId,
+            {},
+            { VALUE: [expr.name, null] },
+            { line: expr.line }
+          );
+          return [3, argBlockId, shadowPayload];
+        }
+        const varId = ensureVar(expr.name, !!expr.isLocal);
+        return [3, [12, expr.name, varId], shadowPayload];
+      }
+      const repId = compileReporter(expr, parentId);
+      return [3, repId, shadowPayload];
+    }
+
+    function compileMenuOrExpr(expr, menuOpcode, fieldName, defaultVal, parentId, normalizeLiteral = null) {
       if (!expr || expr.type === 'String') {
-        const val = expr && expr.value !== undefined ? String(expr.value) : defaultVal;
+        let val = expr && expr.value !== undefined ? String(expr.value) : defaultVal;
+        if (normalizeLiteral) val = normalizeLiteral(val);
         return compileShadowMenu(menuOpcode, fieldName, val, parentId);
       }
       const shadowId = createBlock(menuOpcode, parentId, {}, { [fieldName]: [defaultVal, null] }, { shadow: true });
-      if (expr.type === 'Var' && !(activeProcedureParams && activeProcedureParams.has(expr.name))) {
-        const varId = ensureVar(expr.name);
-        return [3, [12, expr.name, varId], shadowId];
+      return compileShadowedExpr(expr, parentId, shadowId);
+    }
+
+    function compileBroadcastInput(expr, parentId) {
+      if (!expr || expr.type === 'String') {
+        const msg = expr && expr.value ? String(expr.value) : 'message1';
+        const bId = ensureBroadcast(msg);
+        return [1, [11, msg, bId]];
       }
-      const repId = compileReporter(expr, parentId);
-      return [3, repId, shadowId];
+      const defaultBId = ensureBroadcast('message1');
+      return compileShadowedExpr(expr, parentId, [11, 'message1', defaultBId]);
     }
 
     function compileReporter(expr, parentId) {
@@ -832,6 +924,7 @@
             };
             return id;
           }
+          case 'len':
           case 'length_of': {
             const id = createBlock('operator_length', parentId, {}, {}, { line: expr.line });
             blocks[id].inputs = { STRING: compileInput(a[0], id, 10) };
@@ -865,40 +958,98 @@
             return id;
           }
           case 'touching': {
-            let targetVal = a[0] && a[0].value ? String(a[0].value) : '_edge_';
-            if (targetVal === 'edge') targetVal = '_edge_';
-            if (targetVal === 'mouse') targetVal = '_mouse_';
             const id = createBlock('sensing_touchingobject', parentId, {}, {}, { line: expr.line });
             blocks[id].inputs = {
-              TOUCHINGOBJECTMENU: compileShadowMenu('sensing_touchingobjectmenu', 'TOUCHINGOBJECTMENU', targetVal, id)
+              TOUCHINGOBJECTMENU: compileMenuOrExpr(
+                a[0],
+                'sensing_touchingobjectmenu',
+                'TOUCHINGOBJECTMENU',
+                '_edge_',
+                id,
+                (v) => (v === '' || v === 'edge' ? '_edge_' : v === 'mouse' ? '_mouse_' : v)
+              )
             };
             return id;
           }
           case 'distance_to': {
-            let targetVal = a[0] && a[0].value ? String(a[0].value) : '_mouse_';
-            if (targetVal === 'mouse') targetVal = '_mouse_';
             const id = createBlock('sensing_distanceto', parentId, {}, {}, { line: expr.line });
             blocks[id].inputs = {
-              DISTANCETOMENU: compileShadowMenu('sensing_distancetomenu', 'DISTANCETOMENU', targetVal, id)
+              DISTANCETOMENU: compileMenuOrExpr(
+                a[0],
+                'sensing_distancetomenu',
+                'DISTANCETOMENU',
+                '_mouse_',
+                id,
+                (v) => (v === '' || v === 'mouse' ? '_mouse_' : v)
+              )
             };
             return id;
           }
-          case 'list_item': {
+          case 'attribute_of': {
+            const prop = a[0] && a[0].value !== undefined ? String(a[0].value) : 'x position';
+            const id = createBlock('sensing_of', parentId, {}, { PROPERTY: [prop, null] }, { line: expr.line });
+            blocks[id].inputs = {
+              OBJECT: compileMenuOrExpr(
+                a[1],
+                'sensing_of_object_menu',
+                'OBJECT',
+                '_stage_',
+                id,
+                (v) => (v === '' || v === 'Stage' || v === 'stage' ? '_stage_' : v)
+              )
+            };
+            return id;
+          }
+          case 'touching_color': {
+            const id = createBlock('sensing_touchingcolor', parentId, {}, {}, { line: expr.line });
+            blocks[id].inputs = { COLOR: compileInput(a[0], id, 9) };
+            return id;
+          }
+          case 'color_is_touching_color': {
+            const id = createBlock('sensing_coloristouchingcolor', parentId, {}, {}, { line: expr.line });
+            blocks[id].inputs = {
+              COLOR: compileInput(a[0], id, 9),
+              COLOR2: compileInput(a[1], id, 9)
+            };
+            return id;
+          }
+          case 'current_time': {
+            const unit = a[0] && a[0].value !== undefined ? String(a[0].value).toUpperCase() : 'YEAR';
+            return createBlock('sensing_current', parentId, {}, { CURRENTMENU: [unit, null] }, { line: expr.line });
+          }
+          case 'days_since_2000':
+            return createBlock('sensing_dayssince2000', parentId, {}, {}, { line: expr.line });
+          case 'username':
+            return createBlock('sensing_username', parentId, {}, {}, { line: expr.line });
+          case 'loudness':
+            return createBlock('sensing_loudness', parentId, {}, {}, { line: expr.line });
+          case 'list_item':
+          case 'local_list_item': {
             const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-            const listId = ensureList(listName);
+            const listId = ensureList(listName, expr.name === 'local_list_item');
             const id = createBlock('data_itemoflist', parentId, {}, { LIST: [listName, listId] }, { line: expr.line });
             blocks[id].inputs = { INDEX: compileInput(a[1], id, 7) };
             return id;
           }
-          case 'list_length': {
+          case 'list_length':
+          case 'local_list_length': {
             const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-            const listId = ensureList(listName);
+            const listId = ensureList(listName, expr.name === 'local_list_length');
             return createBlock('data_lengthoflist', parentId, {}, { LIST: [listName, listId] }, { line: expr.line });
           }
-          case 'list_contains': {
+          case 'list_contains':
+          case 'local_list_contains': {
             const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-            const listId = ensureList(listName);
+            const listId = ensureList(listName, expr.name === 'local_list_contains');
             const id = createBlock('data_listcontainsitem', parentId, {}, { LIST: [listName, listId] }, { line: expr.line });
+            blocks[id].inputs = { ITEM: compileInput(a[1], id, 10) };
+            return id;
+          }
+          case 'list_index_of':
+          case 'local_list_index_of': {
+            const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
+            const listId = ensureList(listName, expr.name === 'local_list_index_of');
+            const id = createBlock('data_itemnumoflist', parentId, {}, { LIST: [listName, listId] }, { line: expr.line });
             blocks[id].inputs = { ITEM: compileInput(a[1], id, 10) };
             return id;
           }
@@ -914,6 +1065,20 @@
         throw new CompileError(`Невідома функція-значення "${expr.name}()" у рядку ${expr.line}.`, expr.line);
       }
       throw new CompileError(`Неможливо обчислити вираз у рядку ${expr.line}.`, expr.line);
+    }
+
+    function astUsesVar(node, varName) {
+      if (!node) return false;
+      if (Array.isArray(node)) return node.some((n) => astUsesVar(n, varName));
+      if (typeof node !== 'object') return false;
+      if (
+        (node.type === 'Var' || node.type === 'Assign' || node.type === 'ChangeVar') &&
+        !node.isLocal &&
+        node.name === varName
+      ) {
+        return true;
+      }
+      return Object.values(node).some((val) => val && typeof val === 'object' && astUsesVar(val, varName));
     }
 
     function compileStmtList(stmts, parentId) {
@@ -937,18 +1102,25 @@
       if (stmt.type === 'Pass') return null;
 
       if (stmt.type === 'Assign') {
-        const varId = ensureVar(stmt.name);
+        const varId = ensureVar(stmt.name, !!stmt.isLocal);
         const id = createBlock('data_setvariableto', parentId, {}, { VARIABLE: [stmt.name, varId] }, { line: stmt.line });
         blocks[id].inputs = { VALUE: compileInput(stmt.value, id, 10) };
         return id;
       }
       if (stmt.type === 'ChangeVar') {
-        const varId = ensureVar(stmt.name);
+        const varId = ensureVar(stmt.name, !!stmt.isLocal);
         const id = createBlock('data_changevariableby', parentId, {}, { VARIABLE: [stmt.name, varId] }, { line: stmt.line });
         blocks[id].inputs = { VALUE: compileInput(stmt.value, id, 4) };
         return id;
       }
       if (stmt.type === 'Repeat') {
+        if (
+          stmt.loopVar &&
+          !(activeProcedureParams && activeProcedureParams.has(stmt.loopVar)) &&
+          astUsesVar(stmt.body, stmt.loopVar)
+        ) {
+          ensureVar(stmt.loopVar, false);
+        }
         const id = createBlock('control_repeat', parentId, {}, {}, { line: stmt.line });
         blocks[id].inputs = { TIMES: compileInput(stmt.count, id, 4) };
         const subFirst = compileStmtList(stmt.body, id);
@@ -1005,7 +1177,7 @@
               children: [],
               proccode: proc.proccode,
               argumentids: JSON.stringify(proc.paramIds),
-              warp: 'false'
+              warp: proc.warp ? 'true' : 'false'
             }
           }
         );
@@ -1015,6 +1187,12 @@
         });
         blocks[id].inputs = inputs;
         return id;
+      }
+
+      if (stmt.name === 'local_list') {
+        const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
+        ensureLocalList(listName);
+        return null;
       }
 
       const id = createBlock('placeholder', parentId, {}, {}, { line: stmt.line });
@@ -1046,11 +1224,17 @@
       switch (stmt.name) {
         case 'goto':
           if (a.length === 1) {
-            let dest = a[0] && a[0].value ? String(a[0].value) : '_random_';
-            if (dest === 'random') dest = '_random_';
-            if (dest === 'mouse') dest = '_mouse_';
             blocks[id].opcode = 'motion_goto';
-            blocks[id].inputs = { TO: compileShadowMenu('motion_goto_menu', 'TO', dest, id) };
+            blocks[id].inputs = {
+              TO: compileMenuOrExpr(
+                a[0],
+                'motion_goto_menu',
+                'TO',
+                '_random_',
+                id,
+                (v) => (v === '' || v === 'random' ? '_random_' : v === 'mouse' ? '_mouse_' : v)
+              )
+            };
             return id;
           }
           blocks[id].opcode = 'motion_gotoxy';
@@ -1072,15 +1256,33 @@
             Y: compileInput(a[2], id, 4)
           };
           return id;
-        case 'point_towards': {
-          let dest = a[0] && a[0].value ? String(a[0].value) : '_mouse_';
-          if (dest === 'mouse') dest = '_mouse_';
-          blocks[id].opcode = 'motion_pointtowards';
+        case 'glide_to':
+          blocks[id].opcode = 'motion_glideto';
           blocks[id].inputs = {
-            TOWARDS: compileShadowMenu('motion_pointtowards_menu', 'TOWARDS', dest, id)
+            SECS: compileInput(a[0], id, 4),
+            TO: compileMenuOrExpr(
+              a[1],
+              'motion_glideto_menu',
+              'TO',
+              '_random_',
+              id,
+              (v) => (v === '' || v === 'random' ? '_random_' : v === 'mouse' ? '_mouse_' : v)
+            )
           };
           return id;
-        }
+        case 'point_towards':
+          blocks[id].opcode = 'motion_pointtowards';
+          blocks[id].inputs = {
+            TOWARDS: compileMenuOrExpr(
+              a[0],
+              'motion_pointtowards_menu',
+              'TOWARDS',
+              '_mouse_',
+              id,
+              (v) => (v === '' || v === 'mouse' ? '_mouse_' : v)
+            )
+          };
+          return id;
         case 'if_on_edge_bounce':
           blocks[id].opcode = 'motion_ifonedgebounce';
           return id;
@@ -1096,9 +1298,28 @@
             BACKDROP: compileMenuOrExpr(a[0], 'looks_backdrops', 'BACKDROP', 'backdrop1', id)
           };
           return id;
+        case 'switch_backdrop_and_wait':
+          blocks[id].opcode = 'looks_switchbackdroptoandwait';
+          blocks[id].inputs = {
+            BACKDROP: compileMenuOrExpr(a[0], 'looks_backdrops', 'BACKDROP', 'backdrop1', id)
+          };
+          return id;
         case 'next_backdrop':
           blocks[id].opcode = 'looks_nextbackdrop';
           return id;
+        case 'go_to_layer': {
+          const layer = a[0] && a[0].value ? String(a[0].value).toLowerCase() : 'front';
+          blocks[id].opcode = 'looks_gotofrontback';
+          blocks[id].fields = { FRONT_BACK: [layer === 'back' ? 'back' : 'front', null] };
+          return id;
+        }
+        case 'change_layer': {
+          const dir = a[0] && a[0].value ? String(a[0].value).toLowerCase() : 'forward';
+          blocks[id].opcode = 'looks_goforwardbackwardlayers';
+          blocks[id].fields = { FORWARD_BACKWARD: [dir === 'backward' ? 'backward' : 'forward', null] };
+          blocks[id].inputs = { NUM: compileInput(a[1], id, 7) };
+          return id;
+        }
         case 'switch_costume':
           blocks[id].opcode = 'looks_switchcostumeto';
           blocks[id].inputs = {
@@ -1164,6 +1385,23 @@
         case 'stop_all_sounds':
           blocks[id].opcode = 'sound_stopallsounds';
           return id;
+        case 'set_sound_effect': {
+          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'PITCH';
+          blocks[id].opcode = 'sound_seteffectto';
+          blocks[id].fields = { EFFECT: [eff, null] };
+          blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
+          return id;
+        }
+        case 'change_sound_effect': {
+          const eff = a[0] && a[0].value ? String(a[0].value).toUpperCase() : 'PITCH';
+          blocks[id].opcode = 'sound_changeeffectby';
+          blocks[id].fields = { EFFECT: [eff, null] };
+          blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
+          return id;
+        }
+        case 'clear_sound_effects':
+          blocks[id].opcode = 'sound_cleareffects';
+          return id;
         case 'pen_clear':
           usesPen = true;
           blocks[id].opcode = 'pen_clear';
@@ -1228,61 +1466,87 @@
           };
           return id;
         }
-        case 'create_clone': {
-          let targetOpt = a[0] && a[0].value ? String(a[0].value) : '_myself_';
-          if (targetOpt === 'myself') targetOpt = '_myself_';
+        case 'create_clone':
           blocks[id].opcode = 'control_create_clone_of';
           blocks[id].inputs = {
-            CLONE_OPTION: compileShadowMenu('control_create_clone_of_menu', 'CLONE_OPTION', targetOpt, id)
+            CLONE_OPTION: compileMenuOrExpr(
+              a[0],
+              'control_create_clone_of_menu',
+              'CLONE_OPTION',
+              '_myself_',
+              id,
+              (v) => (v === '' || v === 'myself' ? '_myself_' : v)
+            )
           };
           return id;
-        }
         case 'delete_this_clone':
           blocks[id].opcode = 'control_delete_this_clone';
           return id;
+        case 'set_drag_mode': {
+          const mode = a[0] && a[0].value !== undefined ? String(a[0].value) : 'draggable';
+          blocks[id].opcode = 'sensing_setdragmode';
+          blocks[id].fields = { DRAG_MODE: [mode, null] };
+          return id;
+        }
         case 'reset_timer':
           blocks[id].opcode = 'sensing_resettimer';
           return id;
-        case 'broadcast': {
-          const msg = a[0] && a[0].value ? String(a[0].value) : 'message1';
-          const bId = ensureBroadcast(msg);
+        case 'broadcast':
           blocks[id].opcode = 'event_broadcast';
-          blocks[id].inputs = { BROADCAST_INPUT: [1, [11, msg, bId]] };
+          blocks[id].inputs = { BROADCAST_INPUT: compileBroadcastInput(a[0], id) };
           return id;
-        }
-        case 'broadcast_and_wait': {
-          const msg = a[0] && a[0].value ? String(a[0].value) : 'message1';
-          const bId = ensureBroadcast(msg);
+        case 'broadcast_and_wait':
           blocks[id].opcode = 'event_broadcastandwait';
-          blocks[id].inputs = { BROADCAST_INPUT: [1, [11, msg, bId]] };
+          blocks[id].inputs = { BROADCAST_INPUT: compileBroadcastInput(a[0], id) };
+          return id;
+        case 'show_variable':
+        case 'hide_variable': {
+          const arg = a[0];
+          const varName = arg && arg.type === 'Var' ? arg.name : arg && arg.value !== undefined ? String(arg.value) : 'var';
+          const isLocal = !!(arg && arg.type === 'Var' && arg.isLocal);
+          const varId = ensureVar(varName, isLocal);
+          blocks[id].opcode = stmt.name === 'show_variable' ? 'data_showvariable' : 'data_hidevariable';
+          blocks[id].fields = { VARIABLE: [varName, varId] };
           return id;
         }
-        case 'list_add': {
+        case 'show_list':
+        case 'hide_list': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
           const listId = ensureList(listName);
+          blocks[id].opcode = stmt.name === 'show_list' ? 'data_showlist' : 'data_hidelist';
+          blocks[id].fields = { LIST: [listName, listId] };
+          return id;
+        }
+        case 'list_add':
+        case 'local_list_add': {
+          const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
+          const listId = ensureList(listName, stmt.name === 'local_list_add');
           blocks[id].opcode = 'data_addtolist';
           blocks[id].fields = { LIST: [listName, listId] };
           blocks[id].inputs = { ITEM: compileInput(a[1], id, 10) };
           return id;
         }
-        case 'list_delete': {
+        case 'list_delete':
+        case 'local_list_delete': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-          const listId = ensureList(listName);
+          const listId = ensureList(listName, stmt.name === 'local_list_delete');
           blocks[id].opcode = 'data_deleteoflist';
           blocks[id].fields = { LIST: [listName, listId] };
           blocks[id].inputs = { INDEX: compileInput(a[1], id, 7) };
           return id;
         }
-        case 'list_clear': {
+        case 'list_clear':
+        case 'local_list_clear': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-          const listId = ensureList(listName);
+          const listId = ensureList(listName, stmt.name === 'local_list_clear');
           blocks[id].opcode = 'data_deletealloflist';
           blocks[id].fields = { LIST: [listName, listId] };
           return id;
         }
-        case 'list_insert': {
+        case 'list_insert':
+        case 'local_list_insert': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-          const listId = ensureList(listName);
+          const listId = ensureList(listName, stmt.name === 'local_list_insert');
           blocks[id].opcode = 'data_insertatlist';
           blocks[id].fields = { LIST: [listName, listId] };
           blocks[id].inputs = {
@@ -1291,9 +1555,10 @@
           };
           return id;
         }
-        case 'list_replace': {
+        case 'list_replace':
+        case 'local_list_replace': {
           const listName = a[0] && a[0].value ? String(a[0].value) : 'list';
-          const listId = ensureList(listName);
+          const listId = ensureList(listName, stmt.name === 'local_list_replace');
           blocks[id].opcode = 'data_replaceitemoflist';
           blocks[id].fields = { LIST: [listName, listId] };
           blocks[id].inputs = {
@@ -1307,7 +1572,29 @@
       }
     }
 
-    // Pass 1: Register all ProcDef nodes so procedures can be called before or after definition
+    // Pass 1: Register all ProcDef nodes and local list declarations
+    function scanLocalLists(node) {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(scanLocalLists);
+        return;
+      }
+      if (typeof node !== 'object') return;
+      if (
+        node.type === 'Call' &&
+        (node.name === 'local_list' || node.name.startsWith('local_list_')) &&
+        node.args &&
+        node.args[0] &&
+        node.args[0].value
+      ) {
+        declaredLocalLists.add(String(node.args[0].value));
+      }
+      Object.values(node).forEach((v) => {
+        if (v && typeof v === 'object') scanLocalLists(v);
+      });
+    }
+    scanLocalLists(ast);
+
     for (const node of ast) {
       if (node.type === 'ProcDef') {
         const paramIds = node.params.map((p) => `arg_${node.fnName}_${p}`);
@@ -1319,7 +1606,8 @@
           fnName: node.fnName,
           paramNames: node.params,
           paramIds,
-          proccode
+          proccode,
+          warp: !!node.warp
         };
       }
     }
@@ -1351,7 +1639,7 @@
               argumentids: JSON.stringify(proc.paramIds),
               argumentnames: JSON.stringify(proc.paramNames),
               argumentdefaults: JSON.stringify(proc.paramNames.map(() => '')),
-              warp: 'false'
+              warp: proc.warp ? 'true' : 'false'
             }
           }
         );
@@ -1413,6 +1701,18 @@
           { BROADCAST_OPTION: [msg, bId] },
           { topLevel: true, x: 40, y: yOffset, line: h.line }
         );
+      } else if (h.decorator === 'when_greater_than') {
+        const sensor = h.decArgs[0] && h.decArgs[0].value !== undefined ? String(h.decArgs[0].value).toUpperCase() : 'LOUDNESS';
+        hatId = createBlock(
+          'event_whengreaterthan',
+          null,
+          {},
+          { WHENGREATERTHANMENU: [sensor, null] },
+          { topLevel: true, x: 40, y: yOffset, line: h.line }
+        );
+        blocks[hatId].inputs = {
+          VALUE: compileInput(h.decArgs[1], hatId, 4)
+        };
       } else if (h.decorator === 'when_cloned') {
         hatId = createBlock('control_start_as_clone', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
       } else {

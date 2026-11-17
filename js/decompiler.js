@@ -22,12 +22,35 @@
     return sanitizeIdent(base, 'custom_block');
   }
 
-  function createBlockReader(blocks) {
-    function readField(block, name, fallback = '') {
+  function createBlockReader(blocks, target = null, stageTarget = null) {
+    function isLocalVar(varName, varId) {
+      if (!target || target.isStage || !target.variables) return false;
+      if (varId && target.variables[varId]) return true;
+      if (varId && stageTarget && stageTarget.variables && stageTarget.variables[varId]) return false;
+      return Object.values(target.variables).some((v) => v && v[0] === varName);
+    }
+
+    function isLocalList(listName, listId) {
+      if (!target || target.isStage || !target.lists) return false;
+      if (listId && target.lists[listId]) return true;
+      if (listId && stageTarget && stageTarget.lists && stageTarget.lists[listId]) return false;
+      return Object.values(target.lists).some((l) => l && l[0] === listName);
+    }
+
+    function formatVarName(varName, varId) {
+      const ident = sanitizeIdent(varName, 'var');
+      return isLocalVar(varName, varId) ? `self.${ident}` : ident;
+    }
+
+    function readFieldWithId(block, name, fallback = '') {
       if (block && block.fields && block.fields[name]) {
-        return block.fields[name][0];
+        return [block.fields[name][0], block.fields[name][1] ?? null];
       }
-      return fallback;
+      return [fallback, null];
+    }
+
+    function readField(block, name, fallback = '') {
+      return readFieldWithId(block, name, fallback)[0];
     }
 
     function readInput(block, name) {
@@ -64,7 +87,7 @@
         }
         // 12: variable [12, varName, varId]
         if (type === 12) {
-          return String(val[1]);
+          return formatVarName(val[1], val[2]);
         }
         // 13: list [13, listName, listId]
         if (type === 13) {
@@ -87,12 +110,13 @@
           if (fVal === '_mouse_') fVal = 'mouse';
           if (fVal === '_random_') fVal = 'random';
           if (fVal === '_myself_') fVal = 'myself';
+          if (fVal === '_stage_') fVal = 'Stage';
           return JSON.stringify(fVal);
         }
         return decompileReporter(val);
       }
       if (Array.isArray(val) && val[0] === 12) {
-        return String(val[1]);
+        return formatVarName(val[1], val[2]);
       }
       return JSON.stringify(fallback);
     }
@@ -147,9 +171,11 @@
         case 'operator_mathop': {
           const op = readField(b, 'OPERATOR', 'abs');
           const num = readInput(b, 'NUM');
-          const directFuncs = new Set(['abs', 'floor', 'sqrt', 'sin', 'cos', 'tan']);
+          const directFuncs = new Set(['abs', 'floor', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log']);
           if (directFuncs.has(op)) return `${op}(${num})`;
           if (op === 'ceiling') return `ceil(${num})`;
+          if (op === 'e ^') return `exp(${num})`;
+          if (op === '10 ^') return `pow10(${num})`;
           return `math_op(${JSON.stringify(op)}, ${num})`;
         }
         case 'operator_add':
@@ -196,29 +222,60 @@
           return `key_pressed(${readMenuOrExpr(b, 'KEY_OPTION', 'KEY_OPTION', 'space')})`;
         case 'sensing_touchingobject':
           return `touching(${readMenuOrExpr(b, 'TOUCHINGOBJECTMENU', 'TOUCHINGOBJECTMENU', 'edge')})`;
+        case 'sensing_touchingcolor':
+          return `touching_color(${readInput(b, 'COLOR')})`;
+        case 'sensing_coloristouchingcolor':
+          return `color_is_touching_color(${readInput(b, 'COLOR')}, ${readInput(b, 'COLOR2')})`;
         case 'sensing_distanceto':
           return `distance_to(${readMenuOrExpr(b, 'DISTANCETOMENU', 'DISTANCETOMENU', 'mouse')})`;
+        case 'sensing_of':
+          return `attribute_of(${JSON.stringify(readField(b, 'PROPERTY', 'x position'))}, ${readMenuOrExpr(b, 'OBJECT', 'OBJECT', 'Stage')})`;
+        case 'sensing_current':
+          return `current_time(${JSON.stringify(readField(b, 'CURRENTMENU', 'YEAR').toLowerCase())})`;
+        case 'sensing_dayssince2000':
+          return 'days_since_2000()';
+        case 'sensing_username':
+          return 'username()';
+        case 'sensing_loudness':
+          return 'loudness()';
         case 'data_itemoflist': {
-          const listName = readField(b, 'LIST', 'list');
-          return `list_item(${JSON.stringify(listName)}, ${readInput(b, 'INDEX')})`;
+          const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+          const fn = isLocalList(listName, listId) ? 'local_list_item' : 'list_item';
+          return `${fn}(${JSON.stringify(listName)}, ${readInput(b, 'INDEX')})`;
         }
         case 'data_lengthoflist': {
-          const listName = readField(b, 'LIST', 'list');
-          return `list_length(${JSON.stringify(listName)})`;
+          const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+          const fn = isLocalList(listName, listId) ? 'local_list_length' : 'list_length';
+          return `${fn}(${JSON.stringify(listName)})`;
         }
         case 'data_listcontainsitem': {
-          const listName = readField(b, 'LIST', 'list');
-          return `list_contains(${JSON.stringify(listName)}, ${readInput(b, 'ITEM')})`;
+          const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+          const fn = isLocalList(listName, listId) ? 'local_list_contains' : 'list_contains';
+          return `${fn}(${JSON.stringify(listName)}, ${readInput(b, 'ITEM')})`;
+        }
+        case 'data_itemnumoflist': {
+          const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+          const fn = isLocalList(listName, listId) ? 'local_list_index_of' : 'list_index_of';
+          return `${fn}(${JSON.stringify(listName)}, ${readInput(b, 'ITEM')})`;
         }
         default:
           return `0`;
       }
     }
 
-    return { readField, readInput, readMenuOrExpr, decompileReporter };
+    return {
+      readField,
+      readFieldWithId,
+      readInput,
+      readMenuOrExpr,
+      decompileReporter,
+      isLocalVar,
+      isLocalList,
+      formatVarName
+    };
   }
 
-  function decompileTarget(target) {
+  function decompileTarget(target, stageTarget = null) {
     const blocks = target.blocks || {};
     const topBlocks = Object.entries(blocks)
       .filter(([, b]) => b && b.topLevel && !b.shadow)
@@ -228,7 +285,36 @@
       return `# === ${target.isStage ? 'СЦЕНА' : 'СПРАЙТ'} (${target.name}) ===\n# Поки що немає скриптів. Напишіть @when_flag_clicked нижче!\n`;
     }
 
-    const { readField, readInput, readMenuOrExpr } = createBlockReader(blocks);
+    const {
+      readField,
+      readFieldWithId,
+      readInput,
+      readMenuOrExpr,
+      isLocalVar,
+      isLocalList,
+      formatVarName
+    } = createBlockReader(blocks, target, stageTarget);
+
+    const listBlockOps = new Set([
+      'data_addtolist',
+      'data_deleteoflist',
+      'data_deletealloflist',
+      'data_insertatlist',
+      'data_replaceitemoflist',
+      'data_itemoflist',
+      'data_lengthoflist',
+      'data_listcontainsitem',
+      'data_itemnumoflist'
+    ]);
+    const localListsWithOps = new Set();
+    for (const b of Object.values(blocks)) {
+      if (b && listBlockOps.has(b.opcode) && b.fields && b.fields.LIST) {
+        const [lName, lId] = b.fields.LIST;
+        if (isLocalList(lName, lId)) localListsWithOps.add(lName);
+      }
+    }
+    const emittedLocalListDecls = new Set();
+
     let handlerIndex = 1;
     const parts = [];
     parts.push(`# === ${target.isStage ? 'СКРИПТ СЦЕНИ' : 'СКРИПТ ГРАВЦЯ'} (${target.name}) ===\n`);
@@ -287,6 +373,9 @@
           case 'motion_glidesecstoxy':
             lines.push(`${pad}glide(${readInput(b, 'SECS')}, ${readInput(b, 'X')}, ${readInput(b, 'Y')})`);
             break;
+          case 'motion_glideto':
+            lines.push(`${pad}glide_to(${readInput(b, 'SECS')}, ${readMenuOrExpr(b, 'TO', 'TO', 'random')})`);
+            break;
           case 'motion_setx':
             lines.push(`${pad}set_x(${readInput(b, 'X')})`);
             break;
@@ -315,8 +404,19 @@
           case 'looks_switchbackdropto':
             lines.push(`${pad}switch_backdrop(${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')})`);
             break;
+          case 'looks_switchbackdroptoandwait':
+            lines.push(`${pad}switch_backdrop_and_wait(${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')})`);
+            break;
           case 'looks_nextbackdrop':
             lines.push(`${pad}next_backdrop()`);
+            break;
+          case 'looks_gotofrontback':
+            lines.push(`${pad}go_to_layer(${JSON.stringify(readField(b, 'FRONT_BACK', 'front'))})`);
+            break;
+          case 'looks_goforwardbackwardlayers':
+            lines.push(
+              `${pad}change_layer(${JSON.stringify(readField(b, 'FORWARD_BACKWARD', 'forward'))}, ${readInput(b, 'NUM')})`
+            );
             break;
           case 'looks_switchcostumeto':
             lines.push(`${pad}switch_costume(${readMenuOrExpr(b, 'COSTUME', 'COSTUME', 'costume1')})`);
@@ -370,6 +470,19 @@
             break;
           case 'sound_stopallsounds':
             lines.push(`${pad}stop_all_sounds()`);
+            break;
+          case 'sound_seteffectto':
+            lines.push(
+              `${pad}set_sound_effect(${JSON.stringify(readField(b, 'EFFECT', 'PITCH').toLowerCase())}, ${readInput(b, 'VALUE')})`
+            );
+            break;
+          case 'sound_changeeffectby':
+            lines.push(
+              `${pad}change_sound_effect(${JSON.stringify(readField(b, 'EFFECT', 'PITCH').toLowerCase())}, ${readInput(b, 'VALUE')})`
+            );
+            break;
+          case 'sound_cleareffects':
+            lines.push(`${pad}clear_sound_effects()`);
             break;
           case 'sound_setvolumeto':
             lines.push(`${pad}set_volume(${readInput(b, 'VOLUME')})`);
@@ -429,6 +542,9 @@
           case 'sensing_askandwait':
             lines.push(`${pad}ask(${readInput(b, 'QUESTION')})`);
             break;
+          case 'sensing_setdragmode':
+            lines.push(`${pad}set_drag_mode(${JSON.stringify(readField(b, 'DRAG_MODE', 'draggable'))})`);
+            break;
           case 'sensing_resettimer':
             lines.push(`${pad}reset_timer()`);
             break;
@@ -440,32 +556,66 @@
             lines.push(`${pad}broadcast_and_wait(${readInput(b, 'BROADCAST_INPUT')})`);
             break;
 
-          case 'data_setvariableto':
-            lines.push(`${pad}${sanitizeIdent(readField(b, 'VARIABLE', 'var'))} = ${readInput(b, 'VALUE')}`);
+          case 'data_setvariableto': {
+            const [vName, vId] = readFieldWithId(b, 'VARIABLE', 'var');
+            lines.push(`${pad}${formatVarName(vName, vId)} = ${readInput(b, 'VALUE')}`);
             break;
-          case 'data_changevariableby':
-            lines.push(`${pad}${sanitizeIdent(readField(b, 'VARIABLE', 'var'))} += ${readInput(b, 'VALUE')}`);
+          }
+          case 'data_changevariableby': {
+            const [vName, vId] = readFieldWithId(b, 'VARIABLE', 'var');
+            lines.push(`${pad}${formatVarName(vName, vId)} += ${readInput(b, 'VALUE')}`);
             break;
+          }
+          case 'data_showvariable':
+          case 'data_hidevariable': {
+            const [vName, vId] = readFieldWithId(b, 'VARIABLE', 'var');
+            const fn = b.opcode === 'data_showvariable' ? 'show_variable' : 'hide_variable';
+            const arg = isLocalVar(vName, vId) ? `self.${sanitizeIdent(vName, 'var')}` : JSON.stringify(vName);
+            lines.push(`${pad}${fn}(${arg})`);
+            break;
+          }
+          case 'data_showlist':
+          case 'data_hidelist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            if (isLocalList(listName, listId) && !localListsWithOps.has(listName) && !emittedLocalListDecls.has(listName)) {
+              lines.push(`${pad}local_list(${JSON.stringify(listName)})`);
+              emittedLocalListDecls.add(listName);
+            }
+            const fn = b.opcode === 'data_showlist' ? 'show_list' : 'hide_list';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)})`);
+            break;
+          }
 
-          case 'data_addtolist':
-            lines.push(`${pad}list_add(${JSON.stringify(readField(b, 'LIST', 'list'))}, ${readInput(b, 'ITEM')})`);
+          case 'data_addtolist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            const fn = isLocalList(listName, listId) ? 'local_list_add' : 'list_add';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)}, ${readInput(b, 'ITEM')})`);
             break;
-          case 'data_deleteoflist':
-            lines.push(`${pad}list_delete(${JSON.stringify(readField(b, 'LIST', 'list'))}, ${readInput(b, 'INDEX')})`);
+          }
+          case 'data_deleteoflist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            const fn = isLocalList(listName, listId) ? 'local_list_delete' : 'list_delete';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)}, ${readInput(b, 'INDEX')})`);
             break;
-          case 'data_deletealloflist':
-            lines.push(`${pad}list_clear(${JSON.stringify(readField(b, 'LIST', 'list'))})`);
+          }
+          case 'data_deletealloflist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            const fn = isLocalList(listName, listId) ? 'local_list_clear' : 'list_clear';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)})`);
             break;
-          case 'data_insertatlist':
-            lines.push(
-              `${pad}list_insert(${JSON.stringify(readField(b, 'LIST', 'list'))}, ${readInput(b, 'INDEX')}, ${readInput(b, 'ITEM')})`
-            );
+          }
+          case 'data_insertatlist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            const fn = isLocalList(listName, listId) ? 'local_list_insert' : 'list_insert';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)}, ${readInput(b, 'INDEX')}, ${readInput(b, 'ITEM')})`);
             break;
-          case 'data_replaceitemoflist':
-            lines.push(
-              `${pad}list_replace(${JSON.stringify(readField(b, 'LIST', 'list'))}, ${readInput(b, 'INDEX')}, ${readInput(b, 'ITEM')})`
-            );
+          }
+          case 'data_replaceitemoflist': {
+            const [listName, listId] = readFieldWithId(b, 'LIST', 'list');
+            const fn = isLocalList(listName, listId) ? 'local_list_replace' : 'list_replace';
+            lines.push(`${pad}${fn}(${JSON.stringify(listName)}, ${readInput(b, 'INDEX')}, ${readInput(b, 'ITEM')})`);
             break;
+          }
 
           case 'procedures_call': {
             const mut = b.mutation || {};
@@ -524,7 +674,10 @@
         } catch (_) {
           argNames = [];
         }
-        parts.push(`def ${fnName}(${argNames.join(', ')}):`);
+        const isWarp = mut.warp === 'true' || mut.warp === true;
+        parts.push(
+          isWarp ? `@warp\ndef ${fnName}(${argNames.join(', ')}):` : `def ${fnName}(${argNames.join(', ')}):`
+        );
         const bodyLines = hat.next ? decompileChain(hat.next, 1) : ['    pass'];
         parts.push(bodyLines.join('\n') + '\n');
         continue;
@@ -552,6 +705,11 @@
         const msg = readField(hat, 'BROADCAST_OPTION', 'message1');
         dec = `@when_message_received(${JSON.stringify(msg)})`;
         fnName = `on_${sanitizeIdent(msg)}`;
+      } else if (hat.opcode === 'event_whengreaterthan') {
+        const sensor = readField(hat, 'WHENGREATERTHANMENU', 'LOUDNESS').toLowerCase();
+        const val = readInput(hat, 'VALUE');
+        dec = `@when_greater_than(${JSON.stringify(sensor)}, ${val})`;
+        fnName = `on_${sanitizeIdent(sensor)}_gt_${handlerIndex}`;
       } else if (hat.opcode === 'control_start_as_clone') {
         dec = '@when_cloned';
         fnName = `on_clone_${handlerIndex}`;
@@ -605,6 +763,9 @@
       case 'event_whenbroadcastreceived':
         label = `Коли я отримую [${readField(b, 'BROADCAST_OPTION', 'message1')}]`;
         break;
+      case 'event_whengreaterthan':
+        label = `Коли [${readField(b, 'WHENGREATERTHANMENU', 'LOUDNESS').toLowerCase()}] > (${readInput(b, 'VALUE')})`;
+        break;
       case 'event_broadcast':
         label = `Оповістити (${readInput(b, 'BROADCAST_INPUT')})`;
         break;
@@ -648,6 +809,9 @@
       case 'motion_glidesecstoxy':
         label = `Ковзати (${readInput(b, 'SECS')}) сек до x: (${readInput(b, 'X')}) y: (${readInput(b, 'Y')})`;
         break;
+      case 'motion_glideto':
+        label = `Ковзати (${readInput(b, 'SECS')}) сек до [${readMenuOrExpr(b, 'TO', 'TO', 'random')}]`;
+        break;
       case 'motion_setx':
         label = `Встановити x в (${readInput(b, 'X')})`;
         break;
@@ -669,12 +833,26 @@
       case 'motion_ifonedgebounce':
         label = 'Якщо на межі, відбити';
         break;
+      case 'motion_setrotationstyle':
+        label = `Встановити стиль обертання [${readField(b, 'STYLE', 'all around')}]`;
+        break;
       case 'looks_switchbackdropto':
         label = `Змінити тло на [${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')}]`;
+        break;
+      case 'looks_switchbackdroptoandwait':
+        label = `Змінити тло на [${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')}] і чекати`;
         break;
       case 'looks_nextbackdrop':
         label = 'Наступне тло';
         break;
+      case 'looks_gotofrontback':
+        label = readField(b, 'FRONT_BACK', 'front') === 'back' ? 'Перейти на задній план' : 'Перейти на передній план';
+        break;
+      case 'looks_goforwardbackwardlayers': {
+        const dir = readField(b, 'FORWARD_BACKWARD', 'forward') === 'backward' ? 'назад' : 'вперед';
+        label = `Перемістити ${dir} на (${readInput(b, 'NUM')}) шарів`;
+        break;
+      }
       case 'looks_switchcostumeto':
         label = `Змінити образ на [${readMenuOrExpr(b, 'COSTUME', 'COSTUME', 'costume1')}]`;
         break;
@@ -705,6 +883,15 @@
       case 'looks_changesizeby':
         label = `Змінити розмір на (${readInput(b, 'CHANGE')})`;
         break;
+      case 'looks_seteffectto':
+        label = `Встановити ефект [${readField(b, 'EFFECT', 'COLOR').toLowerCase()}] в (${readInput(b, 'VALUE')})`;
+        break;
+      case 'looks_changeeffectby':
+        label = `Змінити ефект [${readField(b, 'EFFECT', 'COLOR').toLowerCase()}] на (${readInput(b, 'CHANGE')})`;
+        break;
+      case 'looks_cleargraphiceffects':
+        label = 'Очистити графічні ефекти';
+        break;
       case 'sound_play':
         label = `Відтворити звук [${readMenuOrExpr(b, 'SOUND_MENU', 'SOUND_MENU', 'pop')}]`;
         break;
@@ -713,6 +900,21 @@
         break;
       case 'sound_stopallsounds':
         label = 'Зупинити всі звуки';
+        break;
+      case 'sound_setvolumeto':
+        label = `Встановити гучність (${readInput(b, 'VOLUME')}) %`;
+        break;
+      case 'sound_changevolumeby':
+        label = `Змінити гучність на (${readInput(b, 'VOLUME')})`;
+        break;
+      case 'sound_seteffectto':
+        label = `Встановити звуковий ефект [${readField(b, 'EFFECT', 'PITCH').toLowerCase()}] в (${readInput(b, 'VALUE')})`;
+        break;
+      case 'sound_changeeffectby':
+        label = `Змінити звуковий ефект [${readField(b, 'EFFECT', 'PITCH').toLowerCase()}] на (${readInput(b, 'VALUE')})`;
+        break;
+      case 'sound_cleareffects':
+        label = 'Очистити звукові ефекти';
         break;
       case 'pen_clear':
         label = 'Очистити все (Олівець)';
@@ -728,6 +930,12 @@
         break;
       case 'pen_setPenColorToColor':
         label = `Надати олівцю колір (${readInput(b, 'COLOR')})`;
+        break;
+      case 'pen_setPenColorParamTo':
+        label = `Встановити параметр олівця [${readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color')}] в (${readInput(b, 'VALUE')})`;
+        break;
+      case 'pen_changePenColorParamBy':
+        label = `Змінити параметр олівця [${readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color')}] на (${readInput(b, 'VALUE')})`;
         break;
       case 'pen_setPenSizeTo':
         label = `Встановити розмір олівця (${readInput(b, 'SIZE')})`;
@@ -768,6 +976,11 @@
       case 'sensing_askandwait':
         label = `Запитати (${readInput(b, 'QUESTION')}) і чекати`;
         break;
+      case 'sensing_setdragmode': {
+        const mode = readField(b, 'DRAG_MODE', 'draggable');
+        label = `Встановити режим перетягування [${mode === 'not draggable' ? 'не перетягується' : 'перетягується'}]`;
+        break;
+      }
       case 'sensing_resettimer':
         label = 'Перезапустити таймер';
         break;
@@ -777,6 +990,18 @@
       case 'data_changevariableby':
         label = `Змінити [${readField(b, 'VARIABLE', 'var')}] на (${readInput(b, 'VALUE')})`;
         break;
+      case 'data_showvariable':
+        label = `Показати змінну [${readField(b, 'VARIABLE', 'var')}]`;
+        break;
+      case 'data_hidevariable':
+        label = `Сховати змінну [${readField(b, 'VARIABLE', 'var')}]`;
+        break;
+      case 'data_showlist':
+        label = `Показати список [${readField(b, 'LIST', 'list')}]`;
+        break;
+      case 'data_hidelist':
+        label = `Сховати список [${readField(b, 'LIST', 'list')}]`;
+        break;
       case 'data_addtolist':
         label = `Додати (${readInput(b, 'ITEM')}) до [${readField(b, 'LIST', 'list')}]`;
         break;
@@ -785,6 +1010,12 @@
         break;
       case 'data_deletealloflist':
         label = `Вилучити все з [${readField(b, 'LIST', 'list')}]`;
+        break;
+      case 'data_insertatlist':
+        label = `Вставити (${readInput(b, 'ITEM')}) у позицію (${readInput(b, 'INDEX')}) списку [${readField(b, 'LIST', 'list')}]`;
+        break;
+      case 'data_replaceitemoflist':
+        label = `Замінити елемент (${readInput(b, 'INDEX')}) списку [${readField(b, 'LIST', 'list')}] на (${readInput(b, 'ITEM')})`;
         break;
     }
 

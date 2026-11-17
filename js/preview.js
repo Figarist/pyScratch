@@ -40,6 +40,17 @@
       this.answerValue = '';
       this.pendingAskResolver = null;
 
+      this._activeAudioNodes = new Set();
+      this._audioBufferCache = new Map();
+      this._soundEpoch = 0;
+      this._activeBroadcasts = new WeakMap();
+      this._gtInterval = null;
+      this._draggingActor = null;
+      this._dragOffsetX = 0;
+      this._dragOffsetY = 0;
+      this.hiddenMonitors = new Set();
+      this.visibleMonitors = new Set();
+
       this.imageCache = new Map();
       this.backdrops = ['space_bg', 'level_2', 'grid_bg'];
       this.backdropColors = {
@@ -67,6 +78,11 @@
 
       this.canvas.addEventListener('mousemove', (e) => {
         toScratchCoords(e);
+        if (this.isRunning && this.mouseDown && this._draggingActor && !this._draggingActor._deleted) {
+          this._draggingActor.x = Math.max(-240, Math.min(240, this.mouseX + this._dragOffsetX));
+          this._draggingActor.y = Math.max(-180, Math.min(180, this.mouseY + this._dragOffsetY));
+          this.render();
+        }
         this._emitTelemetry();
       });
       this.canvas.addEventListener('mousedown', (e) => {
@@ -75,9 +91,43 @@
         this._handleCanvasClick();
         this._emitTelemetry();
       });
-      window.addEventListener('mouseup', () => {
-        this.mouseDown = false;
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('mouseup', () => {
+          this.mouseDown = false;
+          this._draggingActor = null;
+        });
+      }
+    }
+
+    _getActorHalfSize(actor) {
+      const scale = Math.max(0.05, (actor && actor.size !== undefined ? actor.size : 100) / 100);
+      let halfW = 24 * scale;
+      let halfH = 24 * scale;
+      const costumeObj = actor && actor.costumes && actor.costumes[actor.currentCostume];
+      const cachedImg = costumeObj && costumeObj.md5ext ? this.imageCache.get(costumeObj.md5ext) : null;
+      if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+        halfW = (cachedImg.naturalWidth / 2) * scale;
+        halfH = (cachedImg.naturalHeight / 2) * scale;
+      }
+      return {
+        halfW: Math.min(halfW, 239),
+        halfH: Math.min(halfH, 179)
+      };
+    }
+
+    _getSortedSprites() {
+      return this.actors
+        .filter((a) => !a.isStage)
+        .sort((a, b) => (Number(a.layerOrder) || 1) - (Number(b.layerOrder) || 1));
+    }
+
+    _normalizeLayerOrders() {
+      const sprites = this._getSortedSprites();
+      sprites.forEach((a, idx) => {
+        a.layerOrder = idx + 1;
       });
+      const stage = this.actors.find((a) => a.isStage);
+      if (stage) stage.layerOrder = 0;
     }
 
     _handleCanvasClick() {
@@ -85,13 +135,20 @@
       const myRunId = this.runId;
       let clickedSprite = false;
 
-      for (let i = this.actors.length - 1; i >= 0; i--) {
-        const actor = this.actors[i];
-        if (actor.isStage || !actor.visible) continue;
+      const sortedSprites = this._getSortedSprites();
+      for (let i = sortedSprites.length - 1; i >= 0; i--) {
+        const actor = sortedSprites[i];
+        if (!actor.visible) continue;
+        const { halfW, halfH } = this._getActorHalfSize(actor);
+        const hitRadius = Math.max(halfW, halfH, 24 * (actor.size / 100));
         const dist = Math.hypot(actor.x - this.mouseX, actor.y - this.mouseY);
-        const radius = 24 * (actor.size / 100);
-        if (dist <= radius) {
+        if (dist <= hitRadius) {
           clickedSprite = true;
+          if (actor.draggable) {
+            this._draggingActor = actor;
+            this._dragOffsetX = actor.x - this.mouseX;
+            this._dragOffsetY = actor.y - this.mouseY;
+          }
           this._triggerHandlersOnActor(actor, 'when_this_sprite_clicked', null, myRunId);
           break;
         }
@@ -101,40 +158,204 @@
         const stageActor = this.actors.find((a) => a.isStage);
         if (stageActor) {
           this._triggerHandlersOnActor(stageActor, 'when_stage_clicked', null, myRunId);
+          this._triggerHandlersOnActor(stageActor, 'when_this_sprite_clicked', null, myRunId);
         }
       }
     }
 
-    playSynthSound(soundName) {
-      if (this.muted) return;
+    _getAudioContext() {
+      if (typeof window === 'undefined') return null;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!this._audioCtx) this._audioCtx = new AudioCtx();
+      if (this._audioCtx.state === 'suspended' && typeof this._audioCtx.resume === 'function') {
+        try {
+          const r = this._audioCtx.resume();
+          if (r && typeof r.catch === 'function') r.catch(() => {});
+        } catch (_) {}
+      }
+      return this._audioCtx;
+    }
+
+    _stopAllSounds() {
+      this._soundEpoch = (this._soundEpoch || 0) + 1;
+      if (!this._activeAudioNodes) return;
+      for (const node of Array.from(this._activeAudioNodes)) {
+        try {
+          if (typeof node.stop === 'function') node.stop();
+        } catch (_) {}
+        try {
+          if (typeof node.disconnect === 'function') node.disconnect();
+        } catch (_) {}
+        if (typeof node._resolveEnded === 'function') {
+          node._resolveEnded();
+        }
+      }
+      this._activeAudioNodes.clear();
+    }
+
+    playSynthSound(soundName, actor = this.sprite) {
+      if (this.muted) return Promise.resolve();
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        if (!this._audioCtx) this._audioCtx = new AudioCtx();
-        const ctx = this._audioCtx;
-        if (ctx.state === 'suspended') ctx.resume();
+        const ctx = this._getAudioContext();
+        if (!ctx) return Promise.resolve();
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        const now = ctx.currentTime;
+        const now = ctx.currentTime || 0;
         const isLaser = String(soundName).toLowerCase().includes('laser');
+        const pitch = actor && actor.soundEffects ? Number(actor.soundEffects.pitch) || 0 : 0;
+        const pitchMult = Math.max(0.05, Math.pow(2, pitch / 120));
+        const vol = actor && actor.volume !== undefined ? Math.max(0, Math.min(1, actor.volume / 100)) : 1;
+        const dur = isLaser ? 0.14 : 0.1;
 
         osc.type = isLaser ? 'sawtooth' : 'sine';
-        osc.frequency.setValueAtTime(isLaser ? 880 : 523.25, now);
+        osc.frequency.setValueAtTime((isLaser ? 880 : 523.25) * pitchMult, now);
         if (isLaser) {
-          osc.frequency.exponentialRampToValueAtTime(220, now + 0.14);
+          osc.frequency.exponentialRampToValueAtTime(220 * pitchMult, now + dur);
         } else {
-          osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.09);
+          osc.frequency.exponentialRampToValueAtTime(659.25 * pitchMult, now + 0.09);
         }
 
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + (isLaser ? 0.14 : 0.1));
+        gain.gain.setValueAtTime(0.15 * vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + (isLaser ? 0.15 : 0.11));
-      } catch (_) {}
+
+        this._activeAudioNodes.add(osc);
+        return new Promise((resolve) => {
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            this._activeAudioNodes.delete(osc);
+            try { osc.disconnect(); } catch (_) {}
+            try { gain.disconnect(); } catch (_) {}
+            resolve();
+          };
+          osc._resolveEnded = done;
+          osc.onended = done;
+          const fallbackTimer = setTimeout(done, (dur + 0.05) * 1000);
+          if (fallbackTimer && typeof fallbackTimer.unref === 'function') fallbackTimer.unref();
+          osc.start(now);
+          osc.stop(now + dur + 0.01);
+        });
+      } catch (_) {
+        return Promise.resolve();
+      }
+    }
+
+    async playProjectSound(soundName, actor = this.sprite) {
+      if (this.muted) return;
+      const ctx = this._getAudioContext();
+      if (!ctx) return;
+      const myEpoch = this._soundEpoch;
+
+      const sName = String(soundName || '');
+      let soundObj = null;
+      const findInList = (sounds) => {
+        if (!Array.isArray(sounds) || sounds.length === 0) return null;
+        const byName = sounds.find((s) => s.name === sName);
+        if (byName) return byName;
+        const num = Number(sName);
+        if (Number.isInteger(num) && num >= 1 && num <= sounds.length) return sounds[num - 1];
+        return null;
+      };
+
+      if (actor && Array.isArray(actor.sounds)) {
+        soundObj = findInList(actor.sounds);
+      }
+      if (!soundObj && this.projectJson && Array.isArray(this.projectJson.targets)) {
+        const target = actor ? this.projectJson.targets.find((t) => t.name === actor.name) : null;
+        if (target) soundObj = findInList(target.sounds);
+        if (!soundObj) {
+          for (const t of this.projectJson.targets) {
+            soundObj = findInList(t.sounds);
+            if (soundObj) break;
+          }
+        }
+      }
+
+      const md5ext = soundObj
+        ? soundObj.md5ext || (soundObj.assetId && soundObj.dataFormat ? `${soundObj.assetId}.${soundObj.dataFormat}` : null)
+        : null;
+      const rawBytes = md5ext && this.assetsMap ? this.assetsMap.get(md5ext) : null;
+
+      if (!rawBytes || typeof ctx.createBufferSource !== 'function' || typeof ctx.decodeAudioData !== 'function') {
+        await this.playSynthSound(soundName, actor);
+        return;
+      }
+
+      try {
+        let audioBuffer = this._audioBufferCache.get(md5ext);
+        if (!audioBuffer) {
+          const arrayBuf =
+            rawBytes instanceof ArrayBuffer
+              ? rawBytes.slice(0)
+              : rawBytes.buffer.slice(rawBytes.byteOffset, rawBytes.byteOffset + rawBytes.byteLength);
+          audioBuffer = await ctx.decodeAudioData(arrayBuf);
+          if (audioBuffer) {
+            this._audioBufferCache.set(md5ext, audioBuffer);
+          }
+        }
+        if (myEpoch !== this._soundEpoch || this.muted) return;
+        if (!audioBuffer) {
+          await this.playSynthSound(soundName, actor);
+          return;
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        const pitch = actor && actor.soundEffects ? Number(actor.soundEffects.pitch) || 0 : 0;
+        if (source.playbackRate) {
+          source.playbackRate.value = Math.max(0.05, Math.pow(2, pitch / 120));
+        }
+
+        const gain = ctx.createGain();
+        const vol = actor && actor.volume !== undefined ? Math.max(0, Math.min(1, actor.volume / 100)) : 1;
+        if (gain.gain) gain.gain.value = vol;
+
+        const pan = actor && actor.soundEffects ? Number(actor.soundEffects.pan) || 0 : 0;
+        let panner = null;
+        if (pan !== 0 && typeof ctx.createStereoPanner === 'function') {
+          panner = ctx.createStereoPanner();
+          if (panner.pan) panner.pan.value = Math.max(-1, Math.min(1, pan / 100));
+          source.connect(gain);
+          gain.connect(panner);
+          panner.connect(ctx.destination);
+        } else {
+          source.connect(gain);
+          gain.connect(ctx.destination);
+        }
+
+        this._activeAudioNodes.add(source);
+        await new Promise((resolve) => {
+          let settled = false;
+          const rate = source.playbackRate ? source.playbackRate.value : 1;
+          const fallbackMs = Math.max(40, ((audioBuffer.duration || 0.2) / Math.max(0.05, rate)) * 1000 + 250);
+          let fallbackTimer = null;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            if (fallbackTimer) clearTimeout(fallbackTimer);
+            this._activeAudioNodes.delete(source);
+            try { source.disconnect(); } catch (_) {}
+            try { gain.disconnect(); } catch (_) {}
+            if (panner) {
+              try { panner.disconnect(); } catch (_) {}
+            }
+            resolve();
+          };
+          source._resolveEnded = done;
+          source.onended = done;
+          fallbackTimer = setTimeout(done, fallbackMs);
+          if (fallbackTimer && typeof fallbackTimer.unref === 'function') fallbackTimer.unref();
+          source.start(0);
+        });
+      } catch (_) {
+        await this.playSynthSound(soundName, actor);
+      }
     }
 
     syncProjectAssets(projectJson, assetsMap) {
@@ -178,6 +399,13 @@
       this.runId++;
       this.isRunning = false;
       this.startTime = Date.now();
+      this._clearGreaterThanWatcher();
+      this._stopAllSounds();
+      this._draggingActor = null;
+      this._activeBroadcasts = new WeakMap();
+      this.hiddenMonitors = new Set();
+      this.visibleMonitors = new Set();
+
       if (this.pendingAskResolver) {
         this.pendingAskResolver('');
         this.pendingAskResolver = null;
@@ -190,14 +418,25 @@
       this.actors = [];
 
       if (this.projectJson && Array.isArray(this.projectJson.targets)) {
+        const hasStage = this.projectJson.targets.some((t) => t.isStage);
         for (const t of this.projectJson.targets) {
-          for (const [, v] of Object.entries(t.variables || {})) {
-            this.vars[v[0]] = v[1];
-          }
-          for (const [, l] of Object.entries(t.lists || {})) {
-            this.lists[l[0]] = Array.isArray(l[1]) ? [...l[1]] : [];
+          if (t.isStage || !hasStage) {
+            for (const [, v] of Object.entries(t.variables || {})) {
+              this.vars[v[0]] = v[1];
+            }
+            for (const [, l] of Object.entries(t.lists || {})) {
+              this.lists[l[0]] = Array.isArray(l[1]) ? [...l[1]] : [];
+            }
           }
           this.actors.push(this._createActorFromTarget(t));
+        }
+        if (Array.isArray(this.projectJson.monitors)) {
+          for (const m of this.projectJson.monitors) {
+            const name = m.params && (m.params.VARIABLE || m.params.LIST);
+            if (!name) continue;
+            if (m.visible === false) this.hiddenMonitors.add(name);
+            else this.visibleMonitors.add(name);
+          }
         }
       } else {
         this.actors.push(this._createDefaultSpriteActor('Sprite1'));
@@ -224,21 +463,41 @@
         visible: true,
         rotationStyle: 'all around',
         costumes: [{ name: 'costume1', md5ext: null }],
+        sounds: [],
         currentCostume: 0,
+        effects: { color: 0, ghost: 0, brightness: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0 },
         colorEffect: 0,
+        layerOrder: 1,
+        draggable: false,
+        soundEffects: { pitch: 0, pan: 0 },
         penDown: false,
         penColor: '#00ffcc',
+        penHsl: { h: 168, s: 100, l: 50, a: 1 },
         penSize: 3,
         sayText: '',
         sayType: 'say',
         sayUntil: 0,
         volume: 100,
+        localVars: {},
+        localLists: {},
+        _scriptGen: 0,
+        _deleted: false,
         ast: [],
         procedures: {}
       };
     }
 
     _createActorFromTarget(t) {
+      const localVars = {};
+      const localLists = {};
+      if (!t.isStage) {
+        for (const [, v] of Object.entries(t.variables || {})) {
+          localVars[v[0]] = v[1];
+        }
+        for (const [, l] of Object.entries(t.lists || {})) {
+          localLists[l[0]] = Array.isArray(l[1]) ? [...l[1]] : [];
+        }
+      }
       return {
         name: t.name,
         isStage: !!t.isStage,
@@ -250,15 +509,25 @@
         visible: t.visible !== undefined ? !!t.visible : true,
         rotationStyle: t.rotationStyle || 'all around',
         costumes: Array.isArray(t.costumes) ? t.costumes : [],
+        sounds: Array.isArray(t.sounds) ? t.sounds : [],
         currentCostume: Number(t.currentCostume) || 0,
+        effects: { color: 0, ghost: 0, brightness: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0 },
         colorEffect: 0,
+        layerOrder: t.layerOrder !== undefined ? Number(t.layerOrder) : (t.isStage ? 0 : 1),
+        draggable: !!t.draggable,
+        soundEffects: { pitch: 0, pan: 0 },
         penDown: false,
         penColor: '#00ffcc',
+        penHsl: { h: 168, s: 100, l: 50, a: 1 },
         penSize: 3,
         sayText: '',
         sayType: 'say',
         sayUntil: 0,
         volume: t.volume !== undefined ? Number(t.volume) : 100,
+        localVars,
+        localLists,
+        _scriptGen: 0,
+        _deleted: false,
         ast: [],
         procedures: {}
       };
@@ -289,8 +558,32 @@
         mouseY: this.mouseY,
         vars: { ...this.vars },
         lists: { ...this.lists },
+        localVars: actor && actor.localVars ? { ...actor.localVars } : {},
+        localLists: actor && actor.localLists ? { ...actor.localLists } : {},
+        hiddenMonitors: Array.from(this.hiddenMonitors),
         isRunning: this.isRunning
       });
+    }
+
+    _applyGraphicEffects(ctx, actor) {
+      const effects = (actor && actor.effects) || {};
+      const colorVal = effects.color !== undefined ? Number(effects.color) || 0 : Number(actor && actor.colorEffect) || 0;
+      const ghostVal = Number(effects.ghost) || 0;
+      const brightnessVal = Number(effects.brightness) || 0;
+
+      if (ghostVal !== 0) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, 1 - ghostVal / 100));
+      }
+      const filters = [];
+      if (colorVal !== 0) {
+        filters.push(`hue-rotate(${(colorVal * 3.6) % 360}deg)`);
+      }
+      if (brightnessVal !== 0) {
+        filters.push(`brightness(${Math.max(0, 100 + brightnessVal)}%)`);
+      }
+      if (filters.length > 0) {
+        ctx.filter = filters.join(' ');
+      }
     }
 
     _drawActor(ctx, actor) {
@@ -315,17 +608,54 @@
       ctx.rotate(rad);
       ctx.scale(scale * flipX, scale);
 
-      if (actor.colorEffect) {
-        ctx.filter = `hue-rotate(${(actor.colorEffect * 3.6) % 360}deg)`;
-      }
+      this._applyGraphicEffects(ctx, actor);
+
+      const effects = actor.effects || {};
+      const pixelateVal = Number(effects.pixelate) || 0;
+      const mosaicVal = Number(effects.mosaic) || 0;
 
       const costumeObj = actor.costumes && actor.costumes[actor.currentCostume];
       const cachedImg = costumeObj && costumeObj.md5ext ? this.imageCache.get(costumeObj.md5ext) : null;
 
       if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-        const rx = costumeObj.rotationCenterX || cachedImg.naturalWidth / 2;
-        const ry = costumeObj.rotationCenterY || cachedImg.naturalHeight / 2;
-        ctx.drawImage(cachedImg, -rx, -ry);
+        const w = cachedImg.naturalWidth;
+        const h = cachedImg.naturalHeight;
+        const rx = costumeObj.rotationCenterX !== undefined ? costumeObj.rotationCenterX : w / 2;
+        const ry = costumeObj.rotationCenterY !== undefined ? costumeObj.rotationCenterY : h / 2;
+
+        let drawable = cachedImg;
+        if (pixelateVal > 0 && typeof document !== 'undefined' && typeof document.createElement === 'function') {
+          const pFactor = Math.max(1, Math.min(32, Math.floor(Math.abs(pixelateVal) / 5) + 1));
+          if (pFactor > 1) {
+            const pw = Math.max(1, Math.floor(w / pFactor));
+            const ph = Math.max(1, Math.floor(h / pFactor));
+            const pCanvas = this._pixelCanvas || (this._pixelCanvas = document.createElement('canvas'));
+            if (pCanvas && typeof pCanvas.getContext === 'function') {
+              pCanvas.width = pw;
+              pCanvas.height = ph;
+              const pCtx = pCanvas.getContext('2d');
+              if (pCtx && typeof pCtx.drawImage === 'function') {
+                pCtx.clearRect(0, 0, pw, ph);
+                pCtx.drawImage(cachedImg, 0, 0, pw, ph);
+                drawable = pCanvas;
+                ctx.imageSmoothingEnabled = false;
+              }
+            }
+          }
+        }
+
+        const tiles = Math.abs(mosaicVal) >= 5 ? Math.max(1, Math.min(8, Math.floor(Math.abs(mosaicVal) / 10) + 1)) : 1;
+        if (tiles > 1) {
+          const tileW = w / tiles;
+          const tileH = h / tiles;
+          for (let tx = 0; tx < tiles; tx++) {
+            for (let ty = 0; ty < tiles; ty++) {
+              ctx.drawImage(drawable, -rx + tx * tileW, -ry + ty * tileH, tileW, tileH);
+            }
+          }
+        } else {
+          ctx.drawImage(drawable, -rx, -ry, w, h);
+        }
       } else {
         ctx.fillStyle = '#38bdf8';
         ctx.strokeStyle = '#0284c7';
@@ -374,12 +704,17 @@
         this.projectJson && this.projectJson.targets
           ? this.projectJson.targets.find((t) => t.isStage)
           : null;
+      const stageActor = this.actors.find((a) => a.isStage);
       const bgCostume =
         stageTarget && stageTarget.costumes
           ? stageTarget.costumes.find((c) => c.name === this.currentBackdrop)
           : null;
       const bgImg = bgCostume && bgCostume.md5ext ? this.imageCache.get(bgCostume.md5ext) : null;
 
+      ctx.save();
+      if (stageActor) {
+        this._applyGraphicEffects(ctx, stageActor);
+      }
       if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
         ctx.drawImage(bgImg, 0, 0, 480, 360);
       } else {
@@ -398,12 +733,13 @@
           ctx.stroke();
         }
       }
+      ctx.restore();
 
       // 2. Render Pen layer
       ctx.drawImage(this.penCanvas, 0, 0);
 
-      // 3. Render all visible Sprites & Clones
-      for (const actor of this.actors) {
+      // 3. Render all visible Sprites & Clones sorted by layerOrder
+      for (const actor of this._getSortedSprites()) {
         this._drawActor(ctx, actor);
       }
     }
@@ -415,6 +751,89 @@
         if (node.type === 'ProcDef') {
           actor.procedures[node.fnName] = node;
         }
+      }
+    }
+
+    _createScriptCtx(actor, myRunId) {
+      const ctx = {
+        actor,
+        runId: myRunId,
+        gen: actor ? actor._scriptGen || 0 : 0,
+        cancelled: false,
+        isStopped: () => {
+          if (ctx.cancelled) return true;
+          if (this.runId !== myRunId) return true;
+          if (!actor || actor._deleted) return true;
+          if (ctx.gen !== (actor._scriptGen || 0)) return true;
+          return false;
+        }
+      };
+      return ctx;
+    }
+
+    _clearGreaterThanWatcher() {
+      if (this._gtInterval) {
+        clearInterval(this._gtInterval);
+        this._gtInterval = null;
+      }
+    }
+
+    _evalGreaterThanSensor(sensorName) {
+      const s = String(sensorName || '').toLowerCase();
+      if (s === 'timer') {
+        return (Date.now() - this.startTime) / 1000;
+      }
+      if (s === 'loudness') {
+        return 0;
+      }
+      return 0;
+    }
+
+    _startGreaterThanWatcher(myRunId) {
+      this._clearGreaterThanWatcher();
+      const hasGt = this.actors.some(
+        (a) => Array.isArray(a.ast) && a.ast.some((h) => h.type === 'Handler' && h.decorator === 'when_greater_than')
+      );
+      if (!hasGt) return;
+
+      const prevAbove = new WeakMap();
+      const checkAll = () => {
+        if (!this.isRunning || this.runId !== myRunId) {
+          this._clearGreaterThanWatcher();
+          return;
+        }
+        for (const actor of [...this.actors]) {
+          if (actor._deleted) continue;
+          let actorMap = prevAbove.get(actor);
+          if (!actorMap) {
+            actorMap = new Map();
+            prevAbove.set(actor, actorMap);
+          }
+          for (const h of actor.ast || []) {
+            if (h.type !== 'Handler' || h.decorator !== 'when_greater_than') continue;
+            const arg0 = h.decArgs && h.decArgs[0];
+            const sensor = arg0
+              ? arg0.type === 'Var' && (arg0.name === 'timer' || arg0.name === 'loudness')
+                ? arg0.name
+                : this.evalExpr(arg0, actor, {})
+              : 'timer';
+            const threshold = h.decArgs && h.decArgs[1] ? Number(this.evalExpr(h.decArgs[1], actor, {})) : 0;
+            const curVal = this._evalGreaterThanSensor(sensor);
+            const isAbove = curVal > threshold;
+            const wasAbove = actorMap.get(h) || false;
+            actorMap.set(h, isAbove);
+            if (isAbove && !wasAbove) {
+              const scriptCtx = this._createScriptCtx(actor, myRunId);
+              this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx);
+            }
+          }
+        }
+      };
+
+      checkAll();
+      this._gtInterval = setInterval(checkAll, 50);
+      if (this._gtInterval && typeof this._gtInterval.unref === 'function') {
+        this._gtInterval.unref();
       }
     }
 
@@ -431,9 +850,11 @@
       const tasks = [];
       for (const h of ast) {
         if (h.type === 'Handler' && h.decorator === 'when_flag_clicked') {
-          tasks.push(this.execBlock(h.body, myRunId, mainSprite, {}));
+          const scriptCtx = this._createScriptCtx(mainSprite, myRunId);
+          tasks.push(this.execBlock(h.body, myRunId, mainSprite, {}, false, scriptCtx));
         }
       }
+      this._startGreaterThanWatcher(myRunId);
       await Promise.all(tasks);
       if (this.runId === myRunId) {
         this._emitTelemetry(mainSprite);
@@ -455,10 +876,12 @@
       for (const actor of this.actors) {
         for (const h of actor.ast) {
           if (h.type === 'Handler' && h.decorator === 'when_flag_clicked') {
-            tasks.push(this.execBlock(h.body, myRunId, actor, {}));
+            const scriptCtx = this._createScriptCtx(actor, myRunId);
+            tasks.push(this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx));
           }
         }
       }
+      this._startGreaterThanWatcher(myRunId);
       this._emitTelemetry();
       await Promise.all(tasks);
       if (this.runId === myRunId) {
@@ -466,7 +889,44 @@
       }
     }
 
+    _triggerBroadcastOnActor(actor, msg, myRunId) {
+      if (!this._activeBroadcasts) this._activeBroadcasts = new WeakMap();
+      let msgMap = this._activeBroadcasts.get(actor);
+      if (!msgMap) {
+        msgMap = new Map();
+        this._activeBroadcasts.set(actor, msgMap);
+      }
+      let activeSet = msgMap.get(msg);
+      if (activeSet && activeSet.size > 0) {
+        for (const prevCtx of activeSet) {
+          prevCtx.cancelled = true;
+        }
+        activeSet.clear();
+      } else {
+        activeSet = new Set();
+        msgMap.set(msg, activeSet);
+      }
+
+      const tasks = [];
+      for (const h of actor.ast || []) {
+        if (h.type === 'Handler' && h.decorator === 'when_message_received') {
+          const targetArg = h.decArgs && h.decArgs[0] ? String(h.decArgs[0].value) : '';
+          if (targetArg !== msg) continue;
+          const scriptCtx = this._createScriptCtx(actor, myRunId);
+          activeSet.add(scriptCtx);
+          const p = this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx).finally(() => {
+            activeSet.delete(scriptCtx);
+          });
+          tasks.push(p);
+        }
+      }
+      return tasks;
+    }
+
     _triggerHandlersOnActor(actor, decorator, argMatch, myRunId) {
+      if (decorator === 'when_message_received' && argMatch !== null) {
+        return this._triggerBroadcastOnActor(actor, argMatch, myRunId);
+      }
       const tasks = [];
       for (const h of actor.ast || []) {
         if (h.type === 'Handler' && h.decorator === decorator) {
@@ -476,18 +936,20 @@
               continue;
             }
           }
-          tasks.push(this.execBlock(h.body, myRunId, actor, {}));
+          const scriptCtx = this._createScriptCtx(actor, myRunId);
+          tasks.push(this.execBlock(h.body, myRunId, actor, {}, false, scriptCtx));
         }
       }
       return tasks;
     }
 
     triggerKey(key) {
-      if (!this.isRunning && this.activeAst) {
+      if (!this.isRunning && (this.activeAst || this.actors.some((a) => a.ast && a.ast.length > 0))) {
         this.isRunning = true;
       }
       const myRunId = this.runId;
-      for (const actor of this.actors) {
+      for (const actor of [...this.actors]) {
+        if (actor._deleted) continue;
         this._triggerHandlersOnActor(actor, 'when_key_pressed', key, myRunId);
       }
     }
@@ -495,7 +957,8 @@
     triggerBackdrop(bgName) {
       const myRunId = this.runId;
       const tasks = [];
-      for (const actor of this.actors) {
+      for (const actor of [...this.actors]) {
+        if (actor._deleted) continue;
         tasks.push(...this._triggerHandlersOnActor(actor, 'when_backdrop_switches', bgName, myRunId));
       }
       return Promise.all(tasks);
@@ -504,10 +967,240 @@
     triggerBroadcast(msg) {
       const myRunId = this.runId;
       const tasks = [];
-      for (const actor of this.actors) {
-        tasks.push(...this._triggerHandlersOnActor(actor, 'when_message_received', msg, myRunId));
+      for (const actor of [...this.actors]) {
+        if (actor._deleted) continue;
+        tasks.push(...this._triggerBroadcastOnActor(actor, msg, myRunId));
       }
       return Promise.all(tasks);
+    }
+
+    _resolveVarAccess(name, isLocalFlag, actor, localScope, forWrite = false) {
+      const strName = String(name || '');
+      const rawName = strName.startsWith('self.') ? strName.slice(5) : strName;
+      const isExplicitLocal = Boolean(isLocalFlag || strName.startsWith('self.'));
+      if (!forWrite && !isExplicitLocal && localScope && Object.prototype.hasOwnProperty.call(localScope, rawName)) {
+        return { target: 'scope', name: rawName };
+      }
+      if (
+        actor &&
+        !actor.isStage &&
+        actor.localVars &&
+        (isExplicitLocal || Object.prototype.hasOwnProperty.call(actor.localVars, rawName))
+      ) {
+        return { target: 'local', name: rawName };
+      }
+      return { target: 'global', name: rawName };
+    }
+
+    _getListContainer(actor, listName, forceLocal = false, createIfMissing = false) {
+      if (forceLocal) {
+        if (actor && !actor.isStage) {
+          if (!actor.localLists) actor.localLists = {};
+          if (createIfMissing && !Array.isArray(actor.localLists[listName])) {
+            actor.localLists[listName] = [];
+          }
+          return actor.localLists;
+        }
+        if (createIfMissing && !Array.isArray(this.lists[listName])) {
+          this.lists[listName] = [];
+        }
+        return this.lists;
+      }
+      if (
+        actor &&
+        !actor.isStage &&
+        actor.localLists &&
+        Object.prototype.hasOwnProperty.call(actor.localLists, listName)
+      ) {
+        return actor.localLists;
+      }
+      if (createIfMissing && !Array.isArray(this.lists[listName])) {
+        this.lists[listName] = [];
+      }
+      return this.lists;
+    }
+
+    _listItem(arr, rawIdx) {
+      if (!Array.isArray(arr) || arr.length === 0) return '';
+      const key = String(rawIdx);
+      if (key === 'last') return arr[arr.length - 1];
+      if (key === 'random' || key === 'any') return arr[Math.floor(Math.random() * arr.length)];
+      if (key === 'all') return arr.join(' ');
+      const idx = Math.floor(Number(rawIdx)) - 1;
+      return Number.isFinite(idx) && idx >= 0 && idx < arr.length ? arr[idx] : '';
+    }
+
+    _listIndexOf(arr, item) {
+      if (!Array.isArray(arr) || arr.length === 0) return 0;
+      const target = String(item);
+      let idx = arr.findIndex((el) => String(el) === target);
+      if (idx < 0) idx = arr.findIndex((el) => String(el).toLowerCase() === target.toLowerCase());
+      return idx >= 0 ? idx + 1 : 0;
+    }
+
+    _listDelete(container, listName, rawIdx) {
+      const arr = container[listName];
+      if (!Array.isArray(arr)) return;
+      const key = String(rawIdx);
+      if (key === 'all') {
+        container[listName] = [];
+        return;
+      }
+      if (key === 'last') {
+        if (arr.length > 0) arr.pop();
+        return;
+      }
+      if (key === 'random' || key === 'any') {
+        if (arr.length > 0) arr.splice(Math.floor(Math.random() * arr.length), 1);
+        return;
+      }
+      const idx = Math.floor(Number(rawIdx)) - 1;
+      if (Number.isFinite(idx) && idx >= 0 && idx < arr.length) arr.splice(idx, 1);
+    }
+
+    _listInsert(arr, rawIdx, val) {
+      if (!Array.isArray(arr)) return;
+      const key = String(rawIdx);
+      if (key === 'last') {
+        arr.push(val);
+        return;
+      }
+      if (key === 'random' || key === 'any') {
+        arr.splice(Math.floor(Math.random() * (arr.length + 1)), 0, val);
+        return;
+      }
+      const num = Math.floor(Number(rawIdx));
+      if (!Number.isFinite(num)) return;
+      const idx = Math.max(0, Math.min(arr.length, num - 1));
+      arr.splice(idx, 0, val);
+    }
+
+    _listReplace(arr, rawIdx, val) {
+      if (!Array.isArray(arr) || arr.length === 0) return;
+      const key = String(rawIdx);
+      if (key === 'last') {
+        arr[arr.length - 1] = val;
+        return;
+      }
+      if (key === 'random' || key === 'any') {
+        arr[Math.floor(Math.random() * arr.length)] = val;
+        return;
+      }
+      if (key === 'all') {
+        for (let i = 0; i < arr.length; i++) arr[i] = val;
+        return;
+      }
+      const idx = Math.floor(Number(rawIdx)) - 1;
+      if (Number.isFinite(idx) && idx >= 0 && idx < arr.length) arr[idx] = val;
+    }
+
+    _parseColorToRgb(color) {
+      const s = String(color || '').trim();
+      let m = /^#([0-9a-f]{6})$/i.exec(s);
+      if (m) {
+        const n = parseInt(m[1], 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      }
+      m = /^#([0-9a-f]{3})$/i.exec(s);
+      if (m) {
+        return [
+          parseInt(m[1][0] + m[1][0], 16),
+          parseInt(m[1][1] + m[1][1], 16),
+          parseInt(m[1][2] + m[1][2], 16)
+        ];
+      }
+      m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(s);
+      if (m) {
+        return [Number(m[1]), Number(m[2]), Number(m[3])];
+      }
+      return null;
+    }
+
+    _rgbToHsl(r, g, b) {
+      const rn = r / 255;
+      const gn = g / 255;
+      const bn = b / 255;
+      const max = Math.max(rn, gn, bn);
+      const min = Math.min(rn, gn, bn);
+      const l = (max + min) / 2;
+      let h = 0;
+      let s = 0;
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0);
+        else if (max === gn) h = (bn - rn) / d + 2;
+        else h = (rn - gn) / d + 4;
+        h *= 60;
+      }
+      return { h, s: s * 100, l: l * 100, a: 1 };
+    }
+
+    _syncPenColorFromHsl(actor) {
+      const hsl = actor.penHsl || (actor.penHsl = { h: 168, s: 100, l: 50, a: 1 });
+      const h = Math.round(((hsl.h % 360) + 360) % 360);
+      const s = Math.round(Math.max(0, Math.min(100, hsl.s)));
+      const l = Math.round(Math.max(0, Math.min(100, hsl.l)));
+      const a = Number(Math.max(0, Math.min(1, hsl.a)).toFixed(3));
+      actor.penColor = `hsla(${h}, ${s}%, ${l}%, ${a})`;
+    }
+
+    _colorsMatch(r1, g1, b1, r2, g2, b2) {
+      return Math.abs(r1 - r2) <= 16 && Math.abs(g1 - g2) <= 16 && Math.abs(b1 - b2) <= 16;
+    }
+
+    _getActorPixelBox(actor) {
+      const cx = Math.round(this.toCanvasX(actor.x));
+      const cy = Math.round(this.toCanvasY(actor.y));
+      const { halfW, halfH } = this._getActorHalfSize(actor);
+      const pad = 4;
+      const x0 = Math.max(0, Math.floor(cx - halfW - pad));
+      const y0 = Math.max(0, Math.floor(cy - halfH - pad));
+      const x1 = Math.min(480, Math.ceil(cx + halfW + pad));
+      const y1 = Math.min(360, Math.ceil(cy + halfH + pad));
+      return {
+        x0,
+        y0,
+        sw: Math.max(0, x1 - x0),
+        sh: Math.max(0, y1 - y0)
+      };
+    }
+
+    _resolveTargetPoint(dest) {
+      if (dest === 'random' || dest === '_random_') {
+        return {
+          x: Math.floor(Math.random() * 440) - 220,
+          y: Math.floor(Math.random() * 320) - 160
+        };
+      }
+      if (dest === 'mouse' || dest === '_mouse_') {
+        return { x: this.mouseX, y: this.mouseY };
+      }
+      const other =
+        this.actors.find((a) => !a.isClone && a.name === dest) ||
+        this.actors.find((a) => a.name === dest);
+      if (other) {
+        return { x: other.x, y: other.y };
+      }
+      return null;
+    }
+
+    _applySwitchBackdrop(bgArg) {
+      const bg = String(bgArg);
+      if (bg === 'next backdrop' && this.backdrops.length > 0) {
+        const idx = (this.backdrops.indexOf(this.currentBackdrop) + 1) % this.backdrops.length;
+        this.currentBackdrop = this.backdrops[idx];
+      } else if (bg === 'previous backdrop' && this.backdrops.length > 0) {
+        const idx = (this.backdrops.indexOf(this.currentBackdrop) - 1 + this.backdrops.length) % this.backdrops.length;
+        this.currentBackdrop = this.backdrops[idx];
+      } else if (bg === 'random backdrop' && this.backdrops.length > 0) {
+        this.currentBackdrop = this.backdrops[Math.floor(Math.random() * this.backdrops.length)];
+      } else if (!this.backdrops.includes(bg) && typeof bgArg === 'number' && this.backdrops.length > 0 && bgArg >= 1) {
+        this.currentBackdrop = this.backdrops[(Math.floor(bgArg) - 1) % this.backdrops.length];
+      } else {
+        this.currentBackdrop = bg;
+      }
+      if (this.onBackdropChange) this.onBackdropChange(this.currentBackdrop);
     }
 
     evalExpr(expr, actor = this.sprite, localScope = {}) {
@@ -519,11 +1212,14 @@
           return expr.value;
         case 'Bool':
           return expr.value;
-        case 'Var':
-          if (localScope && Object.prototype.hasOwnProperty.call(localScope, expr.name)) {
-            return localScope[expr.name];
+        case 'Var': {
+          const acc = this._resolveVarAccess(expr.name, expr.isLocal, actor, localScope, false);
+          if (acc.target === 'scope') return localScope[acc.name];
+          if (acc.target === 'local') {
+            return actor.localVars[acc.name] !== undefined ? actor.localVars[acc.name] : 0;
           }
-          return this.vars[expr.name] !== undefined ? this.vars[expr.name] : 0;
+          return this.vars[acc.name] !== undefined ? this.vars[acc.name] : 0;
+        }
         case 'UnaryOp':
           if (expr.op === '-') return -Number(this.evalExpr(expr.expr, actor, localScope));
           if (expr.op === 'not') return !this.evalExpr(expr.expr, actor, localScope);
@@ -568,6 +1264,55 @@
             case 'mouse_y': return this.mouseY;
             case 'mouse_down': return this.mouseDown;
             case 'timer': return Number(((Date.now() - this.startTime) / 1000).toFixed(2));
+            case 'loudness': return 0;
+            case 'username': return 'player';
+            case 'days_since_2000':
+              return (Date.now() - Date.UTC(2000, 0, 1, 0, 0, 0)) / 86400000;
+            case 'current_time':
+            case 'current': {
+              const d = new Date();
+              const unit = String(evalArg(0)).toLowerCase();
+              if (unit === 'year') return d.getFullYear();
+              if (unit === 'month') return d.getMonth() + 1;
+              if (unit === 'date') return d.getDate();
+              if (unit === 'dayofweek') return d.getDay() + 1;
+              if (unit === 'hour') return d.getHours();
+              if (unit === 'minute') return d.getMinutes();
+              if (unit === 'second') return d.getSeconds();
+              return 0;
+            }
+            case 'attribute_of': {
+              const attr = String(evalArg(0));
+              const targetName = String(evalArg(1));
+              const target =
+                targetName === '_stage_' || targetName.toLowerCase() === 'stage'
+                  ? this.actors.find((a) => a.isStage)
+                  : this.actors.find((a) => !a.isClone && a.name === targetName) ||
+                    this.actors.find((a) => a.name === targetName);
+              if (!target) return 0;
+              if (target.isStage) {
+                if (attr === 'backdrop #' || attr === 'backdrop number') {
+                  return Math.max(1, this.backdrops.indexOf(this.currentBackdrop) + 1);
+                }
+                if (attr === 'backdrop name') return this.currentBackdrop;
+                if (attr === 'volume') return target.volume;
+                return Object.prototype.hasOwnProperty.call(this.vars, attr) ? this.vars[attr] : 0;
+              }
+              if (attr === 'x position') return Math.round(target.x);
+              if (attr === 'y position') return Math.round(target.y);
+              if (attr === 'direction') return Math.round(target.direction);
+              if (attr === 'costume #' || attr === 'costume number') return (target.currentCostume || 0) + 1;
+              if (attr === 'costume name') {
+                const c = target.costumes && target.costumes[target.currentCostume];
+                return c ? c.name : '';
+              }
+              if (attr === 'size') return Math.round(target.size);
+              if (attr === 'volume') return target.volume;
+              if (target.localVars && Object.prototype.hasOwnProperty.call(target.localVars, attr)) {
+                return target.localVars[attr];
+              }
+              return Object.prototype.hasOwnProperty.call(this.vars, attr) ? this.vars[attr] : 0;
+            }
             case 'random': {
               const a = Number(evalArg(0));
               const b = Number(evalArg(1));
@@ -582,6 +1327,10 @@
               return idx >= 0 && idx < s.length ? s[idx] : '';
             }
             case 'length_of': return String(evalArg(0)).length;
+            case 'len': {
+              const v = evalArg(0);
+              return Array.isArray(v) ? v.length : String(v).length;
+            }
             case 'contains':
               return String(evalArg(0)).toLowerCase().includes(String(evalArg(1)).toLowerCase());
             case 'round_num':
@@ -595,15 +1344,30 @@
             case 'sin': return Number(Math.sin((Number(evalArg(0)) * Math.PI) / 180).toFixed(4));
             case 'cos': return Number(Math.cos((Number(evalArg(0)) * Math.PI) / 180).toFixed(4));
             case 'tan': return Number(Math.tan((Number(evalArg(0)) * Math.PI) / 180).toFixed(4));
+            case 'asin': return (Math.asin(Number(evalArg(0))) * 180) / Math.PI;
+            case 'acos': return (Math.acos(Number(evalArg(0))) * 180) / Math.PI;
+            case 'atan': return (Math.atan(Number(evalArg(0))) * 180) / Math.PI;
+            case 'ln': return Math.log(Number(evalArg(0)));
+            case 'log': return Math.log10(Number(evalArg(0)));
+            case 'exp': return Math.exp(Number(evalArg(0)));
+            case 'pow10': return Math.pow(10, Number(evalArg(0)));
             case 'math_op': {
               const op = String(evalArg(0));
               const v = Number(evalArg(1));
               if (op === 'abs') return Math.abs(v);
               if (op === 'floor') return Math.floor(v);
-              if (op === 'ceiling') return Math.ceil(v);
+              if (op === 'ceiling' || op === 'ceil') return Math.ceil(v);
               if (op === 'sqrt') return Math.sqrt(Math.max(0, v));
-              if (op === 'sin') return Math.sin((v * Math.PI) / 180);
-              if (op === 'cos') return Math.cos((v * Math.PI) / 180);
+              if (op === 'sin') return Number(Math.sin((v * Math.PI) / 180).toFixed(10));
+              if (op === 'cos') return Number(Math.cos((v * Math.PI) / 180).toFixed(10));
+              if (op === 'tan') return Number(Math.tan((v * Math.PI) / 180).toFixed(10));
+              if (op === 'asin') return (Math.asin(v) * 180) / Math.PI;
+              if (op === 'acos') return (Math.acos(v) * 180) / Math.PI;
+              if (op === 'atan') return (Math.atan(v) * 180) / Math.PI;
+              if (op === 'ln') return Math.log(v);
+              if (op === 'log') return Math.log10(v);
+              if (op === 'e ^') return Math.exp(v);
+              if (op === '10 ^') return Math.pow(10, v);
               return v;
             }
             case 'key_pressed': {
@@ -614,14 +1378,77 @@
             case 'touching': {
               const target = String(evalArg(0));
               if (target === 'edge' || target === '_edge_') {
-                return Math.abs(actor.x) >= 225 || Math.abs(actor.y) >= 165;
+                const { halfW, halfH } = this._getActorHalfSize(actor);
+                return Math.abs(actor.x) >= 240 - halfW || Math.abs(actor.y) >= 180 - halfH;
               }
               if (target === 'mouse' || target === '_mouse_') {
                 return Math.hypot(actor.x - this.mouseX, actor.y - this.mouseY) <= 24 * (actor.size / 100);
               }
-              const other = this.actors.find((a) => a.name === target && a.visible);
-              if (other) {
-                return Math.hypot(actor.x - other.x, actor.y - other.y) <= 32 * ((actor.size + other.size) / 200);
+              const matches = this.actors.filter((a) => a !== actor && !a.isStage && a.name === target && a.visible);
+              return matches.some(
+                (other) => Math.hypot(actor.x - other.x, actor.y - other.y) <= 32 * ((actor.size + other.size) / 200)
+              );
+            }
+            case 'touching_color': {
+              if (!this.ctx || typeof this.ctx.getImageData !== 'function' || !actor || !actor.visible) return false;
+              const targetRgb = this._parseColorToRgb(evalArg(0));
+              if (!targetRgb) return false;
+              const { x0, y0, sw, sh } = this._getActorPixelBox(actor);
+              if (sw <= 0 || sh <= 0) return false;
+              try {
+                const img = this.ctx.getImageData(x0, y0, sw, sh);
+                const data = img && img.data;
+                if (!data) return false;
+                for (let i = 0; i < data.length; i += 4) {
+                  if (
+                    data[i + 3] > 0 &&
+                    this._colorsMatch(data[i], data[i + 1], data[i + 2], targetRgb[0], targetRgb[1], targetRgb[2])
+                  ) {
+                    return true;
+                  }
+                }
+              } catch (_) {
+                return false;
+              }
+              return false;
+            }
+            case 'color_is_touching_color': {
+              if (!this.ctx || typeof this.ctx.getImageData !== 'function' || !actor || !actor.visible) return false;
+              const rgb1 = this._parseColorToRgb(evalArg(0));
+              const rgb2 = this._parseColorToRgb(evalArg(1));
+              if (!rgb1 || !rgb2) return false;
+              const { x0, y0, sw, sh } = this._getActorPixelBox(actor);
+              if (sw <= 0 || sh <= 0) return false;
+              try {
+                const img = this.ctx.getImageData(x0, y0, sw, sh);
+                const data = img && img.data;
+                if (!data) return false;
+                const sameColor = this._colorsMatch(rgb1[0], rgb1[1], rgb1[2], rgb2[0], rgb2[1], rgb2[2]);
+                for (let py = 0; py < sh; py++) {
+                  for (let px = 0; px < sw; px++) {
+                    const idx = (py * sw + px) * 4;
+                    if (data[idx + 3] === 0) continue;
+                    if (!this._colorsMatch(data[idx], data[idx + 1], data[idx + 2], rgb1[0], rgb1[1], rgb1[2])) continue;
+                    for (let dy = -2; dy <= 2; dy++) {
+                      const ny = py + dy;
+                      if (ny < 0 || ny >= sh) continue;
+                      for (let dx = -2; dx <= 2; dx++) {
+                        if (!sameColor && dx === 0 && dy === 0) continue;
+                        const nx = px + dx;
+                        if (nx < 0 || nx >= sw) continue;
+                        const nIdx = (ny * sw + nx) * 4;
+                        if (
+                          data[nIdx + 3] > 0 &&
+                          this._colorsMatch(data[nIdx], data[nIdx + 1], data[nIdx + 2], rgb2[0], rgb2[1], rgb2[2])
+                        ) {
+                          return true;
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (_) {
+                return false;
               }
               return false;
             }
@@ -630,25 +1457,44 @@
               if (target === 'mouse' || target === '_mouse_') {
                 return Math.round(Math.hypot(actor.x - this.mouseX, actor.y - this.mouseY));
               }
-              const other = this.actors.find((a) => a.name === target);
+              const other =
+                this.actors.find((a) => !a.isClone && a.name === target) ||
+                this.actors.find((a) => a.name === target);
               if (other) {
                 return Math.round(Math.hypot(actor.x - other.x, actor.y - other.y));
               }
               return 0;
             }
-            case 'list_item': {
-              const arr = this.lists[String(evalArg(0))] || [];
-              const idx = Math.floor(Number(evalArg(1))) - 1;
-              return arr[idx] !== undefined ? arr[idx] : '';
+            case 'list_item':
+            case 'local_list_item': {
+              const forceLocal = expr.name.startsWith('local_');
+              const listName = String(evalArg(0));
+              const container = this._getListContainer(actor, listName, forceLocal, false);
+              return this._listItem(container[listName] || [], evalArg(1));
             }
-            case 'list_length': {
-              const arr = this.lists[String(evalArg(0))] || [];
+            case 'list_length':
+            case 'local_list_length': {
+              const forceLocal = expr.name.startsWith('local_');
+              const listName = String(evalArg(0));
+              const container = this._getListContainer(actor, listName, forceLocal, false);
+              const arr = container[listName] || [];
               return arr.length;
             }
-            case 'list_contains': {
-              const arr = this.lists[String(evalArg(0))] || [];
+            case 'list_contains':
+            case 'local_list_contains': {
+              const forceLocal = expr.name.startsWith('local_');
+              const listName = String(evalArg(0));
+              const container = this._getListContainer(actor, listName, forceLocal, false);
+              const arr = container[listName] || [];
               const item = String(evalArg(1));
-              return arr.some((el) => String(el) === item);
+              return arr.some((el) => String(el) === item || String(el).toLowerCase() === item.toLowerCase());
+            }
+            case 'list_index_of':
+            case 'local_list_index_of': {
+              const forceLocal = expr.name.startsWith('local_');
+              const listName = String(evalArg(0));
+              const container = this._getListContainer(actor, listName, forceLocal, false);
+              return this._listIndexOf(container[listName] || [], evalArg(1));
             }
           }
           return 0;
@@ -678,56 +1524,145 @@
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    async execBlock(stmts, myRunId, actor = this.sprite, localScope = {}) {
+    async _sleepCancellable(ms, scriptCtx) {
+      if (ms <= 0) return !(scriptCtx && scriptCtx.isStopped());
+      const end = Date.now() + ms;
+      while (true) {
+        if (scriptCtx && scriptCtx.isStopped()) return false;
+        const remaining = end - Date.now();
+        if (remaining <= 0) return true;
+        await this.sleep(Math.min(50, remaining));
+      }
+    }
+
+    async _glideToCoords(actor, secs, targetX, targetY, warpMode, scriptCtx) {
+      if (secs <= 0) {
+        this.moveActorTo(actor, targetX, targetY);
+        return true;
+      }
+      const startX = actor.x;
+      const startY = actor.y;
+      const steps = Math.max(1, Math.floor((secs * 1000) / 16));
+      for (let i = 1; i <= steps; i++) {
+        if (scriptCtx && scriptCtx.isStopped()) return false;
+        const t = i / steps;
+        this.moveActorTo(actor, startX + (targetX - startX) * t, startY + (targetY - startY) * t);
+        if (!warpMode) this.render();
+        const ok = await this._sleepCancellable(16, scriptCtx);
+        if (!ok) return false;
+      }
+      return true;
+    }
+
+    async execBlock(stmts, myRunId, actor = this.sprite, localScope = {}, warpMode = false, scriptCtx = null) {
+      if (!scriptCtx) scriptCtx = this._createScriptCtx(actor, myRunId);
+      let warpYieldAt = Date.now() + 500;
+
       for (const stmt of stmts) {
-        if (this.runId !== myRunId || actor._deleted) return;
+        if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
 
         if (stmt.type === 'Pass') {
           continue;
         } else if (stmt.type === 'Assign') {
-          this.vars[stmt.name] = this.evalExpr(stmt.value, actor, localScope);
+          const val = this.evalExpr(stmt.value, actor, localScope);
+          const acc = this._resolveVarAccess(stmt.name, stmt.isLocal, actor, localScope, true);
+          if (acc.target === 'local') {
+            if (!actor.localVars) actor.localVars = {};
+            actor.localVars[acc.name] = val;
+          } else {
+            this.vars[acc.name] = val;
+          }
         } else if (stmt.type === 'ChangeVar') {
-          this.vars[stmt.name] =
-            (Number(this.vars[stmt.name]) || 0) + Number(this.evalExpr(stmt.value, actor, localScope));
+          const delta = Number(this.evalExpr(stmt.value, actor, localScope));
+          const acc = this._resolveVarAccess(stmt.name, stmt.isLocal, actor, localScope, true);
+          if (acc.target === 'local') {
+            if (!actor.localVars) actor.localVars = {};
+            actor.localVars[acc.name] = (Number(actor.localVars[acc.name]) || 0) + delta;
+          } else {
+            this.vars[acc.name] = (Number(this.vars[acc.name]) || 0) + delta;
+          }
         } else if (stmt.type === 'Repeat') {
           const count = Math.max(0, Math.floor(Number(this.evalExpr(stmt.count, actor, localScope))));
+          const hasPrevLoopVar = stmt.loopVar && Object.prototype.hasOwnProperty.call(localScope, stmt.loopVar);
+          const prevLoopVal = hasPrevLoopVar ? localScope[stmt.loopVar] : undefined;
           for (let i = 0; i < count; i++) {
-            if (this.runId !== myRunId || actor._deleted) return;
-            await this.execBlock(stmt.body, myRunId, actor, localScope);
-            this.render();
-            this._emitTelemetry(actor);
-            await this.sleep(16);
+            if (scriptCtx.isStopped()) {
+              if (stmt.loopVar) {
+                if (hasPrevLoopVar) localScope[stmt.loopVar] = prevLoopVal;
+                else delete localScope[stmt.loopVar];
+              }
+              return 'RETURN_SCRIPT';
+            }
+            if (stmt.loopVar) {
+              localScope[stmt.loopVar] = i;
+            }
+            const res = await this.execBlock(stmt.body, myRunId, actor, localScope, warpMode, scriptCtx);
+            if (res === 'RETURN_SCRIPT' || scriptCtx.isStopped()) {
+              if (stmt.loopVar) {
+                if (hasPrevLoopVar) localScope[stmt.loopVar] = prevLoopVal;
+                else delete localScope[stmt.loopVar];
+              }
+              return 'RETURN_SCRIPT';
+            }
+            if (!warpMode) {
+              this.render();
+              this._emitTelemetry(actor);
+              await this.sleep(16);
+            } else if (Date.now() > warpYieldAt) {
+              await this.sleep(0);
+              warpYieldAt = Date.now() + 500;
+            }
+          }
+          if (stmt.loopVar) {
+            if (hasPrevLoopVar) localScope[stmt.loopVar] = prevLoopVal;
+            else delete localScope[stmt.loopVar];
           }
         } else if (stmt.type === 'Forever') {
-          while (this.runId === myRunId && !actor._deleted) {
-            await this.execBlock(stmt.body, myRunId, actor, localScope);
-            this.render();
-            this._emitTelemetry(actor);
+          while (!scriptCtx.isStopped()) {
+            const res = await this.execBlock(stmt.body, myRunId, actor, localScope, warpMode, scriptCtx);
+            if (res === 'RETURN_SCRIPT' || scriptCtx.isStopped()) return 'RETURN_SCRIPT';
+            if (!warpMode) {
+              this.render();
+              this._emitTelemetry(actor);
+            }
             await this.sleep(16);
           }
+          return 'RETURN_SCRIPT';
         } else if (stmt.type === 'RepeatUntil') {
-          while (this.runId === myRunId && !actor._deleted && !this.evalExpr(stmt.cond, actor, localScope)) {
-            await this.execBlock(stmt.body, myRunId, actor, localScope);
-            this.render();
-            this._emitTelemetry(actor);
-            await this.sleep(16);
+          while (!scriptCtx.isStopped() && !this.evalExpr(stmt.cond, actor, localScope)) {
+            const res = await this.execBlock(stmt.body, myRunId, actor, localScope, warpMode, scriptCtx);
+            if (res === 'RETURN_SCRIPT' || scriptCtx.isStopped()) return 'RETURN_SCRIPT';
+            if (!warpMode) {
+              this.render();
+              this._emitTelemetry(actor);
+              await this.sleep(16);
+            } else if (Date.now() > warpYieldAt) {
+              await this.sleep(0);
+              warpYieldAt = Date.now() + 500;
+            }
           }
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
         } else if (stmt.type === 'If') {
           if (this.evalExpr(stmt.cond, actor, localScope)) {
-            await this.execBlock(stmt.thenBody, myRunId, actor, localScope);
+            const res = await this.execBlock(stmt.thenBody, myRunId, actor, localScope, warpMode, scriptCtx);
+            if (res === 'RETURN_SCRIPT') return 'RETURN_SCRIPT';
           } else if (stmt.elseBody) {
-            await this.execBlock(stmt.elseBody, myRunId, actor, localScope);
+            const res = await this.execBlock(stmt.elseBody, myRunId, actor, localScope, warpMode, scriptCtx);
+            if (res === 'RETURN_SCRIPT') return 'RETURN_SCRIPT';
           }
         } else if (stmt.type === 'Call') {
-          const stopSignal = await this.execCall(stmt, myRunId, actor, localScope);
-          if (stopSignal === 'RETURN_SCRIPT') return;
+          const stopSignal = await this.execCall(stmt, myRunId, actor, localScope, warpMode, scriptCtx);
+          if (stopSignal === 'RETURN_SCRIPT' || scriptCtx.isStopped()) return 'RETURN_SCRIPT';
         }
-        this.render();
-        this._emitTelemetry(actor);
+        if (!warpMode) {
+          this.render();
+          this._emitTelemetry(actor);
+        }
       }
     }
 
-    async execCall(stmt, myRunId, actor = this.sprite, localScope = {}) {
+    async execCall(stmt, myRunId, actor = this.sprite, localScope = {}, warpMode = false, scriptCtx = null) {
+      if (!scriptCtx) scriptCtx = this._createScriptCtx(actor, myRunId);
       const arg = (i) => this.evalExpr(stmt.args[i], actor, localScope);
 
       if (actor.procedures && actor.procedures[stmt.name]) {
@@ -736,7 +1671,13 @@
         proc.params.forEach((pName, idx) => {
           childScope[pName] = arg(idx);
         });
-        await this.execBlock(proc.body, myRunId, actor, childScope);
+        const isWarp = Boolean(warpMode || proc.warp);
+        const res = await this.execBlock(proc.body, myRunId, actor, childScope, isWarp, scriptCtx);
+        if (!warpMode && proc.warp) {
+          this.render();
+          this._emitTelemetry(actor);
+        }
+        if (res === 'RETURN_SCRIPT') return 'RETURN_SCRIPT';
         return;
       }
 
@@ -765,10 +1706,10 @@
           let tx = this.mouseX;
           let ty = this.mouseY;
           if (dest !== 'mouse' && dest !== '_mouse_') {
-            const other = this.actors.find((a) => a.name === dest);
-            if (other) {
-              tx = other.x;
-              ty = other.y;
+            const pt = this._resolveTargetPoint(dest);
+            if (pt) {
+              tx = pt.x;
+              ty = pt.y;
             }
           }
           const dx = tx - actor.x;
@@ -778,15 +1719,8 @@
         }
         case 'goto':
           if (stmt.args.length === 1) {
-            const dest = String(arg(0));
-            if (dest === 'random' || dest === '_random_') {
-              this.moveActorTo(actor, Math.floor(Math.random() * 440) - 220, Math.floor(Math.random() * 320) - 160);
-            } else if (dest === 'mouse' || dest === '_mouse_') {
-              this.moveActorTo(actor, this.mouseX, this.mouseY);
-            } else {
-              const other = this.actors.find((a) => a.name === dest);
-              if (other) this.moveActorTo(actor, other.x, other.y);
-            }
+            const pt = this._resolveTargetPoint(String(arg(0)));
+            if (pt) this.moveActorTo(actor, pt.x, pt.y);
           } else {
             this.moveActorTo(actor, Number(arg(0)), Number(arg(1)));
           }
@@ -799,18 +1733,25 @@
           break;
         case 'glide': {
           const secs = Math.max(0, Number(arg(0)));
-          const targetX = Number(arg(1));
-          const targetY = Number(arg(2));
-          const startX = actor.x;
-          const startY = actor.y;
-          const steps = Math.max(1, Math.floor((secs * 1000) / 16));
-          for (let i = 1; i <= steps; i++) {
-            if (this.runId !== myRunId || actor._deleted) return;
-            const t = i / steps;
-            this.moveActorTo(actor, startX + (targetX - startX) * t, startY + (targetY - startY) * t);
-            this.render();
-            await this.sleep(16);
+          if (stmt.args.length === 2) {
+            const pt = this._resolveTargetPoint(String(arg(1)));
+            const targetX = pt ? pt.x : actor.x;
+            const targetY = pt ? pt.y : actor.y;
+            const ok = await this._glideToCoords(actor, secs, targetX, targetY, warpMode, scriptCtx);
+            if (!ok) return 'RETURN_SCRIPT';
+          } else {
+            const ok = await this._glideToCoords(actor, secs, Number(arg(1)), Number(arg(2)), warpMode, scriptCtx);
+            if (!ok) return 'RETURN_SCRIPT';
           }
+          break;
+        }
+        case 'glide_to': {
+          const secs = Math.max(0, Number(arg(0)));
+          const pt = this._resolveTargetPoint(String(arg(1)));
+          const targetX = pt ? pt.x : actor.x;
+          const targetY = pt ? pt.y : actor.y;
+          const ok = await this._glideToCoords(actor, secs, targetX, targetY, warpMode, scriptCtx);
+          if (!ok) return 'RETURN_SCRIPT';
           break;
         }
         case 'set_x':
@@ -825,16 +1766,35 @@
         case 'change_y':
           this.moveActorTo(actor, actor.x, actor.y + Number(arg(0)));
           break;
-        case 'if_on_edge_bounce':
-          if (actor.x <= -225 || actor.x >= 225) {
-            actor.direction = -actor.direction;
-            actor.x = Math.max(-224, Math.min(224, actor.x));
+        case 'if_on_edge_bounce': {
+          const { halfW, halfH } = this._getActorHalfSize(actor);
+          const minX = -240 + halfW;
+          const maxX = 240 - halfW;
+          const minY = -180 + halfH;
+          const maxY = 180 - halfH;
+          const dirRad = (actor.direction * Math.PI) / 180;
+          let dx = Math.sin(dirRad);
+          let dy = Math.cos(dirRad);
+          let bounced = false;
+          if (actor.x <= minX) {
+            actor.x = minX;
+            if (dx < -1e-9) { dx = -dx; bounced = true; }
+          } else if (actor.x >= maxX) {
+            actor.x = maxX;
+            if (dx > 1e-9) { dx = -dx; bounced = true; }
           }
-          if (actor.y <= -165 || actor.y >= 165) {
-            actor.direction = 180 - actor.direction;
-            actor.y = Math.max(-164, Math.min(164, actor.y));
+          if (actor.y <= minY) {
+            actor.y = minY;
+            if (dy < -1e-9) { dy = -dy; bounced = true; }
+          } else if (actor.y >= maxY) {
+            actor.y = maxY;
+            if (dy > 1e-9) { dy = -dy; bounced = true; }
+          }
+          if (bounced) {
+            actor.direction = (Math.atan2(dx, dy) * 180) / Math.PI;
           }
           break;
+        }
         case 'set_rotation_style':
           actor.rotationStyle = String(arg(0));
           break;
@@ -851,9 +1811,35 @@
         case 'pen_up':
           actor.penDown = false;
           break;
-        case 'set_pen_color':
-          actor.penColor = String(arg(0));
+        case 'set_pen_color': {
+          const c = String(arg(0));
+          actor.penColor = c;
+          const rgb = this._parseColorToRgb(c);
+          if (rgb) actor.penHsl = this._rgbToHsl(rgb[0], rgb[1], rgb[2]);
           break;
+        }
+        case 'set_pen_param': {
+          const param = String(arg(0)).toLowerCase();
+          const val = Number(arg(1)) || 0;
+          if (!actor.penHsl) actor.penHsl = { h: 168, s: 100, l: 50, a: 1 };
+          if (param === 'color') actor.penHsl.h = (((val % 100) + 100) % 100) * 3.6;
+          else if (param === 'saturation') actor.penHsl.s = Math.max(0, Math.min(100, val));
+          else if (param === 'brightness') actor.penHsl.l = Math.max(0, Math.min(100, val));
+          else if (param === 'transparency') actor.penHsl.a = Math.max(0, Math.min(1, 1 - val / 100));
+          this._syncPenColorFromHsl(actor);
+          break;
+        }
+        case 'change_pen_param': {
+          const param = String(arg(0)).toLowerCase();
+          const delta = Number(arg(1)) || 0;
+          if (!actor.penHsl) actor.penHsl = { h: 168, s: 100, l: 50, a: 1 };
+          if (param === 'color') actor.penHsl.h = (((actor.penHsl.h + delta * 3.6) % 360) + 360) % 360;
+          else if (param === 'saturation') actor.penHsl.s = Math.max(0, Math.min(100, actor.penHsl.s + delta));
+          else if (param === 'brightness') actor.penHsl.l = Math.max(0, Math.min(100, actor.penHsl.l + delta));
+          else if (param === 'transparency') actor.penHsl.a = Math.max(0, Math.min(1, actor.penHsl.a - delta / 100));
+          this._syncPenColorFromHsl(actor);
+          break;
+        }
         case 'set_pen_size':
           actor.penSize = Math.max(1, Number(arg(0)));
           break;
@@ -873,19 +1859,77 @@
         case 'change_size':
           actor.size = Math.max(5, Math.min(500, actor.size + Number(arg(0))));
           break;
-        case 'set_effect':
-          if (String(arg(0)).toLowerCase() === 'color') actor.colorEffect = Number(arg(1));
+        case 'set_effect': {
+          const eff = String(arg(0)).toLowerCase();
+          const val = Number(arg(1)) || 0;
+          if (!actor.effects) {
+            actor.effects = { color: 0, ghost: 0, brightness: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0 };
+          }
+          actor.effects[eff] = val;
+          if (eff === 'color') actor.colorEffect = actor.effects.color;
           break;
-        case 'change_effect':
-          if (String(arg(0)).toLowerCase() === 'color') actor.colorEffect += Number(arg(1));
+        }
+        case 'change_effect': {
+          const eff = String(arg(0)).toLowerCase();
+          const delta = Number(arg(1)) || 0;
+          if (!actor.effects) {
+            actor.effects = { color: 0, ghost: 0, brightness: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0 };
+          }
+          actor.effects[eff] = (Number(actor.effects[eff]) || 0) + delta;
+          if (eff === 'color') actor.colorEffect = actor.effects.color;
           break;
+        }
         case 'clear_effects':
+          actor.effects = { color: 0, ghost: 0, brightness: 0, fisheye: 0, whirl: 0, pixelate: 0, mosaic: 0 };
           actor.colorEffect = 0;
           break;
+        case 'go_to_layer': {
+          if (actor.isStage) break;
+          const layer = String(arg(0)).toLowerCase();
+          this._normalizeLayerOrders();
+          const sprites = this._getSortedSprites().filter((a) => a !== actor);
+          if (layer === 'back') sprites.unshift(actor);
+          else sprites.push(actor);
+          sprites.forEach((a, idx) => { a.layerOrder = idx + 1; });
+          break;
+        }
+        case 'change_layer': {
+          if (actor.isStage) break;
+          const dir = String(arg(0)).toLowerCase();
+          const delta = Math.round(Number(arg(1))) || 0;
+          this._normalizeLayerOrders();
+          const sprites = this._getSortedSprites();
+          const curIdx = sprites.indexOf(actor);
+          if (curIdx >= 0) {
+            sprites.splice(curIdx, 1);
+            const targetIdx = Math.max(
+              0,
+              Math.min(sprites.length, dir === 'backward' ? curIdx - delta : curIdx + delta)
+            );
+            sprites.splice(targetIdx, 0, actor);
+            sprites.forEach((a, idx) => { a.layerOrder = idx + 1; });
+          }
+          break;
+        }
         case 'switch_costume': {
-          const cName = String(arg(0));
-          const idx = (actor.costumes || []).findIndex((c) => c.name === cName);
-          if (idx >= 0) actor.currentCostume = idx;
+          const cArg = arg(0);
+          const cName = String(cArg);
+          const costumes = actor.costumes || [];
+          const idx = costumes.findIndex((c) => c.name === cName);
+          if (idx >= 0) {
+            actor.currentCostume = idx;
+          } else if (costumes.length > 0) {
+            if (cName === 'next costume') {
+              actor.currentCostume = (actor.currentCostume + 1) % costumes.length;
+            } else if (cName === 'previous costume') {
+              actor.currentCostume = (actor.currentCostume - 1 + costumes.length) % costumes.length;
+            } else if (cName === 'random costume') {
+              actor.currentCostume = Math.floor(Math.random() * costumes.length);
+            } else if (typeof cArg === 'number' || /^\d+$/.test(cName)) {
+              const num = Math.floor(Number(cArg));
+              if (num >= 1) actor.currentCostume = (num - 1) % costumes.length;
+            }
+          }
           break;
         }
         case 'next_costume':
@@ -894,10 +1938,14 @@
           }
           break;
         case 'switch_backdrop': {
-          const bg = String(arg(0));
-          this.currentBackdrop = bg;
-          if (this.onBackdropChange) this.onBackdropChange(bg);
-          this.triggerBackdrop(bg);
+          this._applySwitchBackdrop(arg(0));
+          this.triggerBackdrop(this.currentBackdrop);
+          break;
+        }
+        case 'switch_backdrop_and_wait': {
+          this._applySwitchBackdrop(arg(0));
+          await this.triggerBackdrop(this.currentBackdrop);
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
           break;
         }
         case 'next_backdrop': {
@@ -908,28 +1956,56 @@
           break;
         }
         case 'say':
-        case 'think':
+        case 'think': {
+          const token = (actor._sayToken = (actor._sayToken || 0) + 1);
           actor.sayType = stmt.name;
           actor.sayText = String(arg(0));
           if (stmt.args.length >= 2) {
             const sec = Math.max(0, Number(arg(1)));
             actor.sayUntil = Date.now() + sec * 1000;
-            this.render();
-            await this.sleep(sec * 1000);
-            if (this.runId === myRunId) actor.sayText = '';
+            if (!warpMode) this.render();
+            const ok = await this._sleepCancellable(sec * 1000, scriptCtx);
+            if (actor._sayToken === token && this.runId === myRunId && !actor._deleted) {
+              actor.sayText = '';
+            }
+            if (!ok) return 'RETURN_SCRIPT';
           } else {
             actor.sayUntil = 0;
           }
           break;
+        }
 
         case 'play_sound':
-          this.playSynthSound(arg(0));
+          this.playProjectSound(arg(0), actor).catch(() => {});
           break;
         case 'play_sound_until_done':
-          this.playSynthSound(arg(0));
-          await this.sleep(140);
+          await this.playProjectSound(arg(0), actor);
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
           break;
         case 'stop_all_sounds':
+          this._stopAllSounds();
+          break;
+        case 'set_sound_effect': {
+          const eff = String(arg(0)).toLowerCase();
+          const val = Number(arg(1)) || 0;
+          if (!actor.soundEffects) actor.soundEffects = { pitch: 0, pan: 0 };
+          if (eff === 'pitch') actor.soundEffects.pitch = Math.max(-360, Math.min(360, val));
+          else if (eff === 'pan') actor.soundEffects.pan = Math.max(-100, Math.min(100, val));
+          else actor.soundEffects[eff] = val;
+          break;
+        }
+        case 'change_sound_effect': {
+          const eff = String(arg(0)).toLowerCase();
+          const delta = Number(arg(1)) || 0;
+          if (!actor.soundEffects) actor.soundEffects = { pitch: 0, pan: 0 };
+          const cur = Number(actor.soundEffects[eff]) || 0;
+          if (eff === 'pitch') actor.soundEffects.pitch = Math.max(-360, Math.min(360, cur + delta));
+          else if (eff === 'pan') actor.soundEffects.pan = Math.max(-100, Math.min(100, cur + delta));
+          else actor.soundEffects[eff] = cur + delta;
+          break;
+        }
+        case 'clear_sound_effects':
+          actor.soundEffects = { pitch: 0, pan: 0 };
           break;
         case 'set_volume':
           actor.volume = Math.max(0, Math.min(100, Number(arg(0))));
@@ -938,40 +2014,75 @@
           actor.volume = Math.max(0, Math.min(100, actor.volume + Number(arg(0))));
           break;
 
-        case 'wait':
-          await this.sleep(Math.max(0, Number(arg(0)) * 1000));
+        case 'wait': {
+          const ok = await this._sleepCancellable(Math.max(0, Number(arg(0)) * 1000), scriptCtx);
+          if (!ok) return 'RETURN_SCRIPT';
           break;
+        }
         case 'wait_until':
-          while (this.runId === myRunId && !actor._deleted && !this.evalExpr(stmt.args[0], actor, localScope)) {
+          while (!scriptCtx.isStopped() && !this.evalExpr(stmt.args[0], actor, localScope)) {
             await this.sleep(16);
           }
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
           break;
         case 'broadcast':
           this.triggerBroadcast(String(arg(0)));
           break;
         case 'broadcast_and_wait':
           await this.triggerBroadcast(String(arg(0)));
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
           break;
         case 'create_clone': {
-          if (this.actors.length > 150) break;
+          const cloneCount = this.actors.filter((a) => a.isClone).length;
+          if (cloneCount >= 300) break;
           const targetName = stmt.args.length > 0 ? String(arg(0)) : 'myself';
           const src =
             targetName === 'myself' || targetName === '_myself_'
               ? actor
-              : this.actors.find((a) => a.name === targetName) || actor;
+              : this.actors.find((a) => !a.isClone && a.name === targetName) ||
+                this.actors.find((a) => a.name === targetName) ||
+                null;
+          if (!src || src.isStage) break;
           const clone = {
             ...src,
+            localVars: { ...(src.localVars || {}) },
+            localLists: Object.fromEntries(
+              Object.entries(src.localLists || {}).map(([k, v]) => [k, Array.isArray(v) ? [...v] : []])
+            ),
+            effects: {
+              color: 0,
+              ghost: 0,
+              brightness: 0,
+              fisheye: 0,
+              whirl: 0,
+              pixelate: 0,
+              mosaic: 0,
+              ...(src.effects || {})
+            },
+            soundEffects: { pitch: 0, pan: 0, ...(src.soundEffects || {}) },
+            penHsl: { h: 168, s: 100, l: 50, a: 1, ...(src.penHsl || {}) },
+            layerOrder: src.layerOrder,
+            draggable: !!src.draggable,
+            _scriptGen: 0,
             isClone: true,
             sayText: '',
+            sayUntil: 0,
             _deleted: false
           };
-          this.actors.push(clone);
+          const srcIdx = this.actors.indexOf(src);
+          if (srcIdx >= 0) {
+            this.actors.splice(srcIdx, 0, clone);
+          } else {
+            this.actors.push(clone);
+          }
+          this._normalizeLayerOrders();
           this._triggerHandlersOnActor(clone, 'when_cloned', null, myRunId);
           break;
         }
         case 'delete_this_clone':
           if (actor.isClone) {
             actor._deleted = true;
+            if (this._draggingActor === actor) this._draggingActor = null;
             const idx = this.actors.indexOf(actor);
             if (idx >= 0) this.actors.splice(idx, 1);
             return 'RETURN_SCRIPT';
@@ -979,6 +2090,9 @@
           break;
         case 'reset_timer':
           this.startTime = Date.now();
+          break;
+        case 'set_drag_mode':
+          actor.draggable = String(arg(0)) === 'draggable';
           break;
         case 'ask': {
           const question = String(arg(0));
@@ -996,43 +2110,67 @@
             });
             this.answerValue = String(ans || '');
           }
-          if (this.runId === myRunId) actor.sayText = '';
+          if (this.runId === myRunId && !actor._deleted) actor.sayText = '';
+          if (scriptCtx.isStopped()) return 'RETURN_SCRIPT';
           break;
         }
-        case 'list_add': {
+        case 'local_list': {
           const listName = String(arg(0));
-          if (!this.lists[listName]) this.lists[listName] = [];
-          this.lists[listName].push(arg(1));
+          this._getListContainer(actor, listName, true, true);
           break;
         }
-        case 'list_delete': {
+        case 'list_add':
+        case 'local_list_add': {
+          const forceLocal = stmt.name.startsWith('local_');
           const listName = String(arg(0));
-          const arr = this.lists[listName];
-          if (Array.isArray(arr)) {
-            const idx = Math.floor(Number(arg(1))) - 1;
-            if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
-          }
+          const container = this._getListContainer(actor, listName, forceLocal, true);
+          container[listName].push(arg(1));
           break;
         }
-        case 'list_clear': {
+        case 'list_delete':
+        case 'local_list_delete': {
+          const forceLocal = stmt.name.startsWith('local_');
           const listName = String(arg(0));
-          this.lists[listName] = [];
+          const container = this._getListContainer(actor, listName, forceLocal, false);
+          this._listDelete(container, listName, arg(1));
           break;
         }
-        case 'list_insert': {
+        case 'list_clear':
+        case 'local_list_clear': {
+          const forceLocal = stmt.name.startsWith('local_');
           const listName = String(arg(0));
-          if (!this.lists[listName]) this.lists[listName] = [];
-          const idx = Math.max(0, Math.floor(Number(arg(1))) - 1);
-          this.lists[listName].splice(idx, 0, arg(2));
+          const container = this._getListContainer(actor, listName, forceLocal, true);
+          container[listName] = [];
           break;
         }
-        case 'list_replace': {
+        case 'list_insert':
+        case 'local_list_insert': {
+          const forceLocal = stmt.name.startsWith('local_');
           const listName = String(arg(0));
-          const arr = this.lists[listName];
-          if (Array.isArray(arr)) {
-            const idx = Math.floor(Number(arg(1))) - 1;
-            if (idx >= 0 && idx < arr.length) arr[idx] = arg(2);
-          }
+          const container = this._getListContainer(actor, listName, forceLocal, true);
+          this._listInsert(container[listName], arg(1), arg(2));
+          break;
+        }
+        case 'list_replace':
+        case 'local_list_replace': {
+          const forceLocal = stmt.name.startsWith('local_');
+          const listName = String(arg(0));
+          const container = this._getListContainer(actor, listName, forceLocal, false);
+          this._listReplace(container[listName], arg(1), arg(2));
+          break;
+        }
+        case 'show_variable':
+        case 'show_list': {
+          const mName = String(arg(0));
+          this.hiddenMonitors.delete(mName);
+          this.visibleMonitors.add(mName);
+          break;
+        }
+        case 'hide_variable':
+        case 'hide_list': {
+          const mName = String(arg(0));
+          this.hiddenMonitors.add(mName);
+          this.visibleMonitors.delete(mName);
           break;
         }
         case 'stop': {
@@ -1040,8 +2178,15 @@
           if (opt === 'this script') {
             return 'RETURN_SCRIPT';
           }
+          if (opt === 'other scripts in sprite' || opt === 'other scripts in stage') {
+            actor._scriptGen = (actor._scriptGen || 0) + 1;
+            if (scriptCtx) scriptCtx.gen = actor._scriptGen;
+            break;
+          }
           this.isRunning = false;
           this.runId++;
+          this._stopAllSounds();
+          this._clearGreaterThanWatcher();
           return 'RETURN_SCRIPT';
         }
       }

@@ -326,6 +326,332 @@
     return newSprite;
   }
 
+  function toUint8Array(data) {
+    if (data instanceof Uint8Array) return data;
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    if (ArrayBuffer.isView(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    throw new Error('Очікувались бінарні дані (Uint8Array або ArrayBuffer).');
+  }
+
+  function makeUniqueName(existingNames, rawName, fallback) {
+    const base = String(rawName || '').trim() || fallback;
+    let candidate = base;
+    let n = 2;
+    while (existingNames.has(candidate)) {
+      candidate = `${base}_${n++}`;
+    }
+    return candidate;
+  }
+
+  function parseSvgDimensions(svgText) {
+    const vbMatch = svgText.match(/viewBox\s*=\s*["']\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)\s*["']/i);
+    if (vbMatch) {
+      const w = parseFloat(vbMatch[1]);
+      const h = parseFloat(vbMatch[2]);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        return { width: w, height: h };
+      }
+    }
+    const wMatch = svgText.match(/\bwidth\s*=\s*["']\s*([\d.]+)/i);
+    const hMatch = svgText.match(/\bheight\s*=\s*["']\s*([\d.]+)/i);
+    if (wMatch && hMatch) {
+      const w = parseFloat(wMatch[1]);
+      const h = parseFloat(hMatch[1]);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        return { width: w, height: h };
+      }
+    }
+    return null;
+  }
+
+  function parseRasterDimensions(bytes, format) {
+    if (!bytes || bytes.length < 24) return null;
+    if (format === 'png') {
+      if (
+        bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+        bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+      ) {
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const width = view.getUint32(16, false);
+        const height = view.getUint32(20, false);
+        if (width > 0 && height > 0) return { width, height };
+      }
+      return null;
+    }
+    if (format === 'jpg') {
+      if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+      let offset = 2;
+      while (offset + 4 < bytes.length) {
+        if (bytes[offset] !== 0xff) {
+          offset++;
+          continue;
+        }
+        while (offset < bytes.length && bytes[offset] === 0xff) offset++;
+        if (offset >= bytes.length) break;
+        const marker = bytes[offset++];
+        if (marker === 0xd9 || marker === 0xda) break;
+        if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+        if (offset + 2 > bytes.length) break;
+        const segLen = (bytes[offset] << 8) | bytes[offset + 1];
+        if (segLen < 2 || offset + segLen > bytes.length) break;
+        if (
+          (marker >= 0xc0 && marker <= 0xc3) ||
+          (marker >= 0xc5 && marker <= 0xc7) ||
+          (marker >= 0xc9 && marker <= 0xcb) ||
+          (marker >= 0xcd && marker <= 0xcf)
+        ) {
+          if (offset + 7 <= bytes.length) {
+            const height = (bytes[offset + 3] << 8) | bytes[offset + 4];
+            const width = (bytes[offset + 5] << 8) | bytes[offset + 6];
+            if (width > 0 && height > 0) return { width, height };
+          }
+          break;
+        }
+        offset += segLen;
+      }
+    }
+    return null;
+  }
+
+  function parseWavMetadata(bytes) {
+    const fallback = { rate: 22050, sampleCount: 0 };
+    if (!bytes || bytes.length < 44) return fallback;
+    const ascii = (start, len) => {
+      let s = '';
+      for (let i = 0; i < len && start + i < bytes.length; i++) {
+        s += String.fromCharCode(bytes[start + i]);
+      }
+      return s;
+    };
+    if (ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WAVE') {
+      return fallback;
+    }
+
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let rate = 0;
+    let channels = 0;
+    let bitsPerSample = 0;
+    let dataSize = 0;
+
+    let offset = 12;
+    while (offset + 8 <= bytes.length) {
+      const chunkId = ascii(offset, 4);
+      const chunkSize = view.getUint32(offset + 4, true);
+      const dataStart = offset + 8;
+      const available = Math.max(0, bytes.length - dataStart);
+      const clampedSize = Math.min(chunkSize, available);
+
+      if (chunkId === 'fmt ' && clampedSize >= 16) {
+        channels = view.getUint16(dataStart + 2, true);
+        rate = view.getUint32(dataStart + 4, true);
+        bitsPerSample = view.getUint16(dataStart + 14, true);
+      } else if (chunkId === 'data') {
+        dataSize = clampedSize;
+      }
+
+      const step = 8 + chunkSize + (chunkSize % 2);
+      if (step <= 8) break;
+      offset += step;
+    }
+
+    const sampleRate = rate > 0 ? rate : 22050;
+    let sampleCount = 0;
+    if (dataSize > 0 && channels > 0 && bitsPerSample > 0) {
+      const frameBytes = channels * (bitsPerSample / 8);
+      if (frameBytes > 0) {
+        sampleCount = Math.floor(dataSize / frameBytes);
+      }
+    }
+    return { rate: sampleRate, sampleCount };
+  }
+
+  function validateTargetIndex(projectJson, targetIdx) {
+    if (!projectJson || !Array.isArray(projectJson.targets)) {
+      throw new Error('Некоректний об’єкт projectJson.');
+    }
+    if (!Number.isInteger(targetIdx) || targetIdx < 0 || targetIdx >= projectJson.targets.length) {
+      throw new Error('Некоректний індекс об’єкта у проєкті.');
+    }
+    return projectJson.targets[targetIdx];
+  }
+
+  function renameSprite(projectJson, targetIdx, newName) {
+    const target = validateTargetIndex(projectJson, targetIdx);
+    if (target.isStage) {
+      throw new Error('Неможливо перейменувати Сцену (Stage).');
+    }
+    const trimmed = String(newName ?? '').trim();
+    if (!trimmed) {
+      throw new Error('Назва спрайта не може бути порожньою.');
+    }
+    if (trimmed === 'Stage') {
+      throw new Error('Назва "Stage" зарезервована для Сцени.');
+    }
+    const duplicate = projectJson.targets.some((t, i) => i !== targetIdx && t.name === trimmed);
+    if (duplicate) {
+      throw new Error(`Спрайт з назвою "${trimmed}" вже існує.`);
+    }
+    const oldName = target.name;
+    target.name = trimmed;
+    if (Array.isArray(projectJson.monitors)) {
+      for (const m of projectJson.monitors) {
+        if (m && m.spriteName === oldName) {
+          m.spriteName = trimmed;
+        }
+      }
+    }
+    return target;
+  }
+
+  function deleteSprite(projectJson, targetIdx) {
+    const target = validateTargetIndex(projectJson, targetIdx);
+    if (target.isStage) {
+      throw new Error('Неможливо видалити Сцену (Stage).');
+    }
+    const spriteCount = projectJson.targets.filter((t) => !t.isStage).length;
+    if (spriteCount <= 1) {
+      throw new Error('Неможливо видалити останній спрайт у проєкті.');
+    }
+    const [removed] = projectJson.targets.splice(targetIdx, 1);
+    if (Array.isArray(projectJson.monitors) && removed && removed.name) {
+      projectJson.monitors = projectJson.monitors.filter((m) => !m || m.spriteName !== removed.name);
+    }
+    return removed;
+  }
+
+  const VALID_ROTATION_STYLES = new Set(['all around', 'left-right', "don't rotate"]);
+
+  function updateSpriteProps(projectJson, targetIdx, props) {
+    const target = validateTargetIndex(projectJson, targetIdx);
+    if (target.isStage) {
+      throw new Error('Властивості координат та вигляду доступні лише для спрайтів.');
+    }
+    if (!props || typeof props !== 'object') {
+      return target;
+    }
+    if (props.x !== undefined) {
+      const x = Number(props.x);
+      if (Number.isFinite(x)) target.x = Math.round(x * 100) / 100;
+    }
+    if (props.y !== undefined) {
+      const y = Number(props.y);
+      if (Number.isFinite(y)) target.y = Math.round(y * 100) / 100;
+    }
+    if (props.size !== undefined) {
+      const size = Number(props.size);
+      if (Number.isFinite(size)) target.size = Math.max(5, Math.min(500, Math.round(size * 100) / 100));
+    }
+    if (props.direction !== undefined) {
+      const direction = Number(props.direction);
+      if (Number.isFinite(direction)) target.direction = Math.round(direction * 100) / 100;
+    }
+    if (props.visible !== undefined) {
+      target.visible = Boolean(props.visible);
+    }
+    if (props.draggable !== undefined) {
+      target.draggable = Boolean(props.draggable);
+    }
+    if (props.rotationStyle !== undefined && VALID_ROTATION_STYLES.has(props.rotationStyle)) {
+      target.rotationStyle = props.rotationStyle;
+    }
+    return target;
+  }
+
+  function addCostumeAsset(projectJson, assetsMap, targetIdx, name, dataFormat, content, centerX, centerY) {
+    const target = validateTargetIndex(projectJson, targetIdx);
+    if (!Array.isArray(target.costumes)) target.costumes = [];
+
+    let fmt = String(dataFormat || '').trim().toLowerCase().replace(/^\./, '');
+    if (fmt === 'jpeg') fmt = 'jpg';
+    if (!['svg', 'png', 'jpg'].includes(fmt)) {
+      throw new Error(`Непідтримуваний формат костюма: "${dataFormat}". Використовуйте svg, png або jpg.`);
+    }
+
+    let storedContent;
+    let dims = null;
+    if (fmt === 'svg') {
+      storedContent = typeof content === 'string' ? content : utf8BytesToString(toUint8Array(content));
+      if (!storedContent.trim()) {
+        throw new Error('SVG-файл порожній.');
+      }
+      dims = parseSvgDimensions(storedContent);
+    } else {
+      storedContent = toUint8Array(content);
+      if (storedContent.length === 0) {
+        throw new Error('Файл зображення порожній.');
+      }
+      dims = parseRasterDimensions(storedContent, fmt);
+    }
+
+    const existingNames = new Set(target.costumes.map((c) => c.name));
+    const uniqueName = makeUniqueName(existingNames, name, target.isStage ? 'backdrop' : 'costume');
+
+    const assetId = md5(storedContent);
+    const md5ext = `${assetId}.${fmt}`;
+    if (assetsMap) {
+      assetsMap.set(md5ext, storedContent);
+    }
+
+    const defaultX = dims ? Math.round(dims.width / 2) : target.isStage ? 240 : 32;
+    const defaultY = dims ? Math.round(dims.height / 2) : target.isStage ? 180 : 32;
+    const rx = centerX !== undefined && centerX !== null && Number.isFinite(Number(centerX)) ? Number(centerX) : defaultX;
+    const ry = centerY !== undefined && centerY !== null && Number.isFinite(Number(centerY)) ? Number(centerY) : defaultY;
+
+    const costumeObj = {
+      name: uniqueName,
+      bitmapResolution: 1,
+      dataFormat: fmt,
+      assetId,
+      md5ext,
+      rotationCenterX: rx,
+      rotationCenterY: ry
+    };
+
+    target.costumes.push(costumeObj);
+    return costumeObj;
+  }
+
+  function addSoundAsset(projectJson, assetsMap, targetIdx, name, dataFormat, uint8Bytes) {
+    const target = validateTargetIndex(projectJson, targetIdx);
+    if (!Array.isArray(target.sounds)) target.sounds = [];
+
+    const fmt = String(dataFormat || '').trim().toLowerCase().replace(/^\./, '');
+    if (!['wav', 'mp3'].includes(fmt)) {
+      throw new Error(`Непідтримуваний формат звуку: "${dataFormat}". Використовуйте wav або mp3.`);
+    }
+
+    const bytes = toUint8Array(uint8Bytes);
+    if (bytes.length === 0) {
+      throw new Error('Аудіофайл порожній.');
+    }
+
+    const existingNames = new Set(target.sounds.map((s) => s.name));
+    const uniqueName = makeUniqueName(existingNames, name, 'sound');
+
+    const assetId = md5(bytes);
+    const md5ext = `${assetId}.${fmt}`;
+    if (assetsMap) {
+      assetsMap.set(md5ext, bytes);
+    }
+
+    const meta = fmt === 'wav' ? parseWavMetadata(bytes) : { rate: 44100, sampleCount: 0 };
+
+    const soundObj = {
+      name: uniqueName,
+      assetId,
+      dataFormat: fmt,
+      format: '',
+      rate: meta.rate,
+      sampleCount: meta.sampleCount,
+      md5ext
+    };
+
+    target.sounds.push(soundObj);
+    return soundObj;
+  }
+
   async function loadSb3(arrayBuffer) {
     if (typeof JSZip === 'undefined') {
       throw new Error('Бібліотеку JSZip не завантажено.');
@@ -374,8 +700,11 @@
   }
 
   function getTargetAssets(projectJson, assetsMap) {
-    const stage = projectJson.targets.find((t) => t.isStage);
-    const sprites = projectJson.targets.filter((t) => !t.isStage);
+    const stageIdx = projectJson.targets.findIndex((t) => t.isStage);
+    const stage = stageIdx >= 0 ? projectJson.targets[stageIdx] : null;
+    const sprites = projectJson.targets
+      .map((t, idx) => ({ t, idx }))
+      .filter(({ t }) => !t.isStage);
     return {
       backdrops: stage
         ? (stage.costumes || []).map((c) => ({
@@ -385,13 +714,17 @@
             svg: assetsMap && typeof assetsMap.get(c.md5ext) === 'string' ? assetsMap.get(c.md5ext) : null
           }))
         : [],
-      sprites: sprites.map((s) => ({
+      stageSounds: stage ? (stage.sounds || []).map((snd) => snd.name) : [],
+      sprites: sprites.map(({ t: s, idx }) => ({
+        targetIdx: idx,
         name: s.name,
         x: s.x,
         y: s.y,
         size: s.size,
         direction: s.direction,
         visible: s.visible,
+        rotationStyle: s.rotationStyle || 'all around',
+        draggable: !!s.draggable,
         costumes: (s.costumes || []).map((c) => ({
           name: c.name,
           md5ext: c.md5ext,
@@ -408,6 +741,11 @@
     utf8BytesToString,
     createDefaultProject,
     addSpriteToProject,
+    renameSprite,
+    deleteSprite,
+    updateSpriteProps,
+    addCostumeAsset,
+    addSoundAsset,
     loadSb3,
     saveSb3,
     getTargetAssets

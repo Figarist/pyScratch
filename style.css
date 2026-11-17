@@ -76,6 +76,40 @@ body {
   font-weight: 500;
 }
 
+.brand-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 2px;
+}
+
+.brand-link {
+  color: var(--wp-muted);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--wp-border);
+  background: var(--wp-panel);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.brand-link:hover {
+  color: var(--wp-accent);
+  border-color: var(--wp-accent);
+}
+
+#target-tabs {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#target-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .toolbar-group {
   display: flex;
   align-items: center;
@@ -596,6 +630,253 @@ button.tab-btn.active {
   font-family: var(--font-mono);
   color: var(--wp-accent);
   cursor: pointer;
+}
+
+.var-pill-list {
+  border-color: var(--yellow);
+}
+
+.var-pill-local {
+  border-color: var(--wp-accent);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.var-pill-local-list {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+/* Interactive Sprite & Asset Manager */
+.assets-section + .assets-section {
+  margin-top: 8px;
+}
+
+.active-sprite-section {
+  border-color: var(--wp-accent);
+}
+
+.assets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.assets-header h4 {
+  margin: 0;
+}
+
+.assets-hint {
+  font-size: 11px;
+  color: var(--wp-muted);
+  margin: 4px 0;
+}
+
+.asset-upload-btn {
+  height: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-color: var(--wp-border-strong);
+}
+
+.asset-upload-btn:hover {
+  border-color: var(--wp-accent);
+  color: var(--wp-accent);
+}
+
+.sprite-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.sprite-rename-row input {
+  flex: 1;
+  min-width: 120px;
+  height: 26px;
+  background: var(--wp-bg);
+  color: var(--wp-text);
+  border: 1px solid var(--wp-border);
+  border-radius: 4px;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sprite-rename-row input:focus {
+  outline: none;
+  border-color: var(--wp-accent);
+}
+
+.sprite-props-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.prop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.prop-field label {
+  font-size: 10px;
+  color: var(--wp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.prop-field input,
+.prop-field select {
+  height: 26px;
+  background: var(--wp-bg);
+  color: var(--wp-text);
+  border: 1px solid var(--wp-border);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  width: 100%;
+}
+
+.prop-field input:focus,
+.prop-field select:focus {
+  outline: none;
+  border-color: var(--wp-accent);
+}
+
+.sprite-toggles-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--wp-border);
+  margin-bottom: 8px;
+}
+
+.prop-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--wp-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.prop-check input {
+  accent-color: var(--wp-accent);
+  cursor: pointer;
+}
+
+.assets-subblock {
+  margin-top: 8px;
+}
+
+.assets-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--wp-muted);
+  font-size: 11.5px;
+}
+
+/* Drag-and-Drop .sb3 Overlay */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(12, 16, 22, 0.84);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: none;
+}
+
+.drop-overlay-card {
+  border: 2px dashed var(--wp-accent);
+  background: var(--wp-surface);
+  border-radius: 10px;
+  padding: 28px 36px;
+  text-align: center;
+  max-width: 420px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.drop-overlay-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--wp-accent);
+  margin-bottom: 6px;
+}
+
+.drop-overlay-sub {
+  font-size: 12.5px;
+  color: var(--wp-muted);
+}
+
+/* Compact Embed Mode (?embed=1) for sivochka.com iframes */
+body.embed-mode .topbar {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  gap: 6px;
+}
+
+body.embed-mode .brand-sub,
+body.embed-mode #btn-template {
+  display: none;
+}
+
+body.embed-mode .left-panel .subbar,
+body.embed-mode .palette-bar {
+  display: none;
+}
+
+body.embed-mode .right-content {
+  padding: 8px;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .brand-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 780px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+  }
+
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .left-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--wp-border);
+    min-height: 360px;
+  }
 }
 
 .hidden {

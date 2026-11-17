@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pyScratch — Двосторонній конвертер Python ↔ Scratch 3.0 (.sb3)</title>
+  <meta name="description" content="pyScratch — безкоштовна онлайн Python ↔ Scratch 3.0 (.sb3) IDE з двостороннім компілятором, декомпілятором блоків та живою 480×360 сценою Canvas 2D у браузері." />
+  <meta name="theme-color" content="#0c1016" />
+  <meta property="og:title" content="pyScratch — Онлайн Python ↔ Scratch 3.0 (.sb3) IDE" />
+  <meta property="og:description" content="Пишіть Python-код, миттєво перетворюйте його на блоки Scratch 3.0 (.sb3) і запускайте на сцені Canvas 2D прямо у браузері." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pyscratch.sivochka.com/" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,6 +17,10 @@
     <div class="brand">
       <span class="brand-mark">pyScratch</span>
       <span class="brand-sub">Python DSL ↔ Scratch 3.0 (.sb3)</span>
+      <span class="brand-links">
+        <a href="https://sivochka.com" target="_blank" rel="noopener noreferrer" class="brand-link" title="Створено sivochka.com — репетиторство Scratch та Python">sivochka.com</a>
+        <a href="https://github.com/Figarist/pyScratch" target="_blank" rel="noopener noreferrer" class="brand-link" title="Вихідний код pyScratch на GitHub">GitHub</a>
+      </span>
     </div>
 
     <div class="toolbar-group" id="target-tabs">
@@ -20,9 +30,13 @@
     <div class="toolbar-group">
       <button id="btn-add-sprite" title="Додати новий спрайт у проєкт">+ Спрайт</button>
       <input type="file" id="file-input" accept=".sb3" class="hidden" />
-      <button id="btn-open">Відкрити .sb3</button>
+      <input type="file" id="upload-backdrop-input" accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg" class="hidden" />
+      <input type="file" id="upload-costume-input" accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg" class="hidden" />
+      <input type="file" id="upload-sound-input" accept=".wav,.mp3,audio/wav,audio/mpeg" class="hidden" />
+      <button id="btn-open" title="Відкрити файл .sb3 або перетягніть .sb3 у вікно">Відкрити .sb3</button>
       <button id="btn-template">Скинути шаблон</button>
       <button id="btn-save" class="primary">Зберегти .sb3</button>
+      <button id="btn-share" title="Скопіювати посилання на ваш Python-код">Поділитися</button>
     </div>
   </header>
 
@@ -116,6 +130,13 @@
       </div>
     </section>
   </main>
+
+  <div id="drop-overlay" class="drop-overlay hidden" aria-hidden="true">
+    <div class="drop-overlay-card">
+      <div class="drop-overlay-title">Відпустіть файл .sb3 сюди</div>
+      <div class="drop-overlay-sub">Проєкт Scratch 3.0 відкриється та перетвориться на Python-код</div>
+    </div>
+  </div>
 
   <script src="vendor/jszip.min.js"></script>
   <script src="js/sb3Bridge.js"></script>

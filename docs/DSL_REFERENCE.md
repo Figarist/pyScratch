@@ -25,15 +25,18 @@ Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 
 - **Booleans**: `True` and `False`. In value slots they serialize as `"true"` / `"false"` (type `10`); in boolean condition slots they compile to `operator_equals("1", "1")` and `operator_equals("1", "0")`.
 
 ### Variable, List & Parameter Scoping
-- **Global Stage Scope (Default)**: Newly assigned variables and newly referenced lists are registered on the **Stage** target (`Stage.variables` and `Stage.lists`) by default, matching Scratch's "For all sprites" global sharing. When modifying an imported `.sb3` project, pre-existing sprite-local variables/lists on `target` are matched before falling back to `Stage`.
-- **Procedure Parameters**: Inside a `def proc(a, b):` body, reading `a` or `b` compiles to `argument_reporter_string_number` instead of a global variable. In `StagePreview`, procedure arguments live in a per-call `localScope` dictionary, while assignments (`x = ...`, `x += ...`) always mutate global `this.vars`.
-- **1-Based Indexing**: `list_item`, `list_delete`, `list_insert`, `list_replace`, and `letter_of` use **1-based indexing**, matching Scratch 3.0.
+- **Global Stage Scope (Default)**: Newly assigned bare variables (`score = 0`) and `list_*("name", ...)` calls are registered on the **Stage** target (`Stage.variables` and `Stage.lists`) by default, matching Scratch's "For all sprites" global sharing. When modifying an imported `.sb3` project, pre-existing sprite-local variables/lists on `target` are matched before falling back to `Stage`.
+- **Sprite-Local Variables (`self.var`)**: Prefixing a variable with `self.` (e.g., `self.hp = 100`, `self.hp -= 25`) registers the variable on the **sprite target** (`target.variables`) instead of `Stage`. `decompileTarget(target, stageTarget)` preserves `self.var` syntax, and `StagePreview` isolates `actor.localVars` per sprite and deep-copies them onto each newly spawned clone.
+- **Sprite-Local Lists (`local_list` & `local_list_*`)**: Calling `local_list("inv")` or any `local_list_*` helper (`local_list_add`, `local_list_item`, `local_list_length`, `local_list_contains`, `local_list_index_of`, `local_list_insert`, `local_list_replace`, `local_list_delete`, `local_list_clear`) registers the list on `target.lists` ("For this sprite only"). Once `local_list("inv")` is declared in a sprite script, subsequent `list_*("inv", ...)` calls in that sprite also bind to the local list. `StagePreview` deep-copies `actor.localLists` onto each clone.
+- **Procedure Parameters**: Inside a `def proc(a, b):` body, reading `a` or `b` compiles to `argument_reporter_string_number` instead of a global variable. In `StagePreview`, procedure arguments live in a per-call `localScope` dictionary, while assignments (`x = ...`, `x += ...`) mutate `this.vars` (or `actor.localVars` when using `self.x`).
+- **Dynamic Reporter Inputs in Menu Slots**: Single-argument menu blocks (`goto`, `glide_to`, `point_towards`, `switch_costume`, `switch_backdrop`, `switch_backdrop_and_wait`, `play_sound`, `play_sound_until_done`, `touching`, `distance_to`, `key_pressed`, `attribute_of`, `create_clone`, `broadcast`, `broadcast_and_wait`, `set_pen_param`, `change_pen_param`) accept either string literals or dynamic variable/reporter expressions (`compileMenuOrExpr` / `compileBroadcastInput`).
+- **1-Based Indexing**: `list_item`, `list_index_of`, `list_delete`, `list_insert`, `list_replace`, their `local_list_*` counterparts, and `letter_of` use **1-based indexing**, matching Scratch 3.0.
 
 ---
 
 ## 2. Event Decorators & Broadcasts (`Events` & `Control` Hats)
 
-Event decorators must precede a zero-parameter function (`def name():`).
+Event decorators must precede a zero-parameter function (`def name():`), except `@warp`, which precedes a custom procedure `def proc(...):`.
 
 | Python DSL | Scratch 3.0 Opcode | Fields / Inputs | Notes |
 | --- | --- | --- | --- |
@@ -41,16 +44,17 @@ Event decorators must precede a zero-parameter function (`def name():`).
 | `@when_key_pressed(key)` | `event_whenkeypressed` | Field `KEY_OPTION` (`"space"` default) | Keys: `"space"`, `"up arrow"`, `"down arrow"`, `"left arrow"`, `"right arrow"`, `"enter"`, `"any"`, or single character (`"a"`..`"z"`, `"0"`..`"9"`). |
 | `@when_this_sprite_clicked` | `event_whenthisspriteclicked` | — | Compiles to `event_whenstageclicked` if placed in the Stage tab. |
 | `@when_stage_clicked` | `event_whenstageclicked` | — | Compiles to `event_whenthisspriteclicked` if placed in a Sprite tab. |
-| `@when_backdrop_switches(name)` | `event_whenbackdropswitchesto` | Field `BACKDROP` (`"backdrop1"` default) | Fires when `switch_backdrop(name)` or `next_backdrop()` activates `name`. |
-| `@when_message_received(msg)` | `event_whenbroadcastreceived` | Field `BROADCAST_OPTION` (`"message1"` default) | Registers `msg` in Stage `broadcasts`. |
-| `@when_cloned` | `control_start_as_clone` | — | Executes inside each newly created clone. |
+| `@when_backdrop_switches(name)` | `event_whenbackdropswitchesto` | Field `BACKDROP` (`"backdrop1"` default) | Fires when `switch_backdrop(name)`, `switch_backdrop_and_wait(name)`, or `next_backdrop()` activates `name`. |
+| `@when_message_received(msg)` | `event_whenbroadcastreceived` | Field `BROADCAST_OPTION` (`"message1"` default) | Registers `msg` in Stage `broadcasts`. Re-broadcasting restarts still-running handlers on each actor in `StagePreview`. |
+| `@when_greater_than(sensor, val)` | `event_whengreaterthan` | Field `WHENGREATERTHANMENU` (`"TIMER"` \| `"LOUDNESS"`), input `VALUE` | Edge-triggered hat firing when `sensor > val`. In `StagePreview`, `"timer"` polls every 50ms (`"loudness"` evaluates to `0`). |
+| `@when_cloned` | `control_start_as_clone` | — | Executes inside each newly created clone with inherited local state. |
 
 ### Broadcast Statements (`Events`)
 
 | Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
 | --- | --- | --- | --- |
-| `broadcast(msg)` | `event_broadcast` | `BROADCAST_INPUT` (`[1, [11, msg, bId]]`) | Sends broadcast asynchronously without waiting. |
-| `broadcast_and_wait(msg)` | `event_broadcastandwait` | `BROADCAST_INPUT` (`[1, [11, msg, bId]]`) | Sends broadcast and awaits completion of all triggered handlers. |
+| `broadcast(msg)` | `event_broadcast` | `BROADCAST_INPUT` (`[1, [11, msg, bId]]` or reporter) | Sends broadcast asynchronously without waiting; restarts active receivers for `msg`. |
+| `broadcast_and_wait(msg)` | `event_broadcastandwait` | `BROADCAST_INPUT` (`[1, [11, msg, bId]]` or reporter) | Sends broadcast and awaits completion of all triggered handlers. |
 
 ```python
 @when_flag_clicked
@@ -75,18 +79,20 @@ def jump():
 | Python DSL | Scratch 3.0 Opcodes | Mutation / Fields | Notes |
 | --- | --- | --- | --- |
 | `def name(p1, p2):` | `procedures_definition` + `procedures_prototype` + `argument_reporter_string_number` | `proccode`: `"name %s %s"` (or `"name"` if 0 params), `argumentids`, `argumentnames`, `argumentdefaults`, `warp: "false"` | Two-pass compilation allows calling procedures defined later in the script. |
-| `name(v1, v2)` | `procedures_call` | `proccode`, `argumentids`, `warp: "false"`; inputs keyed by `paramId` | Statement-only (Scratch custom blocks do not return values). |
+| `@warp` + `def name(p1, p2):` | `procedures_definition` + `procedures_prototype` + `argument_reporter_string_number` | Same as above with `warp: "true"` | "Run without screen refresh": executes synchronously in `StagePreview` without 16ms frame yields (500ms safety yield). |
+| `name(v1, v2)` | `procedures_call` | `proccode`, `argumentids`, `warp: "true" \| "false"`; inputs keyed by `paramId` | Statement-only (Scratch custom blocks do not return values). `stop("this script")` inside a procedure exits the caller script as well. |
 
 ```python
-def polygon(sides, length):
-    for i in range(sides):
-        move(length)
-        turn_right(360 / sides)
+@warp
+def fast_ring(count, step):
+    for i in range(count):
+        move(step)
+        turn_right(360 / count)
 
 @when_flag_clicked
 def main():
     pen_down()
-    polygon(6, 70)
+    fast_ring(12, 20)
     pen_up()
 ```
 
@@ -96,21 +102,22 @@ def main():
 
 | Python DSL | Scratch 3.0 Opcode | Inputs / Fields / Mutations | Notes |
 | --- | --- | --- | --- |
-| `for i in range(n):` | `control_repeat` | `TIMES` (`n`), `SUBSTACK` | Accepts a single count expression `n`. The loop variable identifier (e.g., `i`) is syntax-only and not created in Scratch; decompiles as `for i in range(...):`. |
+| `for i in range(n):` | `control_repeat` | `TIMES` (`n`), `SUBSTACK` | Accepts a single count expression `n`. In `StagePreview`, `i` is bound in `localScope` (`0..n-1`); in `.sb3` compilation, `ensureVar` registers `i` if referenced, and decompiles as `for i in range(...):`. |
 | `while True:` | `control_forever` | `SUBSTACK` | Infinite loop until stopped or clone deleted. |
 | `while not cond:` | `control_repeat_until` | `CONDITION` (`cond`), `SUBSTACK` | Maps directly to Scratch's `repeat until`. |
 | `while cond:` | `control_repeat_until` | `CONDITION` (`operator_not(cond)`), `SUBSTACK` | Compiles by wrapping `cond` in `operator_not`. |
 | `if cond:` / `elif cond2:` / `else:` | `control_if` / `control_if_else` | `CONDITION`, `SUBSTACK`, `SUBSTACK2` | `elif` compiles as a nested `control_if` / `control_if_else` inside `SUBSTACK2` and is reconstructed back to `elif` on decompilation. |
 | `pass` | *(none)* | — | Emits no blocks; generated by the decompiler for empty script bodies. |
-| `wait(secs)` | `control_wait` | `DURATION` (`secs`) | Pauses current script for `secs` seconds. |
+| `wait(secs)` | `control_wait` | `DURATION` (`secs`) | Pauses current script for `secs` seconds (cancellable on stop/restart). |
 | `wait_until(cond)` | `control_wait_until` | `CONDITION` (`cond`) | Polls every ~16ms in `StagePreview` until `cond` is truthy. |
-| `stop(option)` | `control_stop` | Field `STOP_OPTION`: `"all"`, `"this script"`, or `"other scripts in sprite"`; mutation `hasnext`: `"true"` iff `"other scripts in sprite"` | Defaults to `"all"`. In `StagePreview`, `"this script"` exits only the current script; other options stop the simulation. |
-| `create_clone(target)` | `control_create_clone_of` | `CLONE_OPTION` shadow `control_create_clone_of_menu` (`"_myself_"` or sprite name) | Pass `"myself"` (mapped to `"_myself_"`) or a sprite name literal. `StagePreview` caps total actors at 150. |
+| `stop(option)` | `control_stop` | Field `STOP_OPTION`: `"all"`, `"this script"`, or `"other scripts in sprite"`; mutation `hasnext`: `"true"` iff `"other scripts in sprite"` | Defaults to `"all"`. In `StagePreview`: `"this script"` exits the current script (propagating out of procedures), `"other scripts in sprite"` / `"other scripts in stage"` cancels sibling threads on that actor only, and `"all"` halts the stage. |
+| `create_clone(target)` | `control_create_clone_of` | `CLONE_OPTION` (`control_create_clone_of_menu`: `"_myself_"`, sprite name, or expr) | Pass `"myself"` (`"_myself_"`), a sprite name, or expression. `StagePreview` enforces Scratch's 300-clone cap (`actor.isClone`) and deep-copies `localVars`, `localLists`, `effects`, `soundEffects`, `penHsl`, and `draggable`. |
 | `delete_this_clone()` | `control_delete_this_clone` | — | Deletes the current clone and aborts its remaining statements. |
 
 ```python
 @when_flag_clicked
 def main():
+    self.hp = 100
     for i in range(4):
         create_clone("myself")
         turn_right(90)
@@ -121,6 +128,7 @@ def main():
 
 @when_cloned
 def burst():
+    self.hp -= 25
     move(40)
     wait(0.5)
     delete_this_clone()
@@ -138,17 +146,18 @@ def burst():
 | `turn_right(deg)` | `motion_turnright` | `DEGREES` | Rotates clockwise by `deg` degrees. |
 | `turn_left(deg)` | `motion_turnleft` | `DEGREES` | Rotates counter-clockwise by `deg` degrees. |
 | `goto(x, y)` | `motion_gotoxy` | `X`, `Y` | Moves to coordinates `(x, y)` (`x: -240..240`, `y: -180..180`). |
-| `goto(target)` | `motion_goto` | `TO` shadow `motion_goto_menu` | Single string literal: `"random"` (`"_random_"`), `"mouse"` (`"_mouse_"`), or `"SpriteName"`. |
+| `goto(target)` | `motion_goto` | `TO` (`motion_goto_menu` or expr) | Single argument: `"random"` (`"_random_"`), `"mouse"` (`"_mouse_"`), `"SpriteName"`, or reporter expression. |
 | `goto_random()` | `motion_goto` | `TO`: `"_random_"` | Shorthand for `goto("random")`; decompiles as `goto_random()`. |
 | `goto_mouse()` | `motion_goto` | `TO`: `"_mouse_"` | Shorthand for `goto("mouse")`; decompiles as `goto_mouse()`. |
 | `glide(secs, x, y)` | `motion_glidesecstoxy` | `SECS`, `X`, `Y` | Interpolates position over `secs` seconds (draws pen trail if pen is down). |
+| `glide_to(secs, target)` | `motion_glideto` | `SECS`, `TO` (`motion_glideto_menu` or expr) | Glides over `secs` seconds toward `"random"` (`"_random_"`), `"mouse"` (`"_mouse_"`), `"SpriteName"`, or expression. |
 | `point_in_direction(dir)` | `motion_pointindirection` | `DIRECTION` | Sets direction in degrees (`0` = up, `90` = right, `180` = down, `-90` = left). |
-| `point_towards(target)` | `motion_pointtowards` | `TOWARDS` shadow `motion_pointtowards_menu` | Accepts `"mouse"` (`"_mouse_"`) or `"SpriteName"`. |
+| `point_towards(target)` | `motion_pointtowards` | `TOWARDS` (`motion_pointtowards_menu` or expr) | Accepts `"mouse"` (`"_mouse_"`), `"SpriteName"`, or expression. |
 | `set_x(x)` | `motion_setx` | `X` | Sets horizontal coordinate. |
 | `change_x(dx)` | `motion_changexby` | `DX` | Adds `dx` to `x`. |
 | `set_y(y)` | `motion_sety` | `Y` | Sets vertical coordinate. |
 | `change_y(dy)` | `motion_changeyby` | `DY` | Adds `dy` to `y`. |
-| `if_on_edge_bounce()` | `motion_ifonedgebounce` | — | Reflects direction and clamps sprite inside stage bounds when near edges. |
+| `if_on_edge_bounce()` | `motion_ifonedgebounce` | — | Reflects direction and clamps sprite inside stage bounds using costume half-size. |
 | `set_rotation_style(style)` | `motion_setrotationstyle` | Field `STYLE` | `"all around"`, `"left-right"`, or `"don't rotate"`. |
 
 ### Reporters
@@ -164,6 +173,7 @@ def burst():
 def patrol():
     set_rotation_style("left-right")
     goto(0, 0)
+    glide_to(0.5, "random")
     point_in_direction(90)
     for i in range(60):
         move(8)
@@ -183,15 +193,18 @@ def patrol():
 | `say(msg)` | `looks_say` | `MESSAGE` | Displays persistent speech bubble. |
 | `think(msg, secs)` | `looks_thinkforsecs` | `MESSAGE`, `SECS` | Displays thought bubble for `secs` seconds and clears it. |
 | `think(msg)` | `looks_think` | `MESSAGE` | Displays persistent thought bubble. |
-| `switch_costume(name)` | `looks_switchcostumeto` | `COSTUME` (`looks_costume` menu or expr) | Accepts costume name string (default `"costume1"`, `"costume2"`, `"star"`) or expression. |
+| `switch_costume(name)` | `looks_switchcostumeto` | `COSTUME` (`looks_costume` menu or expr) | Accepts costume name (default `"costume1"`, `"costume2"`, `"star"`), `"next costume"`, `"previous costume"`, `"random costume"`, 1-based index, or expression. |
 | `next_costume()` | `looks_nextcostume` | — | Cycles to the next costume in `target.costumes`. |
-| `switch_backdrop(name)` | `looks_switchbackdropto` | `BACKDROP` (`looks_backdrops` menu or expr) | Built-in backdrops: `"space_bg"`, `"level_2"`, `"grid_bg"`. Triggers `@when_backdrop_switches`. |
+| `switch_backdrop(name)` | `looks_switchbackdropto` | `BACKDROP` (`looks_backdrops` menu or expr) | Built-in backdrops: `"space_bg"`, `"level_2"`, `"grid_bg"`. Also supports `"next backdrop"`, `"previous backdrop"`, `"random backdrop"`, or 1-based index. Triggers `@when_backdrop_switches`. |
+| `switch_backdrop_and_wait(name)` | `looks_switchbackdroptoandwait` | `BACKDROP` (`looks_backdrops` menu or expr) | Switches backdrop and awaits completion of all `@when_backdrop_switches` handlers. |
 | `next_backdrop()` | `looks_nextbackdrop` | — | Cycles to the next backdrop and triggers `@when_backdrop_switches`. |
+| `go_to_layer(layer)` | `looks_gotofrontback` | Field `FRONT_BACK`: `"front"` \| `"back"` | Moves sprite to the frontmost or backmost `layerOrder`. |
+| `change_layer(dir, num)` | `looks_goforwardbackwardlayers` | Field `FORWARD_BACKWARD`: `"forward"` \| `"backward"`, input `NUM` | Shifts sprite `num` layers forward or backward in `layerOrder`. |
 | `set_size(pct)` | `looks_setsizeto` | `SIZE` | Sets sprite scale percentage (`5..500` in `StagePreview`). |
 | `change_size(delta)` | `looks_changesizeby` | `CHANGE` | Changes sprite scale by `delta` (`5..500` clamped in `StagePreview`). |
-| `set_effect(effect, val)` | `looks_seteffectto` | Field `EFFECT` (uppercased), input `VALUE` | E.g. `"color"`. Compiles uppercase for Scratch; decompiles lowercase. |
-| `change_effect(effect, delta)` | `looks_changeeffectby` | Field `EFFECT` (uppercased), input `CHANGE` | `StagePreview` visually renders `"color"` (`hue-rotate`); other Scratch effects compile cleanly to `.sb3`. |
-| `clear_effects()` | `looks_cleargraphiceffects` | — | Resets graphic effects to `0`. |
+| `set_effect(effect, val)` | `looks_seteffectto` | Field `EFFECT` (uppercased), input `VALUE` | Compiles uppercase (`COLOR`, `GHOST`, `BRIGHTNESS`, `PIXELATE`, `MOSAIC`, `FISHEYE`, `WHIRL`); decompiles lowercase. |
+| `change_effect(effect, delta)` | `looks_changeeffectby` | Field `EFFECT` (uppercased), input `CHANGE` | `StagePreview` renders `color` (`hue-rotate`), `ghost` (`globalAlpha`), `brightness`, `pixelate`, and `mosaic` (including on Stage backdrop). `fisheye` and `whirl` compile/decompile without Canvas warping. |
+| `clear_effects()` | `looks_cleargraphiceffects` | — | Resets all graphic effects to `0`. |
 | `show()` | `looks_show` | — | Makes sprite visible (`visible = true`). |
 | `hide()` | `looks_hide` | — | Hides sprite (`visible = false`). |
 
@@ -208,12 +221,15 @@ def patrol():
 ```python
 @when_flag_clicked
 def intro():
-    switch_backdrop("space_bg")
+    switch_backdrop_and_wait("space_bg")
+    go_to_layer("front")
+    change_layer("backward", 1)
     switch_costume("costume1")
     show()
     set_size(120)
     say(join("Backdrop: ", backdrop_name()), 2)
     set_effect("color", 35)
+    set_effect("ghost", 25)
 ```
 
 ---
@@ -222,22 +238,28 @@ def intro():
 
 ### Statements & Reporter
 
-| Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
+| Python DSL | Scratch 3.0 Opcode | Inputs / Fields | Notes |
 | --- | --- | --- | --- |
 | `play_sound(name)` | `sound_play` | `SOUND_MENU` (`sound_sounds_menu` or expr) | Default assets include `"pop"` and `"laser"`. Plays without waiting. |
-| `play_sound_until_done(name)` | `sound_playuntildone` | `SOUND_MENU` (`sound_sounds_menu` or expr) | Plays sound and waits until finished (~140ms in `StagePreview`). |
-| `stop_all_sounds()` | `sound_stopallsounds` | — | Compiles to `.sb3`; no-op in `StagePreview`. |
-| `set_volume(pct)` | `sound_setvolumeto` | `VOLUME` | Sets actor volume (`0..100` in `StagePreview`). |
+| `play_sound_until_done(name)` | `sound_playuntildone` | `SOUND_MENU` (`sound_sounds_menu` or expr) | Plays sound and awaits actual playback `onended` completion. |
+| `stop_all_sounds()` | `sound_stopallsounds` | — | Stops all active Web Audio sound sources immediately. |
+| `set_sound_effect(eff, val)` | `sound_seteffectto` | Field `EFFECT` (`"PITCH"` \| `"PAN"`), input `VALUE` | Sets sound effect (`pitch` clamped `-360..360`, `pan` clamped `-100..100` in `StagePreview`). |
+| `change_sound_effect(eff, delta)` | `sound_changeeffectby` | Field `EFFECT` (`"PITCH"` \| `"PAN"`), input `VALUE` | Adjusts `pitch` or `pan` effect by `delta`. |
+| `clear_sound_effects()` | `sound_cleareffects` | — | Resets `pitch` and `pan` effects to `0`. |
+| `set_volume(pct)` | `sound_setvolumeto` | `VOLUME` | Sets actor volume (`0..100` in `StagePreview`), connected to Web Audio `GainNode`. |
 | `change_volume(delta)` | `sound_changevolumeby` | `VOLUME` | Adjusts actor volume (`0..100` clamped). |
 | `volume()` | `sound_volume` | — | Reporter returning current actor volume. |
 
-> **Simulator note**: `StagePreview` synthesizes sounds via the Web Audio API (`sawtooth` sweep if `name` contains `"laser"`, `sine` sweep otherwise), while `.sb3` exports bundle valid procedural PCM `.wav` assets (`pop`, `laser`).
+> **Simulator note**: `StagePreview` decodes real `.wav` and `.mp3` buffers from `assetsMap` via `AudioContext.decodeAudioData` (routing through `GainNode` for `volume`, `StereoPannerNode` for `pan`, and `playbackRate` for `pitch`), falling back to Web Audio oscillator synthesis if an asset buffer is absent. `.sb3` exports bundle valid procedural PCM `.wav` assets (`pop`, `laser`) and any uploaded `.wav`/`.mp3` sounds.
 
 ```python
 @when_flag_clicked
 def audio_demo():
     set_volume(80)
+    set_sound_effect("pitch", 20)
+    change_sound_effect("pan", -25)
     play_sound_until_done("pop")
+    clear_sound_effects()
     play_sound("laser")
 ```
 
@@ -253,9 +275,9 @@ Using any `pen_*` statement automatically flags `usesPen = true` and appends `"p
 | `pen_stamp()` | `pen_stamp` | — | Stamps the sprite's current costume onto the pen layer. |
 | `pen_down()` | `pen_penDown` | — | Enables continuous line drawing as the sprite moves/glides. |
 | `pen_up()` | `pen_penUp` | — | Lifts the pen to stop drawing while moving. |
-| `set_pen_color(color)` | `pen_setPenColorToColor` | `COLOR` | Hex color string (e.g., `"#00ffcc"`) compiles as Scratch color shadow type `9`. |
-| `set_pen_param(param, val)` | `pen_setPenColorParamTo` | `COLOR_PARAM` (`pen_menu_colorParam` field `colorParam`), `VALUE` | Compiles/decompiles cleanly to `.sb3` (e.g., `"color"`, `"saturation"`, `"brightness"`, `"transparency"`). Not simulated in `StagePreview`. |
-| `change_pen_param(param, delta)` | `pen_changePenColorParamBy` | `COLOR_PARAM` (`pen_menu_colorParam` field `colorParam`), `VALUE` | Compiles/decompiles cleanly to `.sb3`. Not simulated in `StagePreview`. |
+| `set_pen_color(color)` | `pen_setPenColorToColor` | `COLOR` | Hex color string (e.g., `"#00ffcc"`) compiles as Scratch color shadow type `9` and syncs `actor.penHsl`. |
+| `set_pen_param(param, val)` | `pen_setPenColorParamTo` | `COLOR_PARAM` (`pen_menu_colorParam` or expr), `VALUE` | Supports `"color"`, `"saturation"`, `"brightness"`, and `"transparency"` in both `.sb3` and `StagePreview` (`penHsl`). |
+| `change_pen_param(param, delta)` | `pen_changePenColorParamBy` | `COLOR_PARAM` (`pen_menu_colorParam` or expr), `VALUE` | Increments pen color/saturation/brightness/transparency in both `.sb3` and `StagePreview`. |
 | `set_pen_size(size)` | `pen_setPenSizeTo` | `SIZE` | Sets stroke width in pixels (`>= 1` in `StagePreview`). |
 | `change_pen_size(delta)` | `pen_changePenSizeBy` | `SIZE` | Adjusts stroke width (`>= 1` clamped in `StagePreview`). |
 
@@ -279,23 +301,32 @@ def draw_square():
 
 ### Statements & Reporters
 
-| Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
+| Python DSL | Scratch 3.0 Opcode | Inputs / Fields | Notes |
 | --- | --- | --- | --- |
 | `ask(question)` | `sensing_askandwait` | `QUESTION` | Shows speech bubble + inline prompt overlay in `StagePreview` and pauses until submitted. |
 | `answer()` | `sensing_answer` | — | Returns the most recent answer submitted to `ask()`. |
-| `touching(target)` | `sensing_touchingobject` | `TOUCHINGOBJECTMENU` (`sensing_touchingobjectmenu`) | `"edge"` -> `"_edge_"`, `"mouse"` -> `"_mouse_"`, or `"SpriteName"`. |
-| `distance_to(target)` | `sensing_distanceto` | `DISTANCETOMENU` (`sensing_distancetomenu`) | `"mouse"` -> `"_mouse_"`, or `"SpriteName"`. Returns rounded Euclidean distance. |
+| `touching(target)` | `sensing_touchingobject` | `TOUCHINGOBJECTMENU` (`sensing_touchingobjectmenu` or expr) | `"edge"` -> `"_edge_"`, `"mouse"` -> `"_mouse_"`, `"SpriteName"`, or expression. |
+| `touching_color(color)` | `sensing_touchingcolor` | `COLOR` (color shadow `9` or expr) | Checks rendered Canvas 2D pixel region around actor in `StagePreview` (`±16` RGB tolerance). |
+| `color_is_touching_color(c1, c2)` | `sensing_coloristouchingcolor` | `COLOR`, `COLOR2` | Checks adjacent pixel pairs (`±2px` neighborhood) matching `c1` and `c2` in `StagePreview`. |
+| `set_drag_mode(mode)` | `sensing_setdragmode` | Field `DRAG_MODE`: `"draggable"` \| `"not draggable"` | Enables or disables live pointer dragging on the Canvas stage in `StagePreview`. |
+| `distance_to(target)` | `sensing_distanceto` | `DISTANCETOMENU` (`sensing_distancetomenu` or expr) | `"mouse"` -> `"_mouse_"`, `"SpriteName"`, or expression. Returns rounded Euclidean distance. |
+| `attribute_of(attr, target)` | `sensing_of` | Field `PROPERTY`, input `OBJECT` (`sensing_of_object_menu` or expr) | Reads `"x position"`, `"y position"`, `"direction"`, `"costume #"`, `"costume name"`, `"size"`, `"volume"`, `"backdrop #"`, `"backdrop name"`, sprite-local variables, or global Stage variables (`"Stage"` -> `"_stage_"`). |
 | `key_pressed(key)` | `sensing_keypressed` | `KEY_OPTION` (`sensing_keyoptions` or expr) | Accepts `"space"`, `"up arrow"`, `"down arrow"`, `"left arrow"`, `"right arrow"`, `"enter"`, `"any"`, letters/digits, or an expression. |
 | `mouse_x()` | `sensing_mousex` | — | Stage mouse X coordinate (`-240..240`). |
 | `mouse_y()` | `sensing_mousey` | — | Stage mouse Y coordinate (`-180..180`). |
 | `mouse_down()` | `sensing_mousedown` | — | Boolean: `true` while mouse button is pressed on the stage canvas. |
 | `timer()` | `sensing_timer` | — | Seconds elapsed since run start or last `reset_timer()`. |
 | `reset_timer()` | `sensing_resettimer` | — | Resets the stage timer to `0`. |
+| `current_time(unit)` | `sensing_current` | Field `CURRENTMENU` (uppercased) | Units: `"year"`, `"month"` (`1..12`), `"date"`, `"dayofweek"` (`1=Sun..7=Sat`), `"hour"`, `"minute"`, `"second"`. (`StagePreview` also accepts `current(unit)`). |
+| `days_since_2000()` | `sensing_dayssince2000` | — | Fractional UTC days elapsed since `2000-01-01T00:00:00Z`. |
+| `username()` | `sensing_username` | — | Returns `"player"` in `StagePreview`. |
+| `loudness()` | `sensing_loudness` | — | Compiles/decompiles cleanly; returns `0` in `StagePreview`. |
 
 ```python
 @when_flag_clicked
 def quiz():
     reset_timer()
+    set_drag_mode("draggable")
     ask("What is your name?")
     say(join("Hello, ", answer()), 2)
 ```
@@ -308,40 +339,46 @@ def quiz():
 
 | Python DSL | Scratch 3.0 Opcode | Fields / Inputs | Notes |
 | --- | --- | --- | --- |
-| `var = expr` | `data_setvariableto` | Field `VARIABLE`, input `VALUE` | Sets variable value. Registers new variables on Stage globally. |
-| `var += expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Increments variable by `expr`. |
-| `var -= expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Negates numeric literal directly or wraps `expr` in `operator_subtract(0, expr)`. |
-| `var *= expr` | `data_setvariableto` + `operator_multiply` | Field `VARIABLE`, `VALUE` = `var * expr` | Desugared at parse time into assignment with multiplication. |
-| `var /= expr` | `data_setvariableto` + `operator_divide` | Field `VARIABLE`, `VALUE` = `var / expr` | Desugared at parse time into assignment with division. |
+| `var = expr` | `data_setvariableto` | Field `VARIABLE`, input `VALUE` | Sets global Stage variable value. |
+| `self.var = expr` | `data_setvariableto` | Field `VARIABLE` (sprite-owned ID), input `VALUE` | Sets sprite-local ("For this sprite only") variable; isolated per clone in `StagePreview`. |
+| `var += expr` / `self.var += expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Increments global or sprite-local variable by `expr`. |
+| `var -= expr` / `self.var -= expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Negates numeric literal directly (`-25`) or wraps `expr` in `operator_subtract(0, expr)`. |
+| `var *= expr` / `self.var *= expr` | `data_setvariableto` + `operator_multiply` | Field `VARIABLE`, `VALUE` = `var * expr` | Desugared at parse time into assignment with multiplication. |
+| `var /= expr` / `self.var /= expr` | `data_setvariableto` + `operator_divide` | Field `VARIABLE`, `VALUE` = `var / expr` | Desugared at parse time into assignment with division. |
+| `show_variable(v)` / `hide_variable(v)` | `data_showvariable` / `data_hidevariable` | Field `VARIABLE` | Pass `"name"` for global or `self.var` for sprite-local. Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview`. |
 
 ### Lists (1-Based Indexing)
 
-| Python DSL | Scratch 3.0 Opcode | Fields / Inputs | Notes |
-| --- | --- | --- | --- |
-| `list_add(list, item)` | `data_addtolist` | Field `LIST`, input `ITEM` | Appends `item` to the end of `list`. |
-| `list_delete(list, index)` | `data_deleteoflist` | Field `LIST`, input `INDEX` | Removes element at 1-based `index`. |
-| `list_clear(list)` | `data_deletealloflist` | Field `LIST` | Clears all items from `list`. |
-| `list_insert(list, index, item)` | `data_insertatlist` | Field `LIST`, inputs `INDEX`, `ITEM` | Inserts `item` at 1-based `index`. |
-| `list_replace(list, index, item)` | `data_replaceitemoflist` | Field `LIST`, inputs `INDEX`, `ITEM` | Replaces element at 1-based `index`. |
-| `list_item(list, index)` | `data_itemoflist` | Field `LIST`, input `INDEX` | Reporter returning element at 1-based `index` (`""` if out of bounds). |
-| `list_length(list)` | `data_lengthoflist` | Field `LIST` | Reporter returning number of items in `list`. |
-| `list_contains(list, item)` | `data_listcontainsitem` | Field `LIST`, input `ITEM` | Boolean reporter checking whether `list` contains `item`. |
+Every global `list_*` helper has a sprite-local counterpart `local_list_*` that stores the list in `target.lists` ("For this sprite only") and isolates data per clone in `StagePreview`.
 
-> **Note**: The first argument (`list`) to all `list_*` functions should be a string literal naming the Scratch list (e.g., `"inventory"`).
+| Python DSL | Local Variant | Scratch 3.0 Opcode | Fields / Inputs | Notes |
+| --- | --- | --- | --- | --- |
+| — | `local_list(name)` | *(declaration only)* | — | Registers `name` in `target.lists` without emitting a block; subsequent `list_*(name, ...)` calls in that sprite also bind locally. |
+| `list_add(list, item)` | `local_list_add(list, item)` | `data_addtolist` | Field `LIST`, input `ITEM` | Appends `item` to the end of `list`. |
+| `list_delete(list, index)` | `local_list_delete(list, index)` | `data_deleteoflist` | Field `LIST`, input `INDEX` | Removes element at 1-based `index` (`"last"`, `"random"`, `"all"` supported in `StagePreview`). |
+| `list_clear(list)` | `local_list_clear(list)` | `data_deletealloflist` | Field `LIST` | Clears all items from `list`. |
+| `list_insert(list, index, item)` | `local_list_insert(list, index, item)` | `data_insertatlist` | Field `LIST`, inputs `INDEX`, `ITEM` | Inserts `item` at 1-based `index` (`"last"`, `"random"` supported in `StagePreview`). |
+| `list_replace(list, index, item)` | `local_list_replace(list, index, item)` | `data_replaceitemoflist` | Field `LIST`, inputs `INDEX`, `ITEM` | Replaces element at 1-based `index` (`"last"`, `"random"`, `"all"` supported in `StagePreview`). |
+| `list_item(list, index)` | `local_list_item(list, index)` | `data_itemoflist` | Field `LIST`, input `INDEX` | Reporter returning element at 1-based `index` (`"last"`, `"random"`, `"all"` supported; `""` if out of bounds). |
+| `list_length(list)` | `local_list_length(list)` | `data_lengthoflist` | Field `LIST` | Reporter returning number of items in `list`. |
+| `list_contains(list, item)` | `local_list_contains(list, item)` | `data_listcontainsitem` | Field `LIST`, input `ITEM` | Boolean reporter checking whether `list` contains `item` (case-insensitive). |
+| `list_index_of(list, item)` | `local_list_index_of(list, item)` | `data_itemnumoflist` | Field `LIST`, input `ITEM` | Reporter returning 1-based index of `item` in `list` (`0` if not found). |
+| `show_list(list)` / `hide_list(list)` | — | `data_showlist` / `data_hidelist` | Field `LIST` | Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview` (works with local lists declared via `local_list(list)`). |
+
+> **Note**: The first argument (`list`) to all `list_*` / `local_list_*` functions should be a string literal naming the Scratch list (e.g., `"inventory"`).
 
 ```python
 @when_flag_clicked
 def inventory_demo():
-    score = 10
-    score += 5
-    score -= 2
-    score *= 2
-    list_clear("bag")
-    list_add("bag", "key")
-    list_insert("bag", 1, "map")
-    list_replace("bag", 2, "golden_key")
-    if list_contains("bag", "golden_key"):
-        say(join("Items: ", list_length("bag")), 2)
+    self.hp = 100
+    self.hp -= 25
+    local_list("bag")
+    local_list_add("bag", "key")
+    local_list_insert("bag", 1, "map")
+    local_list_replace("bag", 2, "golden_key")
+    if local_list_contains("bag", "golden_key"):
+        idx = local_list_index_of("bag", "golden_key")
+        say(join("Key at slot: ", idx), 2)
 ```
 
 ---
@@ -376,7 +413,7 @@ def inventory_demo():
 | `random(a, b)` | `operator_random` | `FROM`, `TO` | Random integer between `a` and `b` inclusive (in `StagePreview`). |
 | `join(s1, s2)` | `operator_join` | `STRING1`, `STRING2` | Concatenates two strings/numbers. |
 | `letter_of(idx, s)` | `operator_letter_of` | `LETTER`, `STRING` | Returns character at 1-based position `idx`. |
-| `length_of(s)` | `operator_length` | `STRING` | Returns string length. |
+| `length_of(s)` / `len(s)` | `operator_length` | `STRING` | Compiles to `operator_length` and decompiles as `length_of(s)`. (`StagePreview` `len()` also returns `.length` if passed an array value). |
 | `contains(s, sub)` | `operator_contains` | `STRING1`, `STRING2` | Case-insensitive substring check. |
 | `round(n)` / `round_num(n)` | `operator_round` | `NUM` | Both compile to `operator_round`; decompiles as `round_num(n)`. |
 
@@ -391,12 +428,14 @@ def inventory_demo():
 | `sin(n)` | `"sin"` | `sin(n)` | Supported (degrees) |
 | `cos(n)` | `"cos"` | `cos(n)` | Supported (degrees) |
 | `tan(n)` | `"tan"` | `tan(n)` | Supported (degrees) |
-| `asin(n)` | `"asin"` | `math_op("asin", n)` | `.sb3` compile/decompile only |
-| `acos(n)` | `"acos"` | `math_op("acos", n)` | `.sb3` compile/decompile only |
-| `atan(n)` | `"atan"` | `math_op("atan", n)` | `.sb3` compile/decompile only |
-| `ln(n)` | `"ln"` | `math_op("ln", n)` | `.sb3` compile/decompile only |
-| `log(n)` | `"log"` | `math_op("log", n)` | `.sb3` compile/decompile only |
-| `math_op(op, n)` | `op` | Direct func (for `abs`, `floor`, `ceil`, `sqrt`, `sin`, `cos`, `tan`) or `math_op(op, n)` | `abs`, `floor`, `ceiling`, `sqrt`, `sin`, `cos` |
+| `asin(n)` | `"asin"` | `asin(n)` | Supported (returns degrees) |
+| `acos(n)` | `"acos"` | `acos(n)` | Supported (returns degrees) |
+| `atan(n)` | `"atan"` | `atan(n)` | Supported (returns degrees) |
+| `ln(n)` | `"ln"` | `ln(n)` | Supported (natural log) |
+| `log(n)` | `"log"` | `log(n)` | Supported (base-10 log) |
+| `exp(n)` | `"e ^"` | `exp(n)` | Supported (`Math.exp(n)`) |
+| `pow10(n)` | `"10 ^"` | `pow10(n)` | Supported (`Math.pow(10, n)`) |
+| `math_op(op, n)` | `op` | Direct alias above (or `math_op(op, n)` if unknown) | All 14 Scratch `operator_mathop` operations supported |
 
 ```python
 @when_flag_clicked
@@ -407,4 +446,23 @@ def math_demo():
     steps = 17 // 3
     if (dx >= 70) and not (steps == 0):
         say(join("Target X: ", dx), 2)
+```
+
+---
+
+## 12. Browser IDE URL Query Parameters
+
+The web application ([`index.html`](../index.html) / [`js/app.js`](../js/app.js)) parses `window.location.search` on startup to support iframe embeds, lesson deep-links, and shareable programs:
+
+| Query Parameter | Accepted Values | Effect |
+| --- | --- | --- |
+| `embed` | `1` or `true` | Adds `embed-mode` class to `document.body`, hiding the template bar, quick-insert command palette, brand subtitle, and reset button for compact iframe embedding. |
+| `snippet` | `hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels` | Loads the specified built-in template into the active sprite editor on startup (defaults to `hexagon` if omitted or unknown). |
+| `code` | `<base64url>` | Decodes UTF-8 Base64URL-encoded Python DSL code into the active sprite editor (overrides `snippet`). Produced by clicking **Поділитися** (`#btn-share`). |
+| `autorun` | `1` or `true` | Automatically compiles all targets and clicks `#btn-run` on startup (skipped if `code` failed to decode). |
+
+Example embed URL:
+
+```text
+https://figarist.github.io/pyScratch/?embed=1&snippet=clones&autorun=1
 ```
