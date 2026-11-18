@@ -280,7 +280,7 @@
       meta: {
         semver: '3.0.0',
         vm: '2.3.0',
-        agent: 'pyScratch-1.2.2'
+        agent: 'pyScratch-1.2.3'
       }
     };
 

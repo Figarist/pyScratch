@@ -5,6 +5,11 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.2.3] - 2026-11-18
+
+### Fixed
+- **Guide & FAQ (`index.html`, `ru/`)**: Scratch 3.0 shows "Load from your computer" untranslated in every locale (scratch-gui shared message without l10n), so the uk/ru guide and FAQ now quote it as-is instead of an invented translation.
+
 ## [1.2.2] - 2026-11-18
 
 ### Fixed
