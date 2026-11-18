@@ -96,6 +96,72 @@
             "item": "https://sivochka.com/pyScratch/en/"
           }
         ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://sivochka.com/pyScratch/en/#faq",
+        "inLanguage": "en",
+        "isPartOf": {
+          "@id": "https://sivochka.com/pyScratch/en/#app"
+        },
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Can I convert a Scratch project to Python online for free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Open the .sb3 file in pyScratch and the scripts of every sprite appear as Python-style code. The tool is free, needs no installation or account, and is open source under the MIT license."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I open an .sb3 file online without installing Scratch?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Choose “File → Open .sb3” or drag the file onto the page. You can read the scripts as code and as blocks, run the project on the stage and look through its assets without installing anything."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I edit an .sb3 in Python and open it in Scratch again?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Change the code, choose “File → Save .sb3” and load the downloaded file in the Scratch 3.0 editor with “File → Load from your computer”."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is the code real Python?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It is a Python-style language built from Scratch blocks. Indentation, if, elif, else, while, for i in range(n) and def work as in Python, but there are no imports, classes or return, so the code will not run in a regular Python interpreter."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are my projects uploaded anywhere?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Opening, converting and saving all happen in your browser, and the .sb3 file never leaves your device."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens to blocks pyScratch does not support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Scripts with unknown blocks stay in the project and go back into the saved .sb3 unchanged. The code editor marks them with a comment, and you cannot change them there."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does pyScratch work with old Scratch 2.0 (.sb2) files?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No, only with Scratch 3.0 (.sb3) files. Open an old .sb2 project in the Scratch 3.0 editor first and save it again to get an .sb3 file."
+            }
+          }
+        ]
       }
     ]
   }
@@ -139,7 +205,7 @@
       <a href="https://github.com/Figarist/pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" title="pyScratch source code on GitHub">GitHub</a>
     </nav>
 
-    <span class="menu-tagline" data-i18n="brand_sub">Python DSL ↔ Scratch 3.0 (.sb3)</span>
+    <h1 class="menu-tagline">pyScratch — Scratch to Python converter online (.sb3)</h1>
   </header>
 
   <input type="file" id="file-input" accept=".sb3" class="hidden" />
@@ -465,6 +531,53 @@
       </div>
     </aside>
   </main>
+
+  <section class="seo-guide" id="guide" aria-label="pyScratch guide">
+    <div class="seo-guide-inner">
+      <h2 id="guide-title">Scratch to Python converter online: what pyScratch does</h2>
+      <p>pyScratch is a free online IDE that opens Scratch 3.0 projects (.sb3) and shows every script as Python-style code. You can edit an .sb3 in Python, run it on a 480×360 stage right in the page and save it back as an .sb3 file that opens in the regular Scratch editor. It also works the other way round: write Python-like code from scratch and pyScratch builds the Scratch blocks for you. It is made for students moving from Scratch to Python and for teachers who want to show the same program as blocks and as text.</p>
+      <h2>How to open an .sb3 online and convert it to Python</h2>
+      <ol>
+        <li>In the Scratch editor, choose “File → Save to your computer” to get the .sb3 file of your project.</li>
+        <li>In pyScratch, choose “File → Open .sb3”, or simply drag the .sb3 file onto the page.</li>
+        <li>Pick a sprite or the Stage in the panel under the stage. The code editor shows its scripts as Python, and the “Scratch Blocks” tab shows the same scripts as a block tree; clicking a block jumps to its line of code.</li>
+        <li>Edit the code and press the green flag (or Ctrl+Enter) to run the project on the stage.</li>
+        <li>Choose “File → Save .sb3”, then load the downloaded file in Scratch with “File → Load from your computer”.</li>
+      </ol>
+      <p>The “Inspector (.sb3)” tab checks the project against Scratch’s limits (5 MB for project.json and 10 MB per asset) and helps you remove unused costumes and sounds.</p>
+      <h2>What the Python code can do</h2>
+      <p>The code is a small Python dialect where each function maps to a Scratch block: <code>move(10)</code>, <code>say("Hello!", 2)</code>, <code>if touching("edge"):</code>, <code>for i in range(10):</code>, <code>while True:</code> and so on. Decorators such as <code>@when_flag_clicked</code> or <code>@when_key_pressed("space")</code> become event hats, <code>def</code> creates a My Blocks definition (<code>@warp</code> runs it without screen refresh), <code>score = 0</code> is a variable for all sprites and <code>self.hp = 100</code> is a variable for this sprite only.</p>
+      <p>Supported categories are Motion, Looks, Sound, Events, Control, Sensing, Operators, Variables and lists, My Blocks and clones, plus the Pen, Music, Text to Speech and Translate extensions. The “API Reference” tab lists every command, and nine learning templates (Pong, a maze, a clicker game and more) give you ready-made examples.</p>
+      <h2>Honest limits</h2>
+      <ul>
+        <li>It is not full Python: <code>import</code>, <code>class</code>, <code>return</code>, <code>break</code>, <code>continue</code>, <code>lambda</code>, <code>try</code>/<code>except</code>, <code>with</code>, f-strings, <code>**</code> and the <code>a if b else c</code> expression are not supported, and the compiler tells you so.</li>
+        <li>Scripts that use blocks the converter does not know yet (for example Video Sensing or Makey Makey) stay in the project and are saved unchanged, but the editor shows only a comment for them and you cannot edit them as code.</li>
+        <li>Comments attached to blocks that pyScratch regenerates are lost when you save.</li>
+        <li>The built-in stage is a simplified simulator, not the Scratch engine: touching checks are approximate, the fisheye and whirl effects are not drawn, and <code>translate()</code> returns the text unchanged because the preview never goes online. Always check the final result in Scratch.</li>
+        <li>Compiler error messages and the comments the converter adds to the code are currently in Ukrainian only.</li>
+      </ul>
+      <h2>Privacy: your project stays in the browser</h2>
+      <p>pyScratch runs entirely in your browser. The .sb3 file is unpacked and packed on your device, nothing is uploaded to a server, and there is no account or sign-up. The page only counts anonymous visits without cookies. The “Share” button puts your code into the link itself, so anyone who gets the link can see that code.</p>
+      <h2 id="faq">Frequently asked questions</h2>
+      <div class="seo-faq">
+        <h3>Can I convert a Scratch project to Python online for free?</h3>
+        <p>Yes. Open the .sb3 file in pyScratch and the scripts of every sprite appear as Python-style code. The tool is free, needs no installation or account, and is open source under the MIT license.</p>
+        <h3>How do I open an .sb3 file online without installing Scratch?</h3>
+        <p>Choose “File → Open .sb3” or drag the file onto the page. You can read the scripts as code and as blocks, run the project on the stage and look through its assets without installing anything.</p>
+        <h3>Can I edit an .sb3 in Python and open it in Scratch again?</h3>
+        <p>Yes. Change the code, choose “File → Save .sb3” and load the downloaded file in the Scratch 3.0 editor with “File → Load from your computer”.</p>
+        <h3>Is the code real Python?</h3>
+        <p>It is a Python-style language built from Scratch blocks. Indentation, if, elif, else, while, for i in range(n) and def work as in Python, but there are no imports, classes or return, so the code will not run in a regular Python interpreter.</p>
+        <h3>Are my projects uploaded anywhere?</h3>
+        <p>No. Opening, converting and saving all happen in your browser, and the .sb3 file never leaves your device.</p>
+        <h3>What happens to blocks pyScratch does not support?</h3>
+        <p>Scripts with unknown blocks stay in the project and go back into the saved .sb3 unchanged. The code editor marks them with a comment, and you cannot change them there.</p>
+        <h3>Does pyScratch work with old Scratch 2.0 (.sb2) files?</h3>
+        <p>No, only with Scratch 3.0 (.sb3) files. Open an old .sb2 project in the Scratch 3.0 editor first and save it again to get an .sb3 file.</p>
+      </div>
+      <p class="seo-guide-foot">pyScratch is open source (MIT): <a href="https://github.com/Figarist/pyScratch" target="_blank" rel="noopener noreferrer">GitHub</a>. Made by Ihor Sivochka, <a href="https://sivochka.com/" target="_blank" rel="noopener noreferrer" data-goatcounter-click="pyscratch-hub-guide">sivochka.com</a>.</p>
+    </div>
+  </section>
 
   <div id="drop-overlay" class="drop-overlay hidden" aria-hidden="true">
     <div class="drop-overlay-card">

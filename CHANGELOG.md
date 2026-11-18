@@ -5,6 +5,15 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.2.1] - 2026-11-18
+
+### Added
+- **Page heading (`index.html`, `en/`, `ru/`)**: the menu-bar tagline is now a localized, keyword-bearing `<h1>` that keeps the `pyScratch` brand (uk: "Scratch на Python онлайн", en: "Scratch to Python converter online", ru: "Scratch в Python онлайн"). It no longer uses `data-i18n`, so the page language always wins.
+- **Static guide & FAQ below the IDE (`index.html`, `en/`, `ru/`, `style.css`)**: a crawlable, localized section explaining what pyScratch does, how to open an `.sb3` online and convert it to Python step by step, what the DSL supports, its honest limits, privacy (everything runs in the browser) and a 7-question FAQ. The same questions and answers are mirrored as a `FAQPage` node in each page's JSON-LD `@graph`. Hidden in `?embed=1` mode.
+
+### Changed
+- **Layout (`style.css`)**: the page can now scroll vertically; the menu bar and IDE still fill exactly the first screen (`.gui` height is `100dvh` minus `--menu-bar-h`). Between 821 px and 1100 px the H1 moves to its own row instead of being hidden.
+
 ## [1.2.0] - 2026-11-17
 
 ### Added
