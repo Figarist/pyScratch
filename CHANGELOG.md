@@ -5,6 +5,11 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.2.2] - 2026-11-18
+
+### Fixed
+- **Guide (`index.html`)**: the Scratch 3.0 menu item is quoted with its real Ukrainian label «Файл → Вивантажити на ваш комп’ютер».
+
 ## [1.2.1] - 2026-11-18
 
 ### Added
