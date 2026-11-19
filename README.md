@@ -1,6 +1,6 @@
 # pyScratch
 
-> **Live Online Browser IDE:** [**https://figarist.github.io/pyScratch/**](https://figarist.github.io/pyScratch/)
+> **Live Online Browser IDE:** [**https://sivochka.com/pyScratch/**](https://sivochka.com/pyScratch/)
 >
 > Open `.sb3` files (via file picker or Drag-and-Drop), write or edit Python DSL / Scratch 3.0 scripts, run them live on the 480x360 Canvas 2D stage, manage sprites/costumes/sounds, and download the updated `.sb3` project directly in your browser — **zero installation or PC download required**.
 
@@ -38,7 +38,7 @@
 
 ### 1. Use Online or Run Locally in the Browser
 
-- **Online (No Setup)**: Open [**https://figarist.github.io/pyScratch/**](https://figarist.github.io/pyScratch/) in any modern browser.
+- **Online (No Setup)**: Open [**https://sivochka.com/pyScratch/**](https://sivochka.com/pyScratch/) in any modern browser.
 - **Direct local open**: Open [`index.html`](index.html) directly in a modern web browser.
 - **Local static server**:
 
