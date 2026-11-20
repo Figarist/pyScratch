@@ -14,12 +14,13 @@ Every top-level construct in a target script (Stage or Sprite) **must** be one o
 Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 0` outside a `def`) are rejected with a `CompileError`.
 
 ### Indentation, Comments, & Identifiers
-- **Indentation**: 4 spaces per level is recommended. Tab characters (`\t`) count as 4 spaces. The tokenizer only checks consistency: a dedent must return to a previously used indentation level, otherwise a `CompileError` ("не збігається з жодним попереднім рівнем відступу") points to the offending line. It does not require multiples of 4.
+- **Indentation**: 4 spaces per level is recommended. Tab characters (`\t`) count as 4 spaces. The tokenizer only checks consistency: a dedent must return to a previously used indentation level, otherwise a `CompileError` ("Wrong indentation on line N …" / "Неправильний відступ у рядку N …") points to the offending line. It does not require multiples of 4.
 - **Line continuation**: inside `()` and `[]` a statement may span several lines (blank lines and `#` comments are allowed in between), and a trailing backslash `\` continues the line explicitly. An unclosed bracket is reported at the line where it was opened; a stray or mismatched closing bracket is reported at its own position.
 - **Comments**: `#` begins a single-line comment. Empty lines and comments are ignored by the tokenizer and are **not** stored in `target.comments` (comment round-tripping is not implemented).
 - **Identifiers**: any Unicode letter (`\p{L}`) or `_` to start, then letters, digits and combining marks (identifiers cannot start with a digit).
 - **Error positions**: tokens and `CompileError` carry a 1-based `line` and `col` (`col` may be `null` for errors that are only known per line).
-- **Unsupported Python constructs** produce a dedicated Ukrainian hint instead of a generic syntax error: `return`, `break`, `continue`, `class`, `import` / `from`, `lambda`, `try`/`except`, `with`, `global`, f-strings (and `r`/`b`/`u` string prefixes), `**` and the ternary `a if cond else b`.
+- **Diagnostics language**: every `CompileError` message, the block tree labels and the comments the decompiler writes (`# === PLAYER SCRIPT (Sprite1) ===`, `# [kept unchanged] …`) come from [`js/messages.js`](../js/messages.js) in the language of the page (`uk` at `/`, `en` at `/en/`, `ru` at `/ru/`). In Node.js without `PyScratchI18n` they are Ukrainian. Comments never affect compilation, so code written on one language page compiles the same on the others.
+- **Unsupported Python constructs** produce a dedicated hint instead of a generic syntax error: `return`, `break`, `continue`, `class`, `import` / `from`, `lambda`, `try`/`except`, `with`, `global`, f-strings (and `r`/`b`/`u` string prefixes), `**` and the ternary `a if cond else b`.
 - **Reserved keywords**: `def`, `for`, `in`, `while`, `if`, `elif`, `else`, `pass`, `and`, `or`, `not`, `True`, `False`.
 
 ### Literals & Negative Literal Folding
@@ -33,7 +34,7 @@ Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 
 - **Sprite-Local Lists (`local_list` & `local_list_*`)**: Calling `local_list("inv")` or any `local_list_*` helper (`local_list_add`, `local_list_item`, `local_list_length`, `local_list_contains`, `local_list_index_of`, `local_list_insert`, `local_list_replace`, `local_list_delete`, `local_list_clear`) registers the list on `target.lists` ("For this sprite only"). Once `local_list("inv")` is declared in a sprite script, subsequent `list_*("inv", ...)` calls in that sprite also bind to the local list. `StagePreview` deep-copies `actor.localLists` onto each clone.
 - **Procedure Parameters**: Inside a `def proc(a, b):` body, reading `a` or `b` compiles to `argument_reporter_string_number` instead of a global variable. In `StagePreview`, procedure arguments live in a per-call `localScope` dictionary, while assignments (`x = ...`, `x += ...`) mutate `this.vars` (or `actor.localVars` when using `self.x`).
 - **Dynamic Reporter Inputs in Menu Slots**: Single-argument menu blocks (`goto`, `glide_to`, `point_towards`, `switch_costume`, `switch_backdrop`, `switch_backdrop_and_wait`, `play_sound`, `play_sound_until_done`, `touching`, `distance_to`, `key_pressed`, `attribute_of`, `create_clone`, `broadcast`, `broadcast_and_wait`, `set_pen_param`, `change_pen_param`) accept either string literals or dynamic variable/reporter expressions (`compileMenuOrExpr` / `compileBroadcastInput`).
-- **Name conflicts**: a sprite-local variable (`self.x`) may not share a name with a global (Stage) variable `x`; the compiler raises a `CompileError` ("конфліктує з глобальною змінною") instead of silently shadowing.
+- **Name conflicts**: a sprite-local variable (`self.x`) may not share a name with a global (Stage) variable `x`; the compiler raises a `CompileError` ("clashes with the global variable" / "конфліктує з глобальною змінною") instead of silently shadowing.
 - **`for` loop variable**: `for i in range(n)` is a normal Scratch variable named `i` in the generated project. When the body reads `i`, the compiler emits `set i to 0` before the `repeat` and `change i by 1` as the last body block, so the `.sb3` behaves like the preview (`i = 0 … n-1`; after the loop `i == n`). The decompiler folds that pattern back into `for i in range(n)`; a body that already ends with `i += 1` is left as is. If the body never reads `i`, no counter blocks are emitted. Loop-variable names that are parameters of the enclosing `def` are not touched.
 - **Differences from Python**: `//` is `floor(a / b)` (so `-7 // 2 == -4`, as in Python) but the division is Scratch's: dividing by zero never raises, `x / 0` is `Infinity`/`-Infinity` and `0 / 0` is `NaN` (same for `//`), `%` takes the sign of the divisor like Python and `x % 0` is `NaN`. All numbers are IEEE-754 doubles, so integers are exact only up to 2^53 (no arbitrary-precision `int`). `and`/`or` always evaluate both sides and return booleans, not operands. Strings and numbers are compared Scratch-style (case-insensitive, numeric when both look numeric). Variables are not block-scoped: a bare name is always a global variable (never local to `def` or `if`), only `self.name`, `local_list(...)` and procedure parameters are local. There is no `None`, tuple, dict, slicing or `in` operator for values (use `contains()` / `list_contains()`).
 - **1-Based Indexing**: `list_item`, `list_index_of`, `list_delete`, `list_insert`, `list_replace`, their `local_list_*` counterparts, and `letter_of` use **1-based indexing**, matching Scratch 3.0.
@@ -41,7 +42,7 @@ Top-level imperative statements (e.g., calling `move(10)` or assigning `score = 
 ---
 
 ### Validation of Field Values & Blocks per Target
-The compiler rejects values Scratch would silently ignore, with a Ukrainian `CompileError` listing the allowed values:
+The compiler rejects values Scratch would silently ignore, with a `CompileError` (in the page language) listing the allowed values:
 - `set_effect` / `change_effect`: `COLOR FISHEYE WHIRL PIXELATE MOSAIC BRIGHTNESS GHOST` (case-insensitive); `set_sound_effect` / `change_sound_effect`: `PITCH PAN`.
 - `set_rotation_style`: `"left-right"`, `"don't rotate"`, `"all around"`; `set_drag_mode`: `"draggable"`, `"not draggable"`; `stop`: `"all"`, `"this script"`, `"other scripts in sprite"`.
 - Keys of `@when_key_pressed` / `key_pressed`: `space`, the four `… arrow`, `enter`, `any`, `a`–`z`, `0`–`9` (checked only for string literals).
@@ -52,7 +53,7 @@ The compiler rejects values Scratch would silently ignore, with a Ukrainian `Com
 - Calling a custom block with the wrong number of arguments is a `CompileError`.
 
 ### Imported Projects: Scripts the DSL Cannot Express
-When an imported `.sb3` contains top-level scripts with opcodes the decompiler does not know (unknown hats, extension blocks such as `videoSensing_*` or `makeymakey_*`, loose block stacks, …), `decompileTarget` does not render them; it prints a `# [збережено без змін] …` comment instead. On every recompile `compileToScratch` keeps those scripts verbatim: their blocks are merged back into `target.blocks` (ids that collide with generated ids are renamed to `raw_<id>`, with `parent`/`next`/inputs/comment links rewritten), their variables/lists/broadcasts are protected from orphan cleanup, and custom blocks defined inside such scripts remain callable from DSL code. They cannot be edited or deleted from the code editor. Comments attached to regenerated blocks are dropped (workspace comments and comments on preserved scripts are kept), and monitors of variables/lists removed by the cleanup are removed from `project.monitors`.
+When an imported `.sb3` contains top-level scripts with opcodes the decompiler does not know (unknown hats, extension blocks such as `videoSensing_*` or `makeymakey_*`, loose block stacks, …), `decompileTarget` does not render them; it prints a `# [kept unchanged] …` comment instead (`# [збережено без змін] …` on the Ukrainian page, `# [сохранено без изменений] …` on the Russian one). On every recompile `compileToScratch` keeps those scripts verbatim: their blocks are merged back into `target.blocks` (ids that collide with generated ids are renamed to `raw_<id>`, with `parent`/`next`/inputs/comment links rewritten), their variables/lists/broadcasts are protected from orphan cleanup, and custom blocks defined inside such scripts remain callable from DSL code. They cannot be edited or deleted from the code editor. Comments attached to regenerated blocks are dropped (workspace comments and comments on preserved scripts are kept), and monitors of variables/lists removed by the cleanup are removed from `project.monitors`.
 
 ---
 
@@ -169,7 +170,7 @@ def burst():
 | `move(steps)` | `motion_movesteps` | `STEPS` | Moves in current `direction` (`90` = right, `0` = up). |
 | `turn_right(deg)` | `motion_turnright` | `DEGREES` | Rotates clockwise by `deg` degrees. |
 | `turn_left(deg)` | `motion_turnleft` | `DEGREES` | Rotates counter-clockwise by `deg` degrees. |
-| `goto(x, y)` | `motion_gotoxy` | `X`, `Y` | Moves to coordinates `(x, y)` (`x: -240..240`, `y: -180..180`). |
+| `goto(x, y)` | `motion_gotoxy` | `X`, `Y` | Moves to coordinates `(x, y)` (`x: -240..240`, `y: -180..180`). Like Scratch, `StagePreview` fences the sprite so at least 15 px of its costume stays on the stage, so a large sprite can sit partly beyond the edge. |
 | `goto(target)` | `motion_goto` | `TO` (`motion_goto_menu` or expr) | Single argument: `"random"` (`"_random_"`), `"mouse"` (`"_mouse_"`), `"SpriteName"`, or reporter expression. |
 | `goto_random()` | `motion_goto` | `TO`: `"_random_"` | Shorthand for `goto("random")`; decompiles as `goto_random()`. |
 | `goto_mouse()` | `motion_goto` | `TO`: `"_mouse_"` | Shorthand for `goto("mouse")`; decompiles as `goto_mouse()`. |
@@ -181,7 +182,7 @@ def burst():
 | `change_x(dx)` | `motion_changexby` | `DX` | Adds `dx` to `x`. |
 | `set_y(y)` | `motion_sety` | `Y` | Sets vertical coordinate. |
 | `change_y(dy)` | `motion_changeyby` | `DY` | Adds `dy` to `y`. |
-| `if_on_edge_bounce()` | `motion_ifonedgebounce` | — | Reflects direction and clamps sprite inside stage bounds using costume half-size. |
+| `if_on_edge_bounce()` | `motion_ifonedgebounce` | — | Reflects direction and clamps sprite inside stage bounds using costume half-size (capped at half the stage, so sprites larger than the stage do not jitter). |
 | `set_rotation_style(style)` | `motion_setrotationstyle` | Field `STYLE` | `"all around"`, `"left-right"`, or `"don't rotate"`. |
 
 ### Reporters
@@ -297,7 +298,7 @@ Using any `pen_*` statement automatically flags `usesPen = true` and appends `"p
 | --- | --- | --- | --- |
 | `pen_clear()` | `pen_clear` | — | Clears all pen strokes and stamps from the stage pen layer. |
 | `pen_stamp()` | `pen_stamp` | — | Stamps the sprite's current costume onto the pen layer. |
-| `pen_down()` | `pen_penDown` | — | Enables continuous line drawing as the sprite moves/glides. |
+| `pen_down()` | `pen_penDown` | — | Stamps a dot at the current position (as in Scratch) and enables continuous line drawing as the sprite moves/glides. |
 | `pen_up()` | `pen_penUp` | — | Lifts the pen to stop drawing while moving. |
 | `set_pen_color(color)` | `pen_setPenColorToColor` | `COLOR` | Hex color string (e.g., `"#00ffcc"`) compiles as Scratch color shadow type `9` and syncs `actor.penHsl`. |
 | `set_pen_param(param, val)` | `pen_setPenColorParamTo` | `COLOR_PARAM` (`pen_menu_colorParam` or expr), `VALUE` | Supports `"color"`, `"saturation"`, `"brightness"`, and `"transparency"` in both `.sb3` and `StagePreview` (`penHsl`). |
@@ -369,7 +370,7 @@ def quiz():
 | `var -= expr` / `self.var -= expr` | `data_changevariableby` | Field `VARIABLE`, input `VALUE` | Negates numeric literal directly (`-25`) or wraps `expr` in `operator_subtract(0, expr)`. |
 | `var *= expr` / `self.var *= expr` | `data_setvariableto` + `operator_multiply` | Field `VARIABLE`, `VALUE` = `var * expr` | Desugared at parse time into assignment with multiplication. |
 | `var /= expr` / `self.var /= expr` | `data_setvariableto` + `operator_divide` | Field `VARIABLE`, `VALUE` = `var / expr` | Desugared at parse time into assignment with division. |
-| `show_variable(v)` / `hide_variable(v)` | `data_showvariable` / `data_hidevariable` | Field `VARIABLE` | Pass `"name"` for global or `self.var` for sprite-local. Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview`. The compiler also adds a hidden monitor entry (`visible: false`, `mode: "default"`, `opcode: "data_variable"`, `params.VARIABLE`, `spriteName` = `null` for globals or the sprite name for `self.var`, default position `x: 5`, `y: 5 + 26·n`) to `projectJson.monitors`, keyed by the variable id; existing monitors are never modified, and monitors of variables removed by the orphan cleanup are deleted. |
+| `show_variable(v)` / `hide_variable(v)` | `data_showvariable` / `data_hidevariable` | Field `VARIABLE` | Pass `"name"` for global or `self.var` for sprite-local. Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview`. The compiler also adds a hidden monitor entry (`visible: false`, `mode: "default"`, `opcode: "data_variable"`, `params.VARIABLE`, `spriteName` = `null` for globals or the sprite name for `self.var`, default position `x: 5`, `y: 5 + 26·n`) to `projectJson.monitors`, keyed by the variable id; existing monitors are never modified, and monitors of variables removed by the orphan cleanup are deleted. In the IDE, shown variables appear as Scratch-style monitors on top of the stage (`default`, `large` and interactive `slider` modes from imported projects are honoured); a sprite-local monitor always shows that sprite's own value. |
 
 ### Lists (1-Based Indexing)
 
@@ -387,7 +388,7 @@ Every global `list_*` helper has a sprite-local counterpart `local_list_*` that 
 | `list_length(list)` | `local_list_length(list)` | `data_lengthoflist` | Field `LIST` | Reporter returning number of items in `list`. |
 | `list_contains(list, item)` | `local_list_contains(list, item)` | `data_listcontainsitem` | Field `LIST`, input `ITEM` | Boolean reporter checking whether `list` contains `item` (case-insensitive). |
 | `list_index_of(list, item)` | `local_list_index_of(list, item)` | `data_itemnumoflist` | Field `LIST`, input `ITEM` | Reporter returning 1-based index of `item` in `list` (`0` if not found). |
-| `show_list(list)` / `hide_list(list)` | — | `data_showlist` / `data_hidelist` | Field `LIST` | Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview` (works with local lists declared via `local_list(list)`). Adds a hidden `data_listcontents` monitor (`mode: "list"`) to `projectJson.monitors` exactly like `show_variable`. The IDE's variable watch panel hides names that are hidden this way. |
+| `show_list(list)` / `hide_list(list)` | — | `data_showlist` / `data_hidelist` | Field `LIST` | Updates `visibleMonitors`/`hiddenMonitors` in `StagePreview` (works with local lists declared via `local_list(list)`). Adds a hidden `data_listcontents` monitor (`mode: "list"`) to `projectJson.monitors` exactly like `show_variable`. The IDE's variable watch panel hides names that are hidden this way; shown lists appear as scrollable list monitors on the stage. |
 
 > **Note**: The first argument (`list`) to all `list_*` / `local_list_*` functions should be a string literal naming the Scratch list (e.g., `"inventory"`).
 
@@ -434,7 +435,7 @@ def inventory_demo():
 
 | Python DSL | Scratch 3.0 Opcode | Inputs | Notes |
 | --- | --- | --- | --- |
-| `random(a, b)` | `operator_random` | `FROM`, `TO` | Random integer between `a` and `b` inclusive (in `StagePreview`). |
+| `random(a, b)` | `operator_random` | `FROM`, `TO` | Same rule as Scratch: a random **integer** between `a` and `b` inclusive when both ends are whole numbers, otherwise a random **decimal** (`random(0.0, 1.0)`, `random(1, 5.5)`). A literal written with a decimal point keeps it in the `.sb3` (`"1.0"`), so `random(1.0, 10)` stays a decimal draw in Scratch too. |
 | `join(s1, s2)` | `operator_join` | `STRING1`, `STRING2` | Concatenates two strings/numbers. |
 | `letter_of(idx, s)` | `operator_letter_of` | `LETTER`, `STRING` | Returns character at 1-based position `idx`. |
 | `length_of(s)` / `len(s)` | `operator_length` | `STRING` | Compiles to `operator_length` and decompiles as `length_of(s)`. (`StagePreview` `len()` also returns `.length` if passed an array value). |
@@ -535,12 +536,14 @@ The web application ([`index.html`](../index.html) / [`js/app.js`](../js/app.js)
 | Query Parameter | Accepted Values | Effect |
 | --- | --- | --- |
 | `embed` | `1` or `true` | Adds `embed-mode` class to `document.body`, hiding the template bar, quick-insert command palette, brand subtitle, and reset button for compact iframe embedding. |
-| `snippet` | `hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels` | Loads the specified built-in template into the active sprite editor on startup (defaults to `hexagon` if omitted or unknown). |
-| `code` | `<base64url>` | Decodes UTF-8 Base64URL-encoded Python DSL code into the active sprite editor (overrides `snippet`). Produced by clicking **Поділитися** (`#btn-share`). |
+| `snippet` | `hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker` | Loads the specified built-in template into the active sprite editor on startup, with comments and phrases in the page language (defaults to `hexagon` if omitted or unknown). |
+| `code` | `<base64url>` | Decodes UTF-8 Base64URL-encoded Python DSL code into the active sprite editor (overrides `snippet`). Produced by clicking **Share / Поділитися** (`#btn-share`). |
 | `autorun` | `1` or `true` | Automatically compiles all targets and clicks `#btn-run` on startup (skipped if `code` failed to decode). |
 
 Example embed URL:
 
 ```text
-https://figarist.github.io/pyScratch/?embed=1&snippet=clones&autorun=1
+https://sivochka.com/pyScratch/?embed=1&snippet=clones&autorun=1
 ```
+
+Without `embed`, `snippet` or `code`, the IDE reopens the pupil's last project from the browser: the code of every sprite (`localStorage`, key `pyscratch_autosave_v1`) and a full snapshot of `project.json` with costumes and sounds (IndexedDB database `pyscratch_autosave`). Switching the page language saves the draft first and reopens it on the other language page. `?embed=1` never reads or writes the draft.

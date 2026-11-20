@@ -7,6 +7,15 @@
 (function (global) {
   'use strict';
 
+  // Localized message from js/messages.js (browser global or Node require); the bare key if the catalog is not loaded.
+  function tr(key, params) {
+    let catalog = global.PyScratchMessages;
+    if (!catalog && typeof module !== 'undefined' && module.exports && typeof require === 'function') {
+      try { catalog = require('./messages.js'); } catch (_) { catalog = null; }
+    }
+    return catalog ? catalog.format(key, params) : key;
+  }
+
   // Negate a numeric literal's source text without producing "--2.0" (which Scratch would read as NaN -> 0).
   function negateRaw(raw) {
     const t = String(raw);
@@ -51,18 +60,18 @@
     ...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')
   ]);
   const FIELD_WHITELISTS = {
-    looksEffect: { label: 'графічного ефекту', values: ['COLOR', 'FISHEYE', 'WHIRL', 'PIXELATE', 'MOSAIC', 'BRIGHTNESS', 'GHOST'] },
-    soundEffect: { label: 'ефекту звуку', values: ['PITCH', 'PAN'] },
-    rotationStyle: { label: 'стилю обертання', values: ['left-right', "don't rotate", 'all around'] },
-    dragMode: { label: 'режиму перетягування', values: ['draggable', 'not draggable'] },
-    stopOption: { label: 'параметра stop()', values: ['all', 'this script', 'other scripts in sprite'] },
+    looksEffect: { label: 'wl_looksEffect', values: ['COLOR', 'FISHEYE', 'WHIRL', 'PIXELATE', 'MOSAIC', 'BRIGHTNESS', 'GHOST'] },
+    soundEffect: { label: 'wl_soundEffect', values: ['PITCH', 'PAN'] },
+    rotationStyle: { label: 'wl_rotationStyle', values: ['left-right', "don't rotate", 'all around'] },
+    dragMode: { label: 'wl_dragMode', values: ['draggable', 'not draggable'] },
+    stopOption: { label: 'wl_stopOption', values: ['all', 'this script', 'other scripts in sprite'] },
     mathOp: {
-      label: 'математичної операції',
+      label: 'wl_mathOp',
       values: ['abs', 'floor', 'ceiling', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'ln', 'log', 'e ^', '10 ^']
     },
-    currentMenu: { label: 'одиниці часу', values: ['YEAR', 'MONTH', 'DATE', 'DAYOFWEEK', 'HOUR', 'MINUTE', 'SECOND'] },
-    greaterThan: { label: 'датчика', values: ['LOUDNESS', 'TIMER'] },
-    ttsVoice: { label: 'голосу', values: ['ALTO', 'TENOR', 'SQUEAK', 'GIANT', 'KITTEN'] }
+    currentMenu: { label: 'wl_currentMenu', values: ['YEAR', 'MONTH', 'DATE', 'DAYOFWEEK', 'HOUR', 'MINUTE', 'SECOND'] },
+    greaterThan: { label: 'wl_greaterThan', values: ['LOUDNESS', 'TIMER'] },
+    ttsVoice: { label: 'wl_ttsVoice', values: ['ALTO', 'TENOR', 'SQUEAK', 'GIANT', 'KITTEN'] }
   };
   const SENSING_OF_PROPERTIES = [
     'x position', 'y position', 'direction', 'costume #', 'costume name', 'size', 'volume',
@@ -141,7 +150,7 @@
           }
           if (indentStack[indentStack.length - 1] !== indent) {
             throw new CompileError(
-              `Неправильний відступ у рядку ${lineNum}: він не збігається з жодним попереднім рівнем відступу. Використовуйте однакову кількість пробілів (рекомендовано 4) для рядків одного блоку.`,
+              tr('err_indent_mismatch', { line: lineNum }),
               lineNum,
               1
             );
@@ -168,7 +177,7 @@
             break;
           }
           throw new CompileError(
-            `Символ "\\" у рядку ${lineNum} дозволений лише в кінці рядка (для продовження коду на наступному рядку).`,
+            tr('err_backslash', { line: lineNum }),
             lineNum,
             col
           );
@@ -183,7 +192,7 @@
           while (pos < rawLine.length) {
             if (rawLine[pos] === '\\') {
               if (pos + 1 >= rawLine.length) {
-                throw new CompileError(`Незакритий лапками рядок (${quote}) у рядку ${lineNum}.`, lineNum, col);
+                throw new CompileError(tr('err_unclosed_string', { quote: quote, line: lineNum }), lineNum, col);
               }
               const esc = rawLine[pos + 1];
               const simple = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', '0': '\0', '\\': '\\', "'": "'", '"': '"' };
@@ -195,7 +204,7 @@
                 const hex = rawLine.slice(pos + 2, pos + 2 + len);
                 if (hex.length !== len || !/^[0-9a-fA-F]+$/.test(hex)) {
                   throw new CompileError(
-                    `Некоректна escape-послідовність "\\${esc}" у рядку ${lineNum}: після неї потрібно рівно ${len} шістнадцяткових цифр.`,
+                    tr('err_escape_hex', { esc: esc, line: lineNum, len: len }),
                     lineNum,
                     pos + 1
                   );
@@ -204,7 +213,7 @@
                 pos += 2 + len;
               } else {
                 throw new CompileError(
-                  `Невідома escape-послідовність "\\${esc}" у рядку ${lineNum}. Підтримуються: \\n \\t \\r \\\\ \\' \\" \\xNN \\uNNNN. Щоб написати зворотну скісну риску, подвойте її: \\\\.`,
+                  tr('err_escape_unknown', { esc: esc, line: lineNum }),
                   lineNum,
                   pos + 1
                 );
@@ -218,7 +227,7 @@
             }
           }
           if (!closed) {
-            throw new CompileError(`Незакритий лапками рядок (${quote}) у рядку ${lineNum}.`, lineNum, col);
+            throw new CompileError(tr('err_unclosed_string', { quote: quote, line: lineNum }), lineNum, col);
           }
           tokens.push({ type: 'STRING', value: str, line: lineNum, col });
           continue;
@@ -231,7 +240,7 @@
           while (pos < rawLine.length && /[0-9.]/.test(rawLine[pos])) {
             if (rawLine[pos] === '.') dotCount++;
             if (dotCount > 1) {
-              throw new CompileError(`Некоректне число з кількома крапками у рядку ${lineNum}.`, lineNum, col);
+              throw new CompileError(tr('err_number_dots', { line: lineNum }), lineNum, col);
             }
             numStr += rawLine[pos++];
           }
@@ -249,8 +258,8 @@
           if (/^(f|r|b|u|fr|rf|br|rb)$/i.test(id) && (rawLine[pos] === '"' || rawLine[pos] === "'")) {
             throw new CompileError(
               /^f/i.test(id) || /f$/i.test(id)
-                ? `f-рядки не підтримуються (рядок ${lineNum}). Склейте текст через join("а", змінна).`
-                : `Префікс рядка "${id}" не підтримується (рядок ${lineNum}). Пишіть звичайні рядки в лапках.`,
+                ? tr('err_fstring', { line: lineNum })
+                : tr('err_string_prefix', { prefix: id, line: lineNum }),
               lineNum,
               col
             );
@@ -267,7 +276,7 @@
         const two = rawLine.slice(pos, pos + 2);
         if (two === '**') {
           throw new CompileError(
-            `Оператор ** (степінь) не підтримується (рядок ${lineNum}). Використайте math_op("10 ^", x) або exp(x), чи помножте число саме на себе.`,
+            tr('err_power', { line: lineNum }),
             lineNum,
             col
           );
@@ -291,11 +300,11 @@
           } else if (CLOSE_BRACKETS[ch]) {
             const top = bracketStack[bracketStack.length - 1];
             if (!top) {
-              throw new CompileError(`Зайва закриваюча дужка "${ch}" у рядку ${lineNum}.`, lineNum, col);
+              throw new CompileError(tr('err_extra_bracket', { ch: ch, line: lineNum }), lineNum, col);
             }
             if (top.ch !== CLOSE_BRACKETS[ch]) {
               throw new CompileError(
-                `Дужка "${ch}" у рядку ${lineNum} не відповідає відкритій "${top.ch}" з рядка ${top.line}.`,
+                tr('err_bracket_mismatch', { ch: ch, line: lineNum, open: top.ch, openLine: top.line }),
                 lineNum,
                 col
               );
@@ -307,7 +316,7 @@
           continue;
         }
 
-        throw new CompileError(`Невідомий символ "${ch}" у рядку ${lineNum}.`, lineNum, col);
+        throw new CompileError(tr('err_unknown_char', { ch: ch, line: lineNum }), lineNum, col);
       }
 
       if (bracketStack.length === 0 && !backslashContinued) {
@@ -318,7 +327,7 @@
     if (bracketStack.length > 0) {
       const open = bracketStack[bracketStack.length - 1];
       throw new CompileError(
-        `Забули закрити дужку "${open.ch}", відкриту в рядку ${open.line}.`,
+        tr('err_unclosed_bracket', { ch: open.ch, line: open.line }),
         open.line,
         open.col
       );
@@ -344,32 +353,32 @@
     function expect(type, value, friendlyMsg) {
       const tok = peek();
       if (tok.type !== type || (value !== undefined && tok.value !== value)) {
-        throw new CompileError(friendlyMsg || `Очікувалось "${value || type}" у рядку ${tok.line}.`, tok.line, tok.col);
+        throw new CompileError(friendlyMsg || tr('err_expected', { what: value || type, line: tok.line }), tok.line, tok.col);
       }
       return next();
     }
 
     // Python constructs that have no Scratch equivalent: explain what to do instead of a generic error
     const UNSUPPORTED_STMT_HINTS = {
-      return: 'return не підтримується: власні блоки Scratch нічого не повертають. Збережіть результат у змінну (result = ...) і прочитайте її після виклику.',
-      break: 'break не підтримується в Scratch. Використайте цикл "while умова:" або прапорець-змінну, чи stop("this script").',
-      continue: 'continue не підтримується в Scratch. Загорніть решту тіла циклу в "if умова:".',
-      class: 'class не підтримується: у Scratch немає класів. Для даних спрайта використовуйте self.назва.',
-      import: 'import не потрібен: усі команди (move, say, ...) вже доступні одразу.',
-      from: 'from ... import не потрібен: усі команди (move, say, ...) вже доступні одразу.',
-      lambda: 'lambda не підтримується в Scratch. Оголосіть власний блок через def назва(...):.',
-      try: 'try/except не підтримується в Scratch.',
-      except: 'try/except не підтримується в Scratch.',
-      finally: 'try/finally не підтримується в Scratch.',
-      raise: 'raise не підтримується в Scratch.',
-      with: 'with не підтримується в Scratch.',
-      global: 'global не потрібен: звичайні змінні вже глобальні, локальні пишуться як self.назва.',
-      nonlocal: 'nonlocal не підтримується в Scratch.',
-      del: 'del не підтримується. Для списків використовуйте list_delete(...).',
-      yield: 'yield не підтримується в Scratch.',
-      async: 'async/await не підтримується в Scratch.',
-      await: 'async/await не підтримується в Scratch.',
-      assert: 'assert не підтримується в Scratch.'
+      return: 'hint_return',
+      break: 'hint_break',
+      continue: 'hint_continue',
+      class: 'hint_class',
+      import: 'hint_import',
+      from: 'hint_from',
+      lambda: 'hint_lambda',
+      try: 'hint_try',
+      except: 'hint_try',
+      finally: 'hint_finally',
+      raise: 'hint_raise',
+      with: 'hint_with',
+      global: 'hint_global',
+      nonlocal: 'hint_nonlocal',
+      del: 'hint_del',
+      yield: 'hint_yield',
+      async: 'hint_async',
+      await: 'hint_async',
+      assert: 'hint_assert'
     };
 
     function unsupportedConstructError(tok) {
@@ -377,7 +386,7 @@
       const nxt = tokens[idx + 1];
       // "return = 5" style identifiers still work as plain variable names
       if (nxt && nxt.type === 'OP' && ['=', '+=', '-=', '*=', '/='].includes(nxt.value)) return null;
-      return new CompileError(`${UNSUPPORTED_STMT_HINTS[tok.value]} (рядок ${tok.line})`, tok.line, tok.col);
+      return new CompileError(tr('msg_with_line', { msg: tr(UNSUPPORTED_STMT_HINTS[tok.value]), line: tok.line }), tok.line, tok.col);
     }
 
     function skipNewlines() {
@@ -397,7 +406,7 @@
           const hint = unsupportedConstructError(tok);
           if (hint) throw hint;
           throw new CompileError(
-            `У рядку ${tok.line} код верхнього рівня має починатися з декоратора події (наприклад, @when_flag_clicked) або оголошення функції (def назва():).`,
+            tr('err_top_level', { line: tok.line }),
             tok.line,
             tok.col
           );
@@ -409,13 +418,13 @@
 
     function parseHandler() {
       const atTok = expect('PUNCT', '@');
-      const decName = expect('IDENT', undefined, `Очікувалась назва події після @ у рядку ${atTok.line}.`).value;
+      const decName = expect('IDENT', undefined, tr('err_event_name', { line: atTok.line })).value;
       if (decName === 'warp') {
         if (peek().type === 'PUNCT' && peek().value === '(') {
           next();
-          expect('PUNCT', ')', `Декоратор @warp не приймає аргументів у рядку ${atTok.line}.`);
+          expect('PUNCT', ')', tr('err_warp_args', { line: atTok.line }));
         }
-        expect('NEWLINE', undefined, `Після декоратора @warp має бути перехід на новий рядок (${atTok.line}).`);
+        expect('NEWLINE', undefined, tr('err_warp_newline', { line: atTok.line }));
         skipNewlines();
         return parseCustomProcedure(true, atTok.line);
       }
@@ -429,36 +438,36 @@
             decArgs.push(parseExpr());
           }
         }
-        expect('PUNCT', ')', `Забули закрити дужку ")" у декораторі рядка ${atTok.line}.`);
+        expect('PUNCT', ')', tr('err_decorator_paren', { line: atTok.line }));
       }
-      expect('NEWLINE', undefined, `Після декоратора @${decName} має бути перехід на новий рядок (${atTok.line}).`);
+      expect('NEWLINE', undefined, tr('err_decorator_newline', { decorator: decName, line: atTok.line }));
       skipNewlines();
 
-      const defTok = expect('KW', 'def', `Після декоратора @${decName} очікується "def назва():" у рядку ${peek().line}.`);
-      const fnName = expect('IDENT', undefined, `Очікувалась назва функції після def у рядку ${defTok.line}.`).value;
-      expect('PUNCT', '(', `Очікувались дужки () після ${fnName} у рядку ${defTok.line}.`);
-      expect('PUNCT', ')', `Очікувалась закриваюча дужка ) після ${fnName}( у рядку ${defTok.line}.`);
-      expect('PUNCT', ':', `Забули двокрапку ":" в кінці def ${fnName}() у рядку ${defTok.line}.`);
-      expect('NEWLINE', undefined, `Після ":" потрібен новий рядок з відступом (${defTok.line}).`);
+      const defTok = expect('KW', 'def', tr('err_decorator_def', { decorator: decName, line: peek().line }));
+      const fnName = expect('IDENT', undefined, tr('err_def_name', { line: defTok.line })).value;
+      expect('PUNCT', '(', tr('err_def_parens', { name: fnName, line: defTok.line }));
+      expect('PUNCT', ')', tr('err_def_close_paren', { name: fnName, line: defTok.line }));
+      expect('PUNCT', ':', tr('err_def_colon_call', { name: fnName, line: defTok.line }));
+      expect('NEWLINE', undefined, tr('err_colon_newline', { line: defTok.line }));
 
       const body = parseBlock(defTok.line);
       return { type: 'Handler', decorator: decName, decArgs, fnName, body, line: atTok.line };
     }
 
     function parseCustomProcedure(warp = false, startLine = null) {
-      const defTok = expect('KW', 'def', `Після @warp очікується "def назва(...):" у рядку ${peek().line}.`);
-      const fnName = expect('IDENT', undefined, `Очікувалась назва функції після def у рядку ${defTok.line}.`).value;
-      expect('PUNCT', '(', `Очікувалась "(" після ${fnName} у рядку ${defTok.line}.`);
+      const defTok = expect('KW', 'def', tr('err_warp_def', { line: peek().line }));
+      const fnName = expect('IDENT', undefined, tr('err_def_name', { line: defTok.line })).value;
+      expect('PUNCT', '(', tr('err_def_open_paren', { name: fnName, line: defTok.line }));
       const params = [];
       const paramTypes = []; // 'any' (text/number, %s) or 'bool' (boolean, %b)
       const readParam = (msg) => {
         params.push(expect('IDENT', undefined, msg).value);
         if (peek().type === 'PUNCT' && peek().value === ':') {
           next();
-          const typeTok = expect('IDENT', undefined, `Після ":" очікується тип параметра "bool" (рядок ${defTok.line}).`);
+          const typeTok = expect('IDENT', undefined, tr('err_param_type_expected', { line: defTok.line }));
           if (typeTok.value !== 'bool') {
             throw new CompileError(
-              `Непідтримуваний тип параметра "${typeTok.value}" у рядку ${defTok.line}: можна писати лише "ім'я: bool" для логічного аргументу.`,
+              tr('err_param_type', { type: typeTok.value, line: defTok.line }),
               typeTok.line,
               typeTok.col
             );
@@ -469,22 +478,22 @@
         }
       };
       if (!(peek().type === 'PUNCT' && peek().value === ')')) {
-        readParam(`Очікувалось ім'я параметра у рядку ${defTok.line}.`);
+        readParam(tr('err_param_name', { line: defTok.line }));
         while (peek().type === 'PUNCT' && peek().value === ',') {
           next();
-          readParam(`Очікувалось ім'я параметра після коми у рядку ${defTok.line}.`);
+          readParam(tr('err_param_name_comma', { line: defTok.line }));
         }
       }
-      expect('PUNCT', ')', `Забули закрити дужку ")" у def ${fnName} у рядку ${defTok.line}.`);
-      expect('PUNCT', ':', `Забули двокрапку ":" в кінці def ${fnName} у рядку ${defTok.line}.`);
-      expect('NEWLINE', undefined, `Після ":" потрібен новий рядок з відступом (${defTok.line}).`);
+      expect('PUNCT', ')', tr('err_def_paren', { name: fnName, line: defTok.line }));
+      expect('PUNCT', ':', tr('err_def_colon', { name: fnName, line: defTok.line }));
+      expect('NEWLINE', undefined, tr('err_colon_newline', { line: defTok.line }));
 
       const body = parseBlock(defTok.line);
       return { type: 'ProcDef', fnName, params, paramTypes, warp: !!warp, body, line: startLine || defTok.line };
     }
 
     function parseBlock(parentLine) {
-      expect('INDENT', undefined, `Очікувався відступ (4 пробіли) після рядка ${parentLine}.`);
+      expect('INDENT', undefined, tr('err_indent_expected', { line: parentLine }));
       const stmts = [];
       while (peek().type !== 'DEDENT' && peek().type !== 'EOF') {
         skipNewlines();
@@ -498,7 +507,7 @@
 
     function parseIfChain(ifLine) {
       const cond = parseExpr();
-      expect('PUNCT', ':', `Забули двокрапку ":" після умови у рядку ${ifLine}.`);
+      expect('PUNCT', ':', tr('err_if_colon', { line: ifLine }));
       expect('NEWLINE', undefined);
       const thenBody = parseBlock(ifLine);
       let elseBody = null;
@@ -509,7 +518,7 @@
         elseBody = [parseIfChain(elifTok.line)];
       } else if (peek().type === 'KW' && peek().value === 'else') {
         const elseTok = next();
-        expect('PUNCT', ':', `Забули двокрапку ":" після else у рядку ${elseTok.line}.`);
+        expect('PUNCT', ':', tr('err_else_colon', { line: elseTok.line }));
         expect('NEWLINE', undefined);
         elseBody = parseBlock(elseTok.line);
       }
@@ -531,13 +540,13 @@
       // for i in range(n):
       if (tok.type === 'KW' && tok.value === 'for') {
         next();
-        const varTok = expect('IDENT', undefined, `Очікувалась змінна циклу після for у рядку ${tok.line}.`);
-        expect('KW', 'in', `Очікувалось ключове слово "in" у циклі for у рядку ${tok.line}.`);
-        const rangeTok = expect('IDENT', 'range', `У Scratch підтримується цикл "for ${varTok.value} in range(кількість):" (рядок ${tok.line}).`);
-        expect('PUNCT', '(', `Очікувалась "(" після range у рядку ${rangeTok.line}.`);
+        const varTok = expect('IDENT', undefined, tr('err_for_var', { line: tok.line }));
+        expect('KW', 'in', tr('err_for_in', { line: tok.line }));
+        const rangeTok = expect('IDENT', 'range', tr('err_for_range', { var: varTok.value, line: tok.line }));
+        expect('PUNCT', '(', tr('err_range_paren', { line: rangeTok.line }));
         const countExpr = parseExpr();
-        expect('PUNCT', ')', `Забули ")" після range(...) у рядку ${tok.line}.`);
-        expect('PUNCT', ':', `Забули двокрапку ":" в кінці рядка for (${tok.line}).`);
+        expect('PUNCT', ')', tr('err_range_close', { line: tok.line }));
+        expect('PUNCT', ':', tr('err_for_colon', { line: tok.line }));
         expect('NEWLINE', undefined);
         const body = parseBlock(tok.line);
         return { type: 'Repeat', loopVar: varTok.value, count: countExpr, body, line: tok.line };
@@ -548,7 +557,7 @@
         next();
         if (peek().type === 'KW' && peek().value === 'True') {
           next();
-          expect('PUNCT', ':', `Забули двокрапку ":" після while True у рядку ${tok.line}.`);
+          expect('PUNCT', ':', tr('err_while_true_colon', { line: tok.line }));
           expect('NEWLINE', undefined);
           const body = parseBlock(tok.line);
           return { type: 'Forever', body, line: tok.line };
@@ -556,13 +565,13 @@
         if (peek().type === 'KW' && peek().value === 'not') {
           next();
           const cond = parseExpr();
-          expect('PUNCT', ':', `Забули двокрапку ":" після умови while not у рядку ${tok.line}.`);
+          expect('PUNCT', ':', tr('err_while_not_colon', { line: tok.line }));
           expect('NEWLINE', undefined);
           const body = parseBlock(tok.line);
           return { type: 'RepeatUntil', cond, body, line: tok.line };
         }
         const cond = parseExpr();
-        expect('PUNCT', ':', `Забули двокрапку ":" після умови while у рядку ${tok.line}.`);
+        expect('PUNCT', ':', tr('err_while_colon', { line: tok.line }));
         expect('NEWLINE', undefined);
         const body = parseBlock(tok.line);
         const invertedCond =
@@ -593,10 +602,10 @@
         let isLocal = false;
         if (peek().type === 'PUNCT' && peek().value === '.') {
           if (idTok.value !== 'self') {
-            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line);
+            throw new CompileError(tr('err_self_local', { line: tok.line }), tok.line);
           }
           next();
-          const attrTok = expect('IDENT', undefined, `Очікувалась назва локальної змінної після "self." у рядку ${tok.line}.`);
+          const attrTok = expect('IDENT', undefined, tr('err_self_name', { line: tok.line }));
           targetName = attrTok.value;
           isLocal = true;
         }
@@ -640,7 +649,7 @@
         }
       }
 
-      throw new CompileError(`Незрозуміла команда "${tok.value}" у рядку ${tok.line}.`, tok.line, tok.col);
+      throw new CompileError(tr('err_unknown_command_token', { token: tok.value, line: tok.line }), tok.line, tok.col);
     }
 
     function parseArgList(line) {
@@ -653,7 +662,7 @@
           args.push(parseExpr());
         }
       }
-      expect('PUNCT', ')', `Забули закрити дужку ")" у рядку ${line}.`);
+      expect('PUNCT', ')', tr('err_close_paren', { line: line }));
       return args;
     }
 
@@ -662,7 +671,7 @@
       if (peek().type === 'KW' && peek().value === 'if') {
         const t = peek();
         throw new CompileError(
-          `Тернарний вираз "a if умова else b" не підтримується (рядок ${t.line}). Запишіть його як звичайний "if умова: ... else: ...".`,
+          tr('err_ternary', { line: t.line }),
           t.line,
           t.col
         );
@@ -767,20 +776,20 @@
       if (tok.type === 'PUNCT' && tok.value === '(') {
         next();
         const expr = parseExpr();
-        expect('PUNCT', ')', `Забули закрити дужку ")" у рядку ${tok.line}.`);
+        expect('PUNCT', ')', tr('err_close_paren', { line: tok.line }));
         return expr;
       }
       if (tok.type === 'IDENT') {
         if (tok.value === 'lambda') {
-          throw new CompileError(`${UNSUPPORTED_STMT_HINTS.lambda} (рядок ${tok.line})`, tok.line, tok.col);
+          throw new CompileError(tr('msg_with_line', { msg: tr(UNSUPPORTED_STMT_HINTS.lambda), line: tok.line }), tok.line, tok.col);
         }
         next();
         if (peek().type === 'PUNCT' && peek().value === '.') {
           if (tok.value !== 'self') {
-            throw new CompileError(`Локальні змінні спрайта пишуться через "self.назва" (рядок ${tok.line}).`, tok.line, tok.col);
+            throw new CompileError(tr('err_self_local', { line: tok.line }), tok.line, tok.col);
           }
           next();
-          const attrTok = expect('IDENT', undefined, `Очікувалась назва локальної змінної після "self." у рядку ${tok.line}.`);
+          const attrTok = expect('IDENT', undefined, tr('err_self_name', { line: tok.line }));
           return { type: 'Var', name: attrTok.value, isLocal: true, line: tok.line };
         }
         if (peek().type === 'PUNCT' && peek().value === '(') {
@@ -789,7 +798,7 @@
         }
         return { type: 'Var', name: tok.value, line: tok.line };
       }
-      throw new CompileError(`Неочікуваний вираз "${tok.value}" у рядку ${tok.line}.`, tok.line, tok.col);
+      throw new CompileError(tr('err_unexpected_expr', { token: tok.value, line: tok.line }), tok.line, tok.col);
     }
 
     return parseProgram();
@@ -822,7 +831,7 @@
 
   /**
    * Finds top-level scripts of `target` that the decompiler cannot express as DSL code (it prints a
-   * "# [збережено без змін]" comment for them) and returns them as a self-contained raw block map.
+   * "# [kept unchanged]" comment (localized) for them) and returns them as a self-contained raw block map.
    */
   function collectRawScripts(target, stageTarget) {
     const empty = { blocks: {}, roots: [], procedures: [] };
@@ -933,7 +942,7 @@
         );
         if (clash) {
           throw new CompileError(
-            `Локальна змінна "self.${name}" конфліктує з глобальною змінною "${name}". Дайте їм різні імена.`,
+            tr('err_local_global_conflict', { name: name }),
             currentLine
           );
         }
@@ -1056,7 +1065,7 @@
       const val = normalize(String(raw));
       if (!wl.values.includes(val)) {
         throw new CompileError(
-          `Недопустиме значення "${raw}" для ${wl.label} у рядку ${line}. Допустимі: ${wl.values.map((v) => '"' + v + '"').join(', ')}.`,
+          tr('err_bad_choice', { value: raw, what: tr(wl.label), line: line, allowed: wl.values.map((v) => '"' + v + '"').join(', ') }),
           line
         );
       }
@@ -1067,7 +1076,7 @@
     function literalArg(expr, defaultVal, what, line) {
       if (!expr) return defaultVal;
       if (expr.type !== 'String') {
-        throw new CompileError(`${what} має бути текстом у лапках (рядок ${line}).`, line);
+        throw new CompileError(tr('err_must_be_string', { what: what, line: line }), line);
       }
       return expr.value === '' ? defaultVal : String(expr.value);
     }
@@ -1076,7 +1085,7 @@
       const key = String(raw);
       if (!KEY_OPTIONS.has(key.toLowerCase())) {
         throw new CompileError(
-          `Недопустима клавіша "${key}" у рядку ${line}. Допустимі: "space", "up arrow", "down arrow", "left arrow", "right arrow", "enter", "any", літери "a"-"z" та цифри "0"-"9".`,
+          tr('err_bad_key', { key: key, line: line }),
           line
         );
       }
@@ -1086,13 +1095,13 @@
     function checkTargetKind(name, line) {
       if (target.isStage && SPRITE_ONLY_CALLS.has(name)) {
         throw new CompileError(
-          `Блок "${name}()" (рядок ${line}) доступний лише спрайтам, а ви пишете код для Сцени.`,
+          tr('err_sprite_only_block', { name: name, line: line }),
           line
         );
       }
       if (!target.isStage && STAGE_ONLY_CALLS.has(name)) {
         throw new CompileError(
-          `Блок "${name}()" (рядок ${line}) доступний лише на Сцені, а ви пишете код для спрайта.`,
+          tr('err_stage_only_block', { name: name, line: line }),
           line
         );
       }
@@ -1244,7 +1253,7 @@
       } else if (expr.type === 'String') {
         if (expr.value !== '' && Number.isFinite(Number(expr.value))) literal = String(Number(expr.value));
         else {
-          throw new CompileError(`${what} має бути числом (рядок ${line}), а не текстом "${expr.value}".`, line);
+          throw new CompileError(tr('err_must_be_number', { what: what, line: line, value: expr.value }), line);
         }
       }
       if (literal !== null) return compileShadowMenu(menuOpcode, fieldName, literal, parentId);
@@ -1335,7 +1344,7 @@
           or: ['operator_or', 'OPERAND1', 'OPERAND2', 'bool']
         };
         const spec = opMap[expr.op];
-        if (!spec) throw new CompileError(`Непідтримуваний оператор "${expr.op}" у рядку ${expr.line}.`, expr.line);
+        if (!spec) throw new CompileError(tr('err_bad_operator', { op: expr.op, line: expr.line }), expr.line);
         const id = createBlock(spec[0], parentId, {}, {}, { line: expr.line });
         if (spec[3] === 'bool') {
           blocks[id].inputs = {
@@ -1428,7 +1437,7 @@
             return id;
           }
           case 'math_op': {
-            const opName = checkChoice(literalArg(a[0], 'abs', 'Назва операції math_op', expr.line), 'mathOp', expr.line);
+            const opName = checkChoice(literalArg(a[0], 'abs', tr('what_math_op'), expr.line), 'mathOp', expr.line);
             const id = createBlock('operator_mathop', parentId, {}, { OPERATOR: [opName, null] }, { line: expr.line });
             blocks[id].inputs = { NUM: compileInput(a[1], id, 4) };
             return id;
@@ -1471,11 +1480,11 @@
             return id;
           }
           case 'attribute_of': {
-            const prop = literalArg(a[0], 'x position', 'Назва властивості attribute_of', expr.line);
+            const prop = literalArg(a[0], 'x position', tr('what_attribute'), expr.line);
             const knownProp = SENSING_OF_PROPERTIES.find((p) => p.toLowerCase() === prop.toLowerCase());
             if (knownProp && knownProp !== prop) {
               throw new CompileError(
-                `Недопустима властивість "${prop}" у рядку ${expr.line}. Напишіть "${knownProp}" (регістр має значення). Допустимі: ${SENSING_OF_PROPERTIES.map((v) => '"' + v + '"').join(', ')} або назва змінної.`,
+                tr('err_bad_property', { prop: prop, line: expr.line, known: knownProp, allowed: SENSING_OF_PROPERTIES.map((v) => '"' + v + '"').join(', ') }),
                 expr.line
               );
             }
@@ -1507,7 +1516,7 @@
           }
           case 'current_time': {
             const unit = checkChoice(
-              literalArg(a[0], 'YEAR', 'Одиниця часу current_time', expr.line),
+              literalArg(a[0], 'YEAR', tr('what_current_time'), expr.line),
               'currentMenu',
               expr.line,
               (v) => v.toUpperCase()
@@ -1571,9 +1580,9 @@
           return id;
         }
 
-        throw new CompileError(`Невідома функція-значення "${expr.name}()" у рядку ${expr.line}.`, expr.line);
+        throw new CompileError(tr('err_unknown_reporter', { name: expr.name, line: expr.line }), expr.line);
       }
-      throw new CompileError(`Неможливо обчислити вираз у рядку ${expr.line}.`, expr.line);
+      throw new CompileError(tr('err_cannot_eval', { line: expr.line }), expr.line);
     }
 
     function astUsesVar(node, varName) {
@@ -1711,7 +1720,7 @@
       if (stmt.type === 'Call') {
         return compileCallStmt(stmt, parentId);
       }
-      throw new CompileError(`Непідтримувана конструкція у рядку ${stmt.line}.`, stmt.line);
+      throw new CompileError(tr('err_unsupported_stmt', { line: stmt.line }), stmt.line);
     }
 
     function compileCallStmt(stmt, parentId) {
@@ -1723,7 +1732,7 @@
         const proc = procedures[stmt.name];
         if (a.length !== proc.paramNames.length) {
           throw new CompileError(
-            `Функція "${stmt.name}" очікує аргументів: ${proc.paramNames.length}, а передано ${a.length} (рядок ${stmt.line}).`,
+            tr('err_arg_count', { name: stmt.name, expected: proc.paramNames.length, given: a.length, line: stmt.line }),
             stmt.line
           );
         }
@@ -1864,7 +1873,7 @@
           blocks[id].opcode = 'motion_ifonedgebounce';
           return id;
         case 'set_rotation_style': {
-          const style = checkChoice(literalArg(a[0], 'all around', 'Стиль обертання', stmt.line), 'rotationStyle', stmt.line);
+          const style = checkChoice(literalArg(a[0], 'all around', tr('what_rotation_style'), stmt.line), 'rotationStyle', stmt.line);
           blocks[id].opcode = 'motion_setrotationstyle';
           blocks[id].fields = { STYLE: [style, null] };
           return id;
@@ -1925,14 +1934,14 @@
           }
           return id;
         case 'set_effect': {
-          const eff = checkChoice(literalArg(a[0], 'COLOR', 'Назва ефекту', stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
+          const eff = checkChoice(literalArg(a[0], 'COLOR', tr('what_effect'), stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'looks_seteffectto';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
           return id;
         }
         case 'change_effect': {
-          const eff = checkChoice(literalArg(a[0], 'COLOR', 'Назва ефекту', stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
+          const eff = checkChoice(literalArg(a[0], 'COLOR', tr('what_effect'), stmt.line), 'looksEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'looks_changeeffectby';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { CHANGE: compileInput(a[1], id, 4) };
@@ -1963,14 +1972,14 @@
           blocks[id].opcode = 'sound_stopallsounds';
           return id;
         case 'set_sound_effect': {
-          const eff = checkChoice(literalArg(a[0], 'PITCH', 'Назва ефекту звуку', stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
+          const eff = checkChoice(literalArg(a[0], 'PITCH', tr('what_sound_effect'), stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'sound_seteffectto';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
           return id;
         }
         case 'change_sound_effect': {
-          const eff = checkChoice(literalArg(a[0], 'PITCH', 'Назва ефекту звуку', stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
+          const eff = checkChoice(literalArg(a[0], 'PITCH', tr('what_sound_effect'), stmt.line), 'soundEffect', stmt.line, (v) => v.toUpperCase());
           blocks[id].opcode = 'sound_changeeffectby';
           blocks[id].fields = { EFFECT: [eff, null] };
           blocks[id].inputs = { VALUE: compileInput(a[1], id, 4) };
@@ -2033,7 +2042,7 @@
           blocks[id].inputs = { CONDITION: compileBoolInput(a[0], id) };
           return id;
         case 'stop': {
-          const opt = checkChoice(literalArg(a[0], 'all', 'Параметр stop()', stmt.line), 'stopOption', stmt.line);
+          const opt = checkChoice(literalArg(a[0], 'all', tr('what_stop'), stmt.line), 'stopOption', stmt.line);
           blocks[id].opcode = 'control_stop';
           blocks[id].fields = { STOP_OPTION: [opt, null] };
           blocks[id].mutation = {
@@ -2060,7 +2069,7 @@
           blocks[id].opcode = 'control_delete_this_clone';
           return id;
         case 'set_drag_mode': {
-          const mode = checkChoice(literalArg(a[0], 'draggable', 'Режим перетягування', stmt.line), 'dragMode', stmt.line);
+          const mode = checkChoice(literalArg(a[0], 'draggable', tr('what_drag_mode'), stmt.line), 'dragMode', stmt.line);
           blocks[id].opcode = 'sensing_setdragmode';
           blocks[id].fields = { DRAG_MODE: [mode, null] };
           return id;
@@ -2099,21 +2108,21 @@
         case 'play_drum':
           blocks[id].opcode = 'music_playDrumForBeats';
           blocks[id].inputs = {
-            DRUM: compileNumMenuOrExpr(a[0], 'music_menu_DRUM', 'DRUM', '1', id, 'Номер барабана', stmt.line),
+            DRUM: compileNumMenuOrExpr(a[0], 'music_menu_DRUM', 'DRUM', '1', id, tr('what_drum'), stmt.line),
             BEATS: compileInput(a[1], id, 4)
           };
           return id;
         case 'play_note':
           blocks[id].opcode = 'music_playNoteForBeats';
           blocks[id].inputs = {
-            NOTE: compileNumMenuOrExpr(a[0], 'note', 'NOTE', '60', id, 'Нота (MIDI-номер)', stmt.line),
+            NOTE: compileNumMenuOrExpr(a[0], 'note', 'NOTE', '60', id, tr('what_note'), stmt.line),
             BEATS: compileInput(a[1], id, 4)
           };
           return id;
         case 'set_instrument':
           blocks[id].opcode = 'music_setInstrument';
           blocks[id].inputs = {
-            INSTRUMENT: compileNumMenuOrExpr(a[0], 'music_menu_INSTRUMENT', 'INSTRUMENT', '1', id, 'Номер інструмента', stmt.line)
+            INSTRUMENT: compileNumMenuOrExpr(a[0], 'music_menu_INSTRUMENT', 'INSTRUMENT', '1', id, tr('what_instrument'), stmt.line)
           };
           return id;
         case 'set_voice':
@@ -2181,7 +2190,7 @@
           return id;
         }
         default:
-          throw new CompileError(`Невідома команда "${stmt.name}()" у рядку ${stmt.line}.`, stmt.line);
+          throw new CompileError(tr('err_unknown_command', { name: stmt.name, line: stmt.line }), stmt.line);
       }
     }
 
@@ -2216,7 +2225,7 @@
       if (node.type === 'ProcDef') {
         if (procedures[node.fnName] && procedures[node.fnName].raw) {
           throw new CompileError(
-            `Власний блок "${node.fnName}" (рядок ${node.line}) уже існує в проєкті як скрипт, який DSL не вміє показувати; оберіть інше ім'я.`,
+            tr('err_proc_conflict', { name: node.fnName, line: node.line }),
             node.line
           );
         }
@@ -2299,7 +2308,7 @@
         hatId = createBlock('event_whenflagclicked', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
       } else if (h.decorator === 'when_key_pressed') {
         const key = h.decArgs[0]
-          ? checkKeyOption(literalArg(h.decArgs[0], 'space', 'Клавіша у @when_key_pressed', h.line), h.line)
+          ? checkKeyOption(literalArg(h.decArgs[0], 'space', tr('what_key'), h.line), h.line)
           : 'space';
         hatId = createBlock(
           'event_whenkeypressed',
@@ -2332,7 +2341,7 @@
         );
       } else if (h.decorator === 'when_greater_than') {
         const sensor = checkChoice(
-          literalArg(h.decArgs[0], 'LOUDNESS', 'Датчик у @when_greater_than', h.line),
+          literalArg(h.decArgs[0], 'LOUDNESS', tr('what_sensor'), h.line),
           'greaterThan',
           h.line,
           (v) => v.toUpperCase()
@@ -2349,9 +2358,9 @@
         };
       } else if (h.decorator === 'when_touching') {
         if (target.isStage) {
-          throw new CompileError(`@when_touching (рядок ${h.line}) доступний лише спрайтам: Сцена ні до чого не торкається.`, h.line);
+          throw new CompileError(tr('err_touching_stage', { line: h.line }), h.line);
         }
-        const touchRaw = literalArg(h.decArgs[0], '_mouse_', "Об'єкт у @when_touching", h.line);
+        const touchRaw = literalArg(h.decArgs[0], '_mouse_', tr('what_touch_object'), h.line);
         const touchVal = touchRaw === 'edge' ? '_edge_' : touchRaw === 'mouse' ? '_mouse_' : touchRaw;
         hatId = createBlock('event_whentouchingobject', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
         blocks[hatId].inputs = {
@@ -2359,11 +2368,11 @@
         };
       } else if (h.decorator === 'when_cloned') {
         if (target.isStage) {
-          throw new CompileError(`@when_cloned (рядок ${h.line}) доступний лише спрайтам: Сцену клонувати не можна.`, h.line);
+          throw new CompileError(tr('err_cloned_stage', { line: h.line }), h.line);
         }
         hatId = createBlock('control_start_as_clone', null, {}, {}, { topLevel: true, x: 40, y: yOffset, line: h.line });
       } else {
-        throw new CompileError(`Невідомий декоратор @${h.decorator} у рядку ${h.line}.`, h.line);
+        throw new CompileError(tr('err_unknown_decorator', { decorator: h.decorator, line: h.line }), h.line);
       }
 
       const firstBodyId = compileStmtList(h.body, hatId);

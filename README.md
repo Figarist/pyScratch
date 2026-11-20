@@ -4,7 +4,7 @@
 >
 > Open `.sb3` files (via file picker or Drag-and-Drop), write or edit Python DSL / Scratch 3.0 scripts, run them live on the 480x360 Canvas 2D stage, manage sprites/costumes/sounds, and download the updated `.sb3` project directly in your browser — **zero installation or PC download required**.
 
-**pyScratch** is a zero-build, browser-based bidirectional converter and educational IDE between a Python-inspired DSL and native Scratch 3.0 (`.sb3`) project archives. It combines a real-time 480x360 Canvas 2D stage simulator, a Ukrainian-localized Scratch block tree inspector, an interactive Sprite & Asset Manager, and a lossless round-trip decompiler—all running locally in the browser with no external runtime dependencies.
+**pyScratch** is a zero-build, browser-based bidirectional converter and educational IDE between a Python-inspired DSL and native Scratch 3.0 (`.sb3`) project archives. It combines a real-time 480x360 Canvas 2D stage simulator, a Scratch block tree inspector, an interactive Sprite & Asset Manager, and a lossless round-trip decompiler—all running locally in the browser with no external runtime dependencies. The whole IDE is available in Ukrainian ([`/`](https://sivochka.com/pyScratch/)), English ([`/en/`](https://sivochka.com/pyScratch/en/)) and Russian ([`/ru/`](https://sivochka.com/pyScratch/ru/)): interface, compiler error messages, block labels, lesson templates and generated code comments.
 
 ## Key Features
 
@@ -12,18 +12,22 @@
   - Tokenizes, parses into an AST, and compiles Python-like scripts directly into Scratch 3.0 `project.json` block graphs, global/sprite-local variables & lists, broadcasts, custom procedures (`My Blocks` including `@warp` run-without-screen-refresh), and extensions.
   - Decompiles existing `.sb3` `target.blocks` back into clean, 4-space-indented Python DSL code (`decompileTarget(target, stageTarget)`) with idempotent round-trip stability, distinguishing Stage-global variables/lists from sprite-local `self.var` / `local_list_*` state.
   - Supports Scratch 3.0 parity blocks across Motion (`glide_to`), Looks (`switch_backdrop_and_wait`, `go_to_layer`, `change_layer`), Sound (`set_sound_effect`, `change_sound_effect`, `clear_sound_effects`), Events (`@when_greater_than`), Sensing (`attribute_of`, `touching_color`, `color_is_touching_color`, `set_drag_mode`, `current_time`, `days_since_2000`, `username`, `loudness`), Data (`list_index_of`, `show_variable`/`hide_variable`, `show_list`/`hide_list`), and Math (`tan`, `asin`, `acos`, `atan`, `ln`, `log`, `exp`, `pow10`, `len`).
-  - Preserves negative numeric literals directly (`-150` instead of `0 - 150`), reconstructs `elif` chains and `!=` / `<=` / `>=` comparisons, allows dynamic reporter expressions in menu slots, and reports friendly Ukrainian `CompileError` diagnostics with exact line numbers.
+  - Preserves negative numeric literals directly (`-150` instead of `0 - 150`), reconstructs `elif` chains and `!=` / `<=` / `>=` comparisons, allows dynamic reporter expressions in menu slots, and reports friendly `CompileError` diagnostics with exact line numbers in the language of the page (`uk`, `en`, `ru`; see [`js/messages.js`](js/messages.js)).
 - **Full `.sb3` ZIP Packaging, Asset Management & Drag-and-Drop** ([`js/sb3Bridge.js`](js/sb3Bridge.js) + [`vendor/jszip.min.js`](vendor/jszip.min.js))
   - Opens and exports Scratch 3.0 `.sb3` archives (`loadSb3`, `saveSb3`) powered by a bundled local copy of JSZip (`v3.10.1`), including browser-wide **Drag-and-Drop `.sb3`** import (`#drop-overlay`).
   - Includes a standalone RFC 1321 MD5 implementation (`md5`) supporting UTF-8 strings and binary `Uint8Array` assets to compute Scratch `assetId` / `md5ext` hashes.
   - Provides sprite & asset management helpers (`renameSprite`, `deleteSprite`, `updateSpriteProps`, `addCostumeAsset` for `.svg`/`.png`/`.jpg`, and `addSoundAsset` for `.wav`/`.mp3` with WAV header parsing), plus built-in vector SVG backdrops (`space_bg`, `level_2`, `grid_bg`), sprite costumes (`costume1`, `costume2`, `star`), and procedural PCM `.wav` sound effects (`pop`, `laser`).
 - **Live 480x360 Canvas 2D Stage Simulator** ([`js/preview.js`](js/preview.js))
   - Executes multi-sprite projects directly from compiled ASTs with Scratch coordinates (`x: -240..240`, `y: -180..180`) and `layerOrder` sorting.
+  - Follows Scratch VM rules where pupils notice them: integer vs. decimal `random(a, b)`, 15 px stage fencing for sprites near the edge, `bitmapResolution` for HiDPI raster costumes, and a pen dot on `pen_down()`.
   - Supports clones (`@when_cloned`, `create_clone`, `delete_this_clone`) up to Scratch's 300-clone cap with deep-copied clone-local `self.var` / `local_list_*` state, custom procedures (`def` and synchronous `@warp`), `for i in range(n):` loop counter `i`, broadcasts with restart semantics, `stop("other scripts in sprite")` per-actor cancellation, Pen extension drawing/stamping with HSV + transparency parameters, graphic effects (`color`, `ghost`, `brightness`, `pixelate`, `mosaic`), Web Audio `.wav`/`.mp3` decoding with `volume` / `pitch` / `pan` routing (plus synth fallback and mute toggle), live stage dragging (`set_drag_mode("draggable")`), interactive `ask()`/`answer()` overlays, pixel-color sensing, and live stage telemetry.
 - **Educational Browser IDE & Shareable URLs** ([`index.html`](index.html), [`js/app.js`](js/app.js), [`style.css`](style.css))
-  - Dark workbench layout with live syntax highlighting, line-number error/selection markers, 4-space `Tab` and `:` auto-indentation, `Ctrl+Enter` / `Cmd+Enter` execution shortcut, and a **Share (`Поділитися`)** button that encodes the active script into a shareable `?code=<base64url>` link.
-  - Interactive **Sprite & Asset Manager** UI in the `Асети (.sb3)` tab to rename/delete sprites, edit initial `x`, `y`, `size`, `direction`, `rotationStyle`, `visible`, and `draggable` properties, and upload `.svg`/`.png`/`.jpg` costumes/backdrops or `.wav`/`.mp3` sounds.
-  - Multi-target tab switcher (`Stage`, `Sprite1`, and `+ Спрайт` creation), clickable quick command palette, interactive Ukrainian block tree inspector (`formatBlockUk`) that jumps to the corresponding source line, built-in API reference tab, and 9 interactive learning templates:
+  - Scratch 3.0-style workbench with live syntax highlighting, line-number error/selection markers, 4-space `Tab` and `:` auto-indentation, `Ctrl+Enter` / `Cmd+Enter` execution shortcut, and a **Share** button that encodes the active script into a shareable `?code=<base64url>` link.
+  - **Work is never lost**: the project is saved in the browser as you type (code in `localStorage`, the full project with costumes, sounds and positions in IndexedDB) and reopens after a reload, a closed tab or a language switch. Deleting a sprite or resetting the template asks for confirmation, and native `Ctrl+Z` / `Cmd+Z` undo works for palette insertions too.
+  - **Scratch-like stage**: `X`, `Y`, `Size` and `Direction` under the stage are editable fields, the stage has a fullscreen mode (`Esc` to exit), and shown variables and lists appear as live monitors on the stage, including interactive sliders.
+  - **Command palette for beginners**: every command has a tooltip explaining what it does, and a clicked command lands on its own line with the right indentation (event templates go after the current script, value reporters fill the argument under the cursor).
+  - Interactive **Sprite & Asset Manager** UI in the Costumes / Sounds tabs to rename/delete sprites, edit initial `x`, `y`, `size`, `direction`, `rotationStyle`, `visible`, and `draggable` properties, and upload `.svg`/`.png`/`.jpg` costumes/backdrops or `.wav`/`.mp3` sounds.
+  - Multi-target tab switcher (`Stage`, `Sprite1`, and `+` sprite creation), interactive block tree inspector (`formatBlock`) that jumps to the corresponding source line, built-in API reference tab, and 9 interactive learning templates (comments and phrases in the page language):
     - `hexagon` — Geometry & Pen Extension drawing + backdrop transition
     - `functions` — Custom procedures (`def polygon(sides, step):`)
     - `arrows` — Arrow-key movement, edge bouncing, and stamping
@@ -55,13 +59,15 @@ The browser IDE accepts URL query parameters for lesson embeds and shareable lin
 | Parameter | Example | Behavior |
 | --- | --- | --- |
 | `?embed=1` | `?embed=1` (or `true`) | Enables compact `embed-mode` layout (hides template subbar, quick palette, brand subtitle, and reset button) for iframes. |
-| `?snippet=<name>` | `?snippet=clones` | Preloads one of the 9 built-in templates (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`). |
-| `?code=<base64url>` | `?code=QGd...` | Decodes a UTF-8 Base64URL-encoded Python DSL script into the active sprite editor (generated automatically by the **Поділитися / Share** button). Overrides `?snippet`. |
+| `?snippet=<name>` | `?snippet=clones` | Preloads one of the 9 built-in templates (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`) in the page language. |
+| `?code=<base64url>` | `?code=QGd...` | Decodes a UTF-8 Base64URL-encoded Python DSL script into the active sprite editor (generated automatically by the **Share** button). Overrides `?snippet`. |
 | `?autorun=1` | `?embed=1&snippet=clones&autorun=1` | Automatically compiles and runs the project on the stage when the page loads (unless `?code=` decoding failed). |
+
+Without `?embed`, `?snippet` or `?code`, the IDE reopens the last project saved in this browser.
 
 ### 2. Run the Automated Test Suite
 
-Tests run in Node.js and verify MD5 hashing, `.sb3` asset integrity, full DSL compilation, idempotent round-trip decompilation, Ukrainian block labels, binary ZIP save/load, headless `StagePreview` execution, and compiler error diagnostics:
+Tests run in Node.js (16 sections) and verify MD5 hashing, `.sb3` asset integrity, full DSL compilation, idempotent round-trip decompilation, block labels, binary ZIP save/load, headless `StagePreview` execution, Scratch VM runtime parity, compiler diagnostics, and that every message, template and tooltip exists in all three languages:
 
 ```bash
 npm test
@@ -75,15 +81,16 @@ node test/test_roundtrip.js
 | --- | --- |
 | [`index.html`](index.html) | Workbench UI layout: target tabs, template selector, code editor, quick palette, 480x360 stage canvas, telemetry grid, block/asset/API tabs, `.sb3` drag-and-drop overlay, and asset upload inputs. |
 | [`style.css`](style.css) | Scratch 3.0 1:1 light theme ([`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md)), split-pane responsive grid, category-mapped syntax tokens, Scratch block colors, sprite/asset manager forms, drag-and-drop overlay, and `?embed=1` compact layout. |
-| [`js/compiler.js`](js/compiler.js) | Lexer (`tokenize`), recursive-descent AST parser (`parse`), Ukrainian `CompileError` diagnostics, and Scratch 3.0 block generator (`compileToScratch`) with `self.var`/`local_list_*`, `@warp`, and dynamic menu expressions. |
-| [`js/decompiler.js`](js/decompiler.js) | Scratch 3.0-to-Python DSL decompiler (`decompileTarget`) with local/global scoping, `elif`/operator/negative-literal reconstruction, and Ukrainian block inspector formatter (`formatBlockUk`). |
+| [`js/compiler.js`](js/compiler.js) | Lexer (`tokenize`), recursive-descent AST parser (`parse`), localized `CompileError` diagnostics, and Scratch 3.0 block generator (`compileToScratch`) with `self.var`/`local_list_*`, `@warp`, and dynamic menu expressions. |
+| [`js/decompiler.js`](js/decompiler.js) | Scratch 3.0-to-Python DSL decompiler (`decompileTarget`) with local/global scoping, `elif`/operator/negative-literal reconstruction, and the localized block inspector formatter (`formatBlock`, also exported as `formatBlockUk`). |
 | [`js/preview.js`](js/preview.js) | `StagePreview` 480x360 Canvas 2D execution engine supporting multi-sprite ASTs, clone-local state isolation (up to 300 clones), `@warp` procedures, `layerOrder`, Pen HSV/alpha, graphic effects, Web Audio `.wav`/`.mp3` playback, input/color sensing, dragging, and telemetry. |
 | [`js/sb3Bridge.js`](js/sb3Bridge.js) | `.sb3` ZIP pack/unpack bridge (`loadSb3`, `saveSb3`), RFC 1321 `md5` hasher, procedural `.wav` generator, default project/sprite builders, and sprite/asset management APIs (`renameSprite`, `deleteSprite`, `updateSpriteProps`, `addCostumeAsset`, `addSoundAsset`). |
-| [`js/app.js`](js/app.js) | Browser IDE controller wiring editor highlighting, cursor telemetry, 9 learning templates (`SNIPPETS`), built-in `API_DOCS`, block tree navigation, Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, URL parameters (`?embed=1`, `?snippet=`, `?code=`, `?autorun=1`), and Share button. |
+| [`js/app.js`](js/app.js) | Browser IDE controller wiring editor highlighting, cursor telemetry, 9 learning templates (`SNIPPETS` + per-language `SNIPPET_L10N`), autosave (`localStorage` + IndexedDB), on-stage monitors, built-in `API_DOCS`, block tree navigation, Sprite & Asset Manager UI, Drag-and-Drop `.sb3`, URL parameters (`?embed=1`, `?snippet=`, `?code=`, `?autorun=1`), and Share button. |
 | [`js/inspector.js`](js/inspector.js) | `.sb3` project analyzer and optimizer (5 MB `project.json` / 10 MB asset limits, unused asset cleanup, and raster optimization). |
-| [`js/i18n.js`](js/i18n.js) | Multi-language UI localization (`uk`, `en`, `ru`) with `?lang=` query parameter and `localStorage` persistence. |
+| [`js/i18n.js`](js/i18n.js) | Multi-language UI localization (`uk`, `en`, `ru`): interface strings, palette tooltips, language switching between `/`, `/en/` and `/ru/`. |
+| [`js/messages.js`](js/messages.js) | Message catalog (`uk`, `en`, `ru`) for text produced by the core modules: compiler diagnostics, block tree labels, generated code comments and `.sb3` bridge errors. Works in the browser and in Node.js. |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip v3.10.1 library enabling offline ZIP compression/decompression in both browser and Node.js tests. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Node.js verification suite with 14 test sections covering MD5, assets, compilation, idempotent round-trips, `formatBlockUk`, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, Scratch 3.0 parity, reliability regressions, and the Stage 5 blocks. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Node.js verification suite with 16 test sections covering MD5, assets, compilation, idempotent round-trips, block labels, `.sb3` ZIP I/O, `StagePreview`, error diagnostics, Scratch 3.0 parity, reliability regressions, the Stage 5 blocks, v1.3 runtime parity and UX, and localized core messages and templates. |
 
 ## Documentation & Versioning
 

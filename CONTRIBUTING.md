@@ -12,15 +12,16 @@ We welcome pull requests of all sizes—from implementing missing Scratch 3.0 bl
 
 | Component | Purpose |
 | --- | --- |
-| [`js/compiler.js`](js/compiler.js) | Tokenizes Python DSL source (`tokenize`), parses into an AST (`parse`), emits Ukrainian `CompileError` diagnostics, and compiles ASTs into Scratch 3.0 `project.json` blocks, variables, lists, broadcasts, custom procedures, and extensions (`compileToScratch`). |
-| [`js/decompiler.js`](js/decompiler.js) | Decompiles Scratch 3.0 `target.blocks` back into 4-space-indented Python DSL (`decompileTarget`) and generates Ukrainian block labels for the visual block tree inspector (`formatBlockUk`). |
+| [`js/compiler.js`](js/compiler.js) | Tokenizes Python DSL source (`tokenize`), parses into an AST (`parse`), emits localized `CompileError` diagnostics, and compiles ASTs into Scratch 3.0 `project.json` blocks, variables, lists, broadcasts, custom procedures, and extensions (`compileToScratch`). |
+| [`js/decompiler.js`](js/decompiler.js) | Decompiles Scratch 3.0 `target.blocks` back into 4-space-indented Python DSL (`decompileTarget`) and generates localized block labels for the visual block tree inspector (`formatBlock`, alias `formatBlockUk`). |
 | [`js/preview.js`](js/preview.js) | `StagePreview` 480×360 Canvas 2D execution engine supporting multi-sprite ASTs, clones, custom procedures, Pen drawing/stamping, Web Audio synthesis, input sensing, and live telemetry. |
 | [`js/sb3Bridge.js`](js/sb3Bridge.js) | Packs and unpacks `.sb3` ZIP archives (`loadSb3`, `saveSb3`), computes RFC 1321 MD5 hashes (`md5`), and generates default SVG costumes/backdrops and procedural `.wav` sounds. |
 | [`js/inspector.js`](js/inspector.js) | Analyzes `.sb3` limits (5 MB `project.json`, 10 MB per asset), detects orphan scripts, and removes unused assets. |
-| [`js/i18n.js`](js/i18n.js) | Handles UK/EN/RU UI localization with `?lang=` and `localStorage` persistence. |
-| [`js/app.js`](js/app.js) | Browser IDE controller wiring target tabs, syntax highlighting, error/cursor telemetry, templates (`SNIPPETS`), API reference (`API_DOCS`), block tree navigation, and `.sb3` file I/O (with [`index.html`](index.html) and [`style.css`](style.css)). |
+| [`js/i18n.js`](js/i18n.js) | Handles UK/EN/RU interface localization, palette tooltips and switching between the `/`, `/en/` and `/ru/` pages. |
+| [`js/messages.js`](js/messages.js) | UK/EN/RU message catalog for the core modules: compiler diagnostics, block tree labels, generated code comments and `.sb3` bridge errors (`tr('key', { params })` inside the modules). |
+| [`js/app.js`](js/app.js) | Browser IDE controller wiring target tabs, syntax highlighting, error/cursor telemetry, templates (`SNIPPETS` + per-language `SNIPPET_L10N`), autosave, on-stage monitors, API reference (`API_DOCS`), block tree navigation, and `.sb3` file I/O (with [`index.html`](index.html) and [`style.css`](style.css)). |
 | [`vendor/jszip.min.js`](vendor/jszip.min.js) | Bundled JSZip (`v3.10.1`) providing offline `.sb3` compression/decompression in both the browser and Node.js. |
-| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 14-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, `formatBlockUk`, `.sb3` ZIP I/O, headless `StagePreview` execution, error diagnostics, reliability regressions, and the Stage 5 blocks. |
+| [`test/test_roundtrip.js`](test/test_roundtrip.js) | Automated 16-part Node.js test suite verifying MD5 hashing, assets, DSL compilation, idempotent round-trip decompilation, block labels, `.sb3` ZIP I/O, headless `StagePreview` execution, error diagnostics, reliability regressions, the Stage 5 blocks, runtime parity and UX, and the uk/en/ru message catalog. |
 
 ---
 
@@ -32,9 +33,9 @@ Looking for something to work on? Pick any unchecked `[ ]` item from [`TODO.md`]
    - Implement statement, reporter, or hat-decorator parsing and compilation (`compileStmt`, `compileCallStmt`, `compileReporter`, or `compileToScratch`).
    - Emit exact Scratch 3.0 `opcode`, `inputs`, `fields`, shadow blocks/menus, and `mutation` metadata (plus any required `extensions` entries).
 
-2. **Add Decompilation & Ukrainian Label (`js/decompiler.js`)**
+2. **Add Decompilation & Block Label (`js/decompiler.js`, `js/messages.js`)**
    - Reconstruct the Python DSL construct in `decompileTarget` (e.g., `decompileChain` / `decompileReporter`) so that compiling and decompiling any supported script is **100% round-trip idempotent**.
-   - Add a clear Ukrainian inspector label for the opcode in `formatBlockUk`.
+   - Add an inspector label for the opcode in `formatBlockUk` as `tr('blk_…', { … })` and put the text for **all three languages** (`uk`, `en`, `ru`) into [`js/messages.js`](js/messages.js). New compiler errors work the same way (`tr('err_…')`). Never hard-code user-facing text in the core modules: test section 16 fails on Cyrillic strings in `compiler.js`, `decompiler.js` or `sb3Bridge.js` and on keys missing in any language.
 
 3. **Add Runtime Simulation Behavior (`js/preview.js`)**
    - Implement the matching runtime behavior inside `StagePreview` so the 480×360 Canvas 2D stage simulator matches Scratch 3.0 semantics (including sprite/clone state, layering, rendering, audio, or sensing as needed).
@@ -56,6 +57,7 @@ Looking for something to work on? Pick any unchecked `[ ]` item from [`TODO.md`]
 - **Vanilla ES6+ only**: Write browser- and Node-compatible ES6+ JavaScript using the existing IIFE/UMD pattern—do not introduce build tools, TypeScript compilation steps, or external npm runtime dependencies.
 - **2-space JavaScript indentation**: All `.js` files (`js/*.js`, `test/*.js`) use 2 spaces per indentation level.
 - **4-space Python DSL indentation**: Generated DSL output (`js/decompiler.js`), templates (`js/app.js`), tests, and documentation examples must use 4 spaces per indentation level.
+- **Three languages, always**: every user-facing string exists in `uk`, `en` and `ru` — interface text in [`js/i18n.js`](js/i18n.js), core-module messages in [`js/messages.js`](js/messages.js), lesson template comments and phrases in `SNIPPET_L10N` ([`js/app.js`](js/app.js)). Keep placeholders (`{line}`, `{name}`) identical across languages.
 - **Lossless round-trip invariant**: Every supported Python DSL program compiled with `compileToScratch`, saved/loaded via `.sb3`, and decompiled with `decompileTarget` must produce valid Python DSL that re-compiles cleanly with identical Scratch semantics.
 - **UI & Scratch 3.0 Style Guide**: All visual changes to [`index.html`](index.html) or [`style.css`](style.css) must follow [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) (1:1 Scratch 3.0 color tokens, light `#E5F0FF`/`#F9F9F9` workspace, `#855CD6` topbar, and legacy `--wp-*` alias invariants).
 

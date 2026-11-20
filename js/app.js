@@ -278,6 +278,92 @@ def catch_target():
 `
   };
 
+  // Per-language text for the lesson templates: comments and the phrases sprites say. The code itself is shared,
+  // so every locale runs exactly the same program. Each pair is [Ukrainian source fragment, translation].
+  const SNIPPET_L10N = {
+    en: [
+      ['# === СКРИПТ ГРАВЦЯ (Sprite1) ===', '# === PLAYER SCRIPT (Sprite1) ==='],
+      ['# Налаштування сцени та позиції', '# Set up the stage and position'],
+      ['# Робота з Олівцем (Pen Extension)', '# Drawing with the Pen extension'],
+      ['# Малюємо геометричну фігуру в циклі', '# Draw a geometric shape in a loop'],
+      ['"Готово! Переходимо на новий рівень"', '"Done! Moving on to the next level"'],
+      ['"Рівень 2 почався!"', '"Level 2 has started!"'],
+      ['# === ВЛАСНІ ФУНКЦІЇ (Мій Блок у Scratch) ===', '# === CUSTOM FUNCTIONS (My Block in Scratch) ==='],
+      ['"Трикутник, квадрат і п\'ятикутник!"', '"Triangle, square and pentagon!"'],
+      ['# === КЕРУВАННЯ СТРІЛКАМИ + ВІДБИВАННЯ ===', '# === ARROW KEYS + BOUNCING ==='],
+      ['"Керуй стрілками або пробілом!"', '"Use the arrow keys or space!"'],
+      ['# === КЛОНИ ТА ЗІРКОВИЙ САЛЮТ ===', '# === CLONES AND STAR FIREWORKS ==='],
+      ['# === ДІАЛОГ, УМОВИ ELIF ТА СПИСКИ ===', '# === DIALOGUE, ELIF CONDITIONS AND LISTS ==='],
+      ['"Скільки буде 7 * 8?"', '"What is 7 * 8?"'],
+      ['"Мега-Кристал"', '"Mega Crystal"'],
+      ['"Правильно! Бали: "', '"Correct! Points: "'],
+      ['"Майже! Це 6 * 9, а не 7 * 8"', '"Almost! That is 6 * 9, not 7 * 8"'],
+      ['"Спробуй ще раз!"', '"Try again!"'],
+      ['# === ЗМІНА РІВНІВ ТА ПОВІДОМЛЕННЯ ===', '# === LEVELS AND MESSAGES ==='],
+      ['"Натисни Пробіл для старту місії!"', '"Press Space to start the mission!"'],
+      ['"Рівень 2: Хвиля почалась!"', '"Level 2: the wave has begun!"'],
+      ['# === ПІНГ-ПОНГ (КЛАСИЧНА ГРА) ===', '# === PING-PONG (CLASSIC GAME) ==='],
+      ['"Гру завершено! Рахунок: "', '"Game over! Score: "'],
+      ['# === ЛАБІРИНТ (СТРІЛКИ + ТОРКАННЯ КОЛЬОРУ) ===', '# === MAZE (ARROW KEYS + TOUCHING A COLOR) ==='],
+      ['"Дійди до зеленої цілі стрілками!"', '"Reach the green goal with the arrow keys!"'],
+      ['"Перемога!"', '"You win!"'],
+      ['# === ШВИДКИЙ КЛІКЕР (КЛОНИ + ТАЙМЕР) ===', '# === QUICK CLICKER (CLONES + TIMER) ==='],
+      ['"Час вийшов! Бали: "', '"Time is up! Points: "'],
+      // API reference examples (Docs tab)
+      ['"Текст"', '"Text"'],
+      ['"Думка"', '"Thought"'],
+      ['"Питання"', '"Question"'],
+      ['"ключ"', '"key"']
+    ],
+    ru: [
+      ['# === СКРИПТ ГРАВЦЯ (Sprite1) ===', '# === СКРИПТ ИГРОКА (Sprite1) ==='],
+      ['# Налаштування сцени та позиції', '# Настройка сцены и позиции'],
+      ['# Робота з Олівцем (Pen Extension)', '# Рисуем Пером (Pen Extension)'],
+      ['# Малюємо геометричну фігуру в циклі', '# Рисуем геометрическую фигуру в цикле'],
+      ['"Готово! Переходимо на новий рівень"', '"Готово! Переходим на новый уровень"'],
+      ['"Рівень 2 почався!"', '"Уровень 2 начался!"'],
+      ['# === ВЛАСНІ ФУНКЦІЇ (Мій Блок у Scratch) ===', '# === СВОИ ФУНКЦИИ (Мой блок в Scratch) ==='],
+      ['"Трикутник, квадрат і п\'ятикутник!"', '"Треугольник, квадрат и пятиугольник!"'],
+      ['# === КЕРУВАННЯ СТРІЛКАМИ + ВІДБИВАННЯ ===', '# === УПРАВЛЕНИЕ СТРЕЛКАМИ + ОТСКОК ==='],
+      ['"Керуй стрілками або пробілом!"', '"Управляй стрелками или пробелом!"'],
+      ['# === КЛОНИ ТА ЗІРКОВИЙ САЛЮТ ===', '# === КЛОНЫ И ЗВЁЗДНЫЙ САЛЮТ ==='],
+      ['# === ДІАЛОГ, УМОВИ ELIF ТА СПИСКИ ===', '# === ДИАЛОГ, УСЛОВИЯ ELIF И СПИСКИ ==='],
+      ['"Скільки буде 7 * 8?"', '"Сколько будет 7 * 8?"'],
+      ['"Мега-Кристал"', '"Мега-Кристалл"'],
+      ['"Правильно! Бали: "', '"Правильно! Очки: "'],
+      ['"Майже! Це 6 * 9, а не 7 * 8"', '"Почти! Это 6 * 9, а не 7 * 8"'],
+      ['"Спробуй ще раз!"', '"Попробуй ещё раз!"'],
+      ['# === ЗМІНА РІВНІВ ТА ПОВІДОМЛЕННЯ ===', '# === СМЕНА УРОВНЕЙ И СООБЩЕНИЯ ==='],
+      ['"Натисни Пробіл для старту місії!"', '"Нажми Пробел, чтобы начать миссию!"'],
+      ['"Рівень 2: Хвиля почалась!"', '"Уровень 2: волна началась!"'],
+      ['# === ПІНГ-ПОНГ (КЛАСИЧНА ГРА) ===', '# === ПИНГ-ПОНГ (КЛАССИЧЕСКАЯ ИГРА) ==='],
+      ['"Гру завершено! Рахунок: "', '"Игра окончена! Счёт: "'],
+      ['# === ЛАБІРИНТ (СТРІЛКИ + ТОРКАННЯ КОЛЬОРУ) ===', '# === ЛАБИРИНТ (СТРЕЛКИ + КАСАНИЕ ЦВЕТА) ==='],
+      ['"Дійди до зеленої цілі стрілками!"', '"Доберись до зелёной цели стрелками!"'],
+      ['"Перемога!"', '"Победа!"'],
+      ['# === ШВИДКИЙ КЛІКЕР (КЛОНИ + ТАЙМЕР) ===', '# === БЫСТРЫЙ КЛИКЕР (КЛОНЫ + ТАЙМЕР) ==='],
+      ['"Час вийшов! Бали: "', '"Время вышло! Очки: "'],
+      // API reference examples (Docs tab)
+      ['"Думка"', '"Мысль"'],
+      ['"Питання"', '"Вопрос"']
+    ]
+  };
+
+  function localizeSnippetText(code, lang) {
+    const pairs = SNIPPET_L10N[lang];
+    if (!pairs) return code;
+    let out = code;
+    for (const [from, to] of pairs) out = out.split(from).join(to);
+    return out;
+  }
+
+  // Lesson template in the language of the page (falls back to the Ukrainian source).
+  function getSnippet(key) {
+    if (!Object.prototype.hasOwnProperty.call(SNIPPETS, key)) return null;
+    const lang = typeof PyScratchI18n !== 'undefined' && PyScratchI18n.getLang ? PyScratchI18n.getLang() : 'uk';
+    return localizeSnippetText(SNIPPETS[key], lang);
+  }
+
   const API_DOCS = [
     ['cat_events', '@when_flag_clicked', 'doc_01'],
     ['cat_events', '@when_key_pressed("space")', 'doc_02'],
@@ -1688,7 +1774,9 @@ def catch_target():
     html += `<table class="docs-table"><thead><tr><th>${escapeHtml(i18nT('docs_col_cat'))}</th><th>${escapeHtml(
       i18nT('docs_col_cmd')
     )}</th><th>${escapeHtml(i18nT('docs_col_block'))}</th></tr></thead><tbody>`;
-    for (const [cat, cmd, desc] of API_DOCS) {
+    const docLang = typeof PyScratchI18n !== 'undefined' && PyScratchI18n.getLang ? PyScratchI18n.getLang() : 'uk';
+    for (const [cat, rawCmd, desc] of API_DOCS) {
+      const cmd = localizeSnippetText(rawCmd, docLang);
       html += `<tr><td>${escapeHtml(i18nT(cat))}</td><td><code data-doc-insert='${escapeHtml(cmd)}'>${escapeHtml(
         cmd
       )}</code></td><td>${escapeHtml(i18nT(desc))}</td></tr>`;
@@ -1730,7 +1818,7 @@ def catch_target():
     }
 
     function createBlockRow(id, isHat = false) {
-      const info = PyScratchDecompiler.formatBlockUk(id, blocks);
+      const info = PyScratchDecompiler.formatBlock(id, blocks);
       const el = document.createElement('div');
       el.className = isHat ? 'scratch-hat' : `scratch-block ${info.category}`;
       const lineBadge = info.line ? i18nT('line_badge', { line: info.line, opcode: info.opcode }) : info.opcode;
@@ -1949,6 +2037,8 @@ def catch_target():
   const AUTOSAVE_DEBOUNCE_MS = 500;
   let autosaveTimer = null;
   let autosaveQuotaWarned = false;
+  // Promise of the latest IndexedDB snapshot write (resolves true/false), so a page change can wait for it.
+  let autosaveIdbPending = Promise.resolve(true);
 
   function saveAutosaveNow() {
     if (isEmbedMode || !state.projectJson) return false;
@@ -1969,7 +2059,7 @@ def catch_target():
       return false;
     }
     // IndexedDB first and independently: it must still work where localStorage is blocked or full.
-    idbSaveProjectSnapshot(payload);
+    autosaveIdbPending = idbSaveProjectSnapshot(payload);
     try {
       if (typeof localStorage === 'undefined') return false;
       localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
@@ -2061,22 +2151,23 @@ def catch_target():
   }
 
   function idbSaveProjectSnapshot(payload) {
-    if (isEmbedMode || !state.projectJson || !state.assetsMap) return;
+    if (isEmbedMode || !state.projectJson || !state.assetsMap) return Promise.resolve(false);
     let projectStr;
     try {
       projectStr = JSON.stringify(state.projectJson);
     } catch (_) {
-      return;
+      return Promise.resolve(false);
     }
     const assetsMap = state.assetsMap;
     const sig = Array.from(assetsMap.keys()).sort().join('|');
     const writeAssets = sig !== autosaveAssetsSig;
     const gen = autosaveGen;
-    idbRun('readwrite', (store) => {
+    return idbRun('readwrite', (store) => {
       store.put({ v: 1, savedAt: payload.savedAt, project: projectStr, draft: payload }, 'project');
       if (writeAssets) store.put(new Map(assetsMap), 'assets');
     }).then((ok) => {
       if (ok && writeAssets && gen === autosaveGen) autosaveAssetsSig = sig;
+      return !!ok;
     });
   }
 
@@ -2124,7 +2215,7 @@ def catch_target():
     }
   }
 
-  let startupCode = SNIPPETS.hexagon;
+  let startupCode = getSnippet('hexagon');
   let codeDecodeError = null;
   let loadedFromCodeParam = false;
   let hasExplicitUrlProject = false;
@@ -2132,7 +2223,7 @@ def catch_target():
   if (urlParams) {
     const snippetParam = urlParams.get('snippet');
     if (snippetParam && Object.prototype.hasOwnProperty.call(SNIPPETS, snippetParam)) {
-      startupCode = SNIPPETS[snippetParam];
+      startupCode = getSnippet(snippetParam);
       hasExplicitUrlProject = true;
     }
     const codeParam = urlParams.get('code');
@@ -2231,7 +2322,7 @@ def catch_target():
     window.addEventListener('pagehide', flushAutosave);
     window.addEventListener('beforeunload', (e) => {
       flushAutosave();
-      if (projectDirty && !isEmbedMode) {
+      if (projectDirty) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -2379,7 +2470,7 @@ def catch_target():
           const firstSpriteIdx = state.projectJson.targets.findIndex((t) => !t.isStage);
           if (firstSpriteIdx >= 0) selectTarget(firstSpriteIdx);
         }
-        editor.value = SNIPPETS[key];
+        editor.value = getSnippet(key);
         projectDirty = true;
         scheduleAutosave();
         state.highlightedLine = null;
@@ -2403,8 +2494,40 @@ def catch_target():
     btn.onclick = () => {
       if (typeof PyScratchI18n === 'undefined') return;
       const targetLang = btn.getAttribute('data-lang');
-      if (projectDirty && typeof confirm === 'function' && !confirm(i18nT('lang_switch_unsaved'))) return;
-      if (typeof PyScratchI18n.navigateToLang === 'function' && PyScratchI18n.navigateToLang(targetLang)) return;
+      const canNavigate = typeof PyScratchI18n.navigateToLang === 'function';
+      const go = (draftSaved) => {
+        if (draftSaved) {
+          // The draft is saved in this browser, so the page in the other language reopens the same project.
+          // Drop ?code= / ?snippet= from the URL, otherwise they would win over the draft there.
+          projectDirty = false;
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('code');
+            url.searchParams.delete('snippet');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+          } catch (_) {}
+        }
+        if (canNavigate && PyScratchI18n.navigateToLang(targetLang)) return true;
+        // Same-page switch: nothing was left behind, the project stays as unsaved as it was.
+        if (draftSaved) projectDirty = true;
+        return false;
+      };
+      if (projectDirty) {
+        if (saveAutosaveNow()) {
+          // Wait (briefly) for the IndexedDB snapshot with costumes and sounds before leaving the page,
+          // otherwise the navigation can abort the write and only the code would come back.
+          const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+          Promise.race([autosaveIdbPending, timeout]).then(() => {
+            if (!go(true)) finishSameLang();
+          });
+          return;
+        }
+        if (typeof confirm === 'function' && !confirm(i18nT('lang_switch_unsaved'))) return;
+      }
+      if (!go(false)) finishSameLang();
+    };
+    const finishSameLang = () => {
+      const targetLang = btn.getAttribute('data-lang');
       PyScratchI18n.setLang(targetLang);
       renderDocsView();
       renderInspectorView();
@@ -2423,7 +2546,7 @@ def catch_target():
       if (editor) state.codeByTarget.set(state.activeTargetIdx, editor.value);
       const newSprite = Sb3Bridge.addSpriteToProject(state.projectJson, state.assetsMap);
       const newIdx = state.projectJson.targets.length - 1;
-      const starterCode = `# === СКРИПТ ГРАВЦЯ (${newSprite.name}) ===\n\n@when_flag_clicked\ndef main():\n    goto(${newSprite.x}, 0)\n    say("Привіт від ${newSprite.name}!", 2)\n`;
+      const starterCode = i18nT('starter_sprite_code', { name: newSprite.name, x: newSprite.x });
       state.codeByTarget.set(newIdx, starterCode);
       state.activeTargetIdx = newIdx;
       if (editor) editor.value = starterCode;
@@ -2590,7 +2713,7 @@ def catch_target():
       clearAutosave();
       projectDirty = false;
       const d = Sb3Bridge.createDefaultProject();
-      loadProject(d.projectJson, d.assetsMap, SNIPPETS.hexagon);
+      loadProject(d.projectJson, d.assetsMap, getSnippet('hexagon'));
       setStatus(i18nT('template_reset'));
     };
   }

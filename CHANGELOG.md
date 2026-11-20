@@ -5,6 +5,21 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.4.0] - 2026-11-20
+
+### Added
+- **Three-language core messages (`js/messages.js`)**: a new catalog with the same keys and placeholders in `uk`, `en` and `ru` for everything the core modules show to a learner. `js/compiler.js`, `js/decompiler.js` and `js/sb3Bridge.js` now look their text up through `tr('key', { params })` and no longer contain hard-coded Ukrainian strings. The pages load `js/messages.js` before the core modules; in Node the modules `require` it.
+- **Tests (`test/test_roundtrip.js`)**: Suite 16 checks key and placeholder parity across the three languages, that every `tr()` key exists, that the core modules contain no Cyrillic text, single-pass placeholder formatting, per-language compiler errors and hints, decompiled headers and block labels, and that every template and the starter code compiles in all three languages. The test suite now has 16 sections.
+
+### Changed
+- **Compiler diagnostics in the page language (`js/compiler.js`)**: syntax errors, "did you mean" hints, unsupported-statement hints (`break`, `while`, `import`, …), whitelist errors (`set_effect`, `key_pressed`, …) and Stage-only/sprite-only errors now appear in English on `/en/` and in Russian on `/ru/`; Ukrainian stays the default.
+- **Block tree and generated code comments (`js/decompiler.js`)**: block labels in the Blocks tab, the header of decompiled scripts and the comments for unknown or raw blocks follow the page language. `formatBlock` is the new neutral name; `formatBlockUk` stays as an alias.
+- **`.sb3` errors (`js/sb3Bridge.js`)**: messages for broken archives, missing `project.json`, unsupported assets and sprite rename/delete problems are localized.
+- **Templates, starter code and docs examples (`js/app.js`, `js/i18n.js`)**: the 9 lesson templates, the code of a new sprite and the API reference examples use English or Russian comments and phrases on the matching page (`SNIPPET_L10N`, `starter_sprite_code`).
+- **Language switch keeps your work (`js/app.js`)**: switching between `uk`, `en` and `ru` with unsaved changes saves the draft first and restores it on the new page; the confirmation only appears when the draft cannot be saved. The switch waits (up to 1.5 s) for the IndexedDB snapshot, so uploaded costumes, sounds and an opened `.sb3` come along too.
+- **Interface placeholders (`js/i18n.js`)**: `t()` fills `{…}` placeholders in a single pass, like `js/messages.js`, so a sprite name containing `{x}` is not expanded twice.
+- **Docs**: `README.md`, `CONTRIBUTING.md`, `TODO.md`, `docs/DSL_REFERENCE.md` and `AGENTS.md` describe the message catalog and the three-language rule for new blocks and errors.
+
 ## [1.3.0] - 2026-11-20
 
 ### Added

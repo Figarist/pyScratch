@@ -1,11 +1,20 @@
 /**
  * decompiler.js
  * Decompiles Scratch 3.0 target.blocks into clean, idiomatic Python-DSL code (4-space indent)
- * and provides human-readable Ukrainian Scratch block labels for the visual inspector.
+ * and provides human-readable Scratch block labels (uk / en / ru, see js/messages.js) for the visual inspector.
  */
 
 (function (global) {
   'use strict';
+
+  // Localized message from js/messages.js (browser global or Node require); the bare key if the catalog is not loaded.
+  function tr(key, params) {
+    let catalog = global.PyScratchMessages;
+    if (!catalog && typeof module !== 'undefined' && module.exports && typeof require === 'function') {
+      try { catalog = require('./messages.js'); } catch (_) { catalog = null; }
+    }
+    return catalog ? catalog.format(key, params) : key;
+  }
 
   const PYTHON_RESERVED_IDENTS = new Set([
     'def', 'for', 'in', 'while', 'if', 'elif', 'else', 'pass',
@@ -360,7 +369,7 @@
       .sort((a, b) => (a[1].y || 0) - (b[1].y || 0));
 
     if (topBlocks.length === 0) {
-      return `# === ${target.isStage ? 'СЦЕНА' : 'СПРАЙТ'} (${target.name}) ===\n# Поки що немає скриптів. Напишіть @when_flag_clicked нижче!\n`;
+      return tr('dec_empty_header', { kind: target.isStage ? tr('dec_kind_stage') : tr('dec_kind_sprite'), name: target.name });
     }
 
     const {
@@ -397,7 +406,7 @@
 
     let handlerIndex = 1;
     const parts = [];
-    parts.push(`# === ${target.isStage ? 'СКРИПТ СЦЕНИ' : 'СКРИПТ ГРАВЦЯ'} (${target.name}) ===\n`);
+    parts.push(tr('dec_header', { kind: target.isStage ? tr('dec_kind_stage_script') : tr('dec_kind_sprite_script'), name: target.name }));
 
     function decompileIf(b, indent, keyword = 'if', visited = new Set()) {
       const lines = [];
@@ -786,7 +795,7 @@
 
           default:
             markUnknown(b.opcode);
-            lines.push(`${pad}# невідомий блок: ${b.opcode}`);
+            lines.push(tr('dec_unknown_block_line', { pad: pad, opcode: b.opcode }));
         }
         currId = b.next;
       }
@@ -811,7 +820,7 @@
       if (unsupportedByRoot.has(rootId)) {
         parts.length = partsMark;
         parts.push(
-          `# [збережено без змін] скрипт із блоками, яких немає в DSL: ${unsupportedByRoot.get(rootId).join(', ')}.\n# Він не показується тут, але залишається в проєкті й потрапить у .sb3.\n`
+          tr('dec_raw_script', { opcodes: unsupportedByRoot.get(rootId).join(', ') })
         );
       }
       currentRoot = null;
@@ -894,10 +903,11 @@
     }
   }
 
-  // Human-readable Ukrainian label for each Scratch block (for educational block tree inspection)
+  // Human-readable label for each Scratch block in the page language (for educational block tree inspection).
+  // The historical name formatBlockUk is kept for compatibility; formatBlock is the same function.
   function formatBlockUk(blockId, blocks) {
     const b = blocks[blockId];
-    if (!b) return { label: 'невідомий блок', category: 'motion' };
+    if (!b) return { label: tr('blk_unknown'), category: 'motion' };
     const { readField, readInput, readMenuOrExpr, readNumMenuOrExpr } = createBlockReader(blocks);
 
     let category = 'motion';
@@ -917,79 +927,79 @@
     let label = b.opcode;
     switch (b.opcode) {
       case 'event_whenflagclicked':
-        label = 'Коли натиснуто зелений прапорець';
+        label = tr('blk_when_flag');
         break;
       case 'event_whenkeypressed':
-        label = `Коли клавішу [${readField(b, 'KEY_OPTION', 'space')}] натиснуто`;
+        label = tr('blk_when_key', { key: readField(b, 'KEY_OPTION', 'space') });
         break;
       case 'event_whenthisspriteclicked':
-        label = 'Коли спрайт натиснуто';
+        label = tr('blk_when_sprite_clicked');
         break;
       case 'event_whenstageclicked':
-        label = 'Коли сцену натиснуто';
+        label = tr('blk_when_stage_clicked');
         break;
       case 'event_whenbackdropswitchesto':
-        label = `Коли тло змінюється на [${readField(b, 'BACKDROP', 'backdrop1')}]`;
+        label = tr('blk_when_backdrop', { backdrop: readField(b, 'BACKDROP', 'backdrop1') });
         break;
       case 'event_whenbroadcastreceived':
-        label = `Коли я отримую [${readField(b, 'BROADCAST_OPTION', 'message1')}]`;
+        label = tr('blk_when_broadcast', { message: readField(b, 'BROADCAST_OPTION', 'message1') });
         break;
       case 'event_whengreaterthan':
-        label = `Коли [${readField(b, 'WHENGREATERTHANMENU', 'LOUDNESS').toLowerCase()}] > (${readInput(b, 'VALUE')})`;
+        label = tr('blk_when_greater', { sensor: readField(b, 'WHENGREATERTHANMENU', 'LOUDNESS').toLowerCase(), value: readInput(b, 'VALUE') });
         break;
       case 'event_broadcast':
-        label = `Оповістити (${readInput(b, 'BROADCAST_INPUT')})`;
+        label = tr('blk_broadcast', { message: readInput(b, 'BROADCAST_INPUT') });
         break;
       case 'event_broadcastandwait':
-        label = `Оповістити (${readInput(b, 'BROADCAST_INPUT')}) і чекати`;
+        label = tr('blk_broadcast_wait', { message: readInput(b, 'BROADCAST_INPUT') });
         break;
       case 'control_start_as_clone':
-        label = 'Коли я починаю як клон';
+        label = tr('blk_when_clone');
         break;
       case 'event_whentouchingobject':
-        label = `Коли торкається [${readMenuOrExpr(b, 'TOUCHINGOBJECTMENU', 'TOUCHINGOBJECTMENU', 'mouse')}]`;
+        label = tr('blk_when_touching', { object: readMenuOrExpr(b, 'TOUCHINGOBJECTMENU', 'TOUCHINGOBJECTMENU', 'mouse') });
         break;
       case 'music_playDrumForBeats':
-        label = `Барабан (${readNumMenuOrExpr(b, 'DRUM', 'DRUM', 1)}) (${readInput(b, 'BEATS')}) тактів`;
+        label = tr('blk_drum', { drum: readNumMenuOrExpr(b, 'DRUM', 'DRUM', 1), beats: readInput(b, 'BEATS') });
         break;
       case 'music_restForBeats':
-        label = `Пауза (${readInput(b, 'BEATS')}) тактів`;
+        label = tr('blk_rest', { beats: readInput(b, 'BEATS') });
         break;
       case 'music_playNoteForBeats':
-        label = `Зіграти ноту (${readNumMenuOrExpr(b, 'NOTE', 'NOTE', 60)}) (${readInput(b, 'BEATS')}) тактів`;
+        label = tr('blk_note', { note: readNumMenuOrExpr(b, 'NOTE', 'NOTE', 60), beats: readInput(b, 'BEATS') });
         break;
       case 'music_setInstrument':
-        label = `Встановити інструмент (${readNumMenuOrExpr(b, 'INSTRUMENT', 'INSTRUMENT', 1)})`;
+        label = tr('blk_instrument', { instrument: readNumMenuOrExpr(b, 'INSTRUMENT', 'INSTRUMENT', 1) });
         break;
       case 'music_setTempo':
-        label = `Встановити темп (${readInput(b, 'TEMPO')})`;
+        label = tr('blk_set_tempo', { tempo: readInput(b, 'TEMPO') });
         break;
       case 'music_changeTempo':
-        label = `Змінити темп на (${readInput(b, 'TEMPO')})`;
+        label = tr('blk_change_tempo', { tempo: readInput(b, 'TEMPO') });
         break;
       case 'music_getTempo':
-        label = 'Темп';
+        label = tr('blk_tempo');
         break;
       case 'text2speech_speakAndWait':
-        label = `Сказати (${readInput(b, 'WORDS')})`;
+        label = tr('blk_speak', { words: readInput(b, 'WORDS') });
         break;
       case 'text2speech_setVoice':
-        label = `Встановити голос [${readMenuOrExpr(b, 'VOICES', 'voices', 'ALTO')}]`;
+        label = tr('blk_set_voice', { voice: readMenuOrExpr(b, 'VOICES', 'voices', 'ALTO') });
         break;
       case 'text2speech_setLanguage':
-        label = `Встановити мову [${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')}]`;
+        label = tr('blk_set_language', { language: readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en') });
         break;
       case 'translate_getTranslate':
-        label = `Перекласти (${readInput(b, 'WORDS')}) на [${readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en')}]`;
+        label = tr('blk_translate', { words: readInput(b, 'WORDS'), language: readMenuOrExpr(b, 'LANGUAGE', 'languages', 'en') });
         break;
       case 'translate_getViewerLanguage':
-        label = 'Мова';
+        label = tr('blk_viewer_language');
         break;
       case 'procedures_definition': {
         const protoId = b.inputs && b.inputs.custom_block ? b.inputs.custom_block[1] : null;
         const proto = protoId ? blocks[protoId] : null;
         const mut = (proto && proto.mutation) || {};
-        label = `Визначити: ${mut.proccode || 'блок'}`;
+        label = tr('blk_define', { proccode: mut.proccode || tr('blk_block') });
         break;
       }
       case 'procedures_call': {
@@ -998,241 +1008,241 @@
         let argIds = [];
         try { argIds = JSON.parse(mut.argumentids || '[]'); } catch (_) {}
         const args = argIds.map((id) => readInput(b, id));
-        label = `Викликати ${fnName}(${args.join(', ')})`;
+        label = tr('blk_call', { name: fnName, args: args.join(', ') });
         break;
       }
       case 'motion_movesteps':
-        label = `Перемістити на (${readInput(b, 'STEPS')}) кроків`;
+        label = tr('blk_move', { steps: readInput(b, 'STEPS') });
         break;
       case 'motion_turnright':
-        label = `Повернути праворуч на (${readInput(b, 'DEGREES')}) град.`;
+        label = tr('blk_turn_right', { degrees: readInput(b, 'DEGREES') });
         break;
       case 'motion_turnleft':
-        label = `Повернути ліворуч на (${readInput(b, 'DEGREES')}) град.`;
+        label = tr('blk_turn_left', { degrees: readInput(b, 'DEGREES') });
         break;
       case 'motion_gotoxy':
-        label = `Перейти в x: (${readInput(b, 'X')}) y: (${readInput(b, 'Y')})`;
+        label = tr('blk_goto_xy', { x: readInput(b, 'X'), y: readInput(b, 'Y') });
         break;
       case 'motion_goto':
-        label = `Перейти до [${readMenuOrExpr(b, 'TO', 'TO', 'random')}]`;
+        label = tr('blk_goto', { target: readMenuOrExpr(b, 'TO', 'TO', 'random') });
         break;
       case 'motion_glidesecstoxy':
-        label = `Ковзати (${readInput(b, 'SECS')}) сек до x: (${readInput(b, 'X')}) y: (${readInput(b, 'Y')})`;
+        label = tr('blk_glide_xy', { secs: readInput(b, 'SECS'), x: readInput(b, 'X'), y: readInput(b, 'Y') });
         break;
       case 'motion_glideto':
-        label = `Ковзати (${readInput(b, 'SECS')}) сек до [${readMenuOrExpr(b, 'TO', 'TO', 'random')}]`;
+        label = tr('blk_glide_to', { secs: readInput(b, 'SECS'), target: readMenuOrExpr(b, 'TO', 'TO', 'random') });
         break;
       case 'motion_setx':
-        label = `Встановити x в (${readInput(b, 'X')})`;
+        label = tr('blk_set_x', { x: readInput(b, 'X') });
         break;
       case 'motion_sety':
-        label = `Встановити y в (${readInput(b, 'Y')})`;
+        label = tr('blk_set_y', { y: readInput(b, 'Y') });
         break;
       case 'motion_changexby':
-        label = `Змінити x на (${readInput(b, 'DX')})`;
+        label = tr('blk_change_x', { dx: readInput(b, 'DX') });
         break;
       case 'motion_changeyby':
-        label = `Змінити y на (${readInput(b, 'DY')})`;
+        label = tr('blk_change_y', { dy: readInput(b, 'DY') });
         break;
       case 'motion_pointindirection':
-        label = `Повернути в напрямку (${readInput(b, 'DIRECTION')})`;
+        label = tr('blk_point_direction', { direction: readInput(b, 'DIRECTION') });
         break;
       case 'motion_pointtowards':
-        label = `Слідувати за [${readMenuOrExpr(b, 'TOWARDS', 'TOWARDS', 'mouse')}]`;
+        label = tr('blk_point_towards', { target: readMenuOrExpr(b, 'TOWARDS', 'TOWARDS', 'mouse') });
         break;
       case 'motion_ifonedgebounce':
-        label = 'Якщо на межі, відбити';
+        label = tr('blk_bounce');
         break;
       case 'motion_setrotationstyle':
-        label = `Встановити стиль обертання [${readField(b, 'STYLE', 'all around')}]`;
+        label = tr('blk_rotation_style', { style: readField(b, 'STYLE', 'all around') });
         break;
       case 'looks_switchbackdropto':
-        label = `Змінити тло на [${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')}]`;
+        label = tr('blk_switch_backdrop', { backdrop: readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1') });
         break;
       case 'looks_switchbackdroptoandwait':
-        label = `Змінити тло на [${readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1')}] і чекати`;
+        label = tr('blk_switch_backdrop_wait', { backdrop: readMenuOrExpr(b, 'BACKDROP', 'BACKDROP', 'backdrop1') });
         break;
       case 'looks_nextbackdrop':
-        label = 'Наступне тло';
+        label = tr('blk_next_backdrop');
         break;
       case 'looks_gotofrontback':
-        label = readField(b, 'FRONT_BACK', 'front') === 'back' ? 'Перейти на задній план' : 'Перейти на передній план';
+        label = readField(b, 'FRONT_BACK', 'front') === 'back' ? tr('blk_go_back') : tr('blk_go_front');
         break;
       case 'looks_goforwardbackwardlayers': {
-        const dir = readField(b, 'FORWARD_BACKWARD', 'forward') === 'backward' ? 'назад' : 'вперед';
-        label = `Перемістити ${dir} на (${readInput(b, 'NUM')}) шарів`;
+        const dir = readField(b, 'FORWARD_BACKWARD', 'forward') === 'backward' ? tr('blk_dir_backward') : tr('blk_dir_forward');
+        label = tr('blk_layers', { dir: dir, num: readInput(b, 'NUM') });
         break;
       }
       case 'looks_switchcostumeto':
-        label = `Змінити образ на [${readMenuOrExpr(b, 'COSTUME', 'COSTUME', 'costume1')}]`;
+        label = tr('blk_switch_costume', { costume: readMenuOrExpr(b, 'COSTUME', 'COSTUME', 'costume1') });
         break;
       case 'looks_nextcostume':
-        label = 'Наступний образ';
+        label = tr('blk_next_costume');
         break;
       case 'looks_sayforsecs':
-        label = `Говорити (${readInput(b, 'MESSAGE')}) протягом (${readInput(b, 'SECS')}) сек`;
+        label = tr('blk_say_for', { message: readInput(b, 'MESSAGE'), secs: readInput(b, 'SECS') });
         break;
       case 'looks_say':
-        label = `Говорити (${readInput(b, 'MESSAGE')})`;
+        label = tr('blk_say', { message: readInput(b, 'MESSAGE') });
         break;
       case 'looks_thinkforsecs':
-        label = `Думати (${readInput(b, 'MESSAGE')}) протягом (${readInput(b, 'SECS')}) сек`;
+        label = tr('blk_think_for', { message: readInput(b, 'MESSAGE'), secs: readInput(b, 'SECS') });
         break;
       case 'looks_think':
-        label = `Думати (${readInput(b, 'MESSAGE')})`;
+        label = tr('blk_think', { message: readInput(b, 'MESSAGE') });
         break;
       case 'looks_show':
-        label = 'Показати';
+        label = tr('blk_show');
         break;
       case 'looks_hide':
-        label = 'Сховати';
+        label = tr('blk_hide');
         break;
       case 'looks_setsizeto':
-        label = `Встановити розмір (${readInput(b, 'SIZE')}) %`;
+        label = tr('blk_set_size', { size: readInput(b, 'SIZE') });
         break;
       case 'looks_changesizeby':
-        label = `Змінити розмір на (${readInput(b, 'CHANGE')})`;
+        label = tr('blk_change_size', { change: readInput(b, 'CHANGE') });
         break;
       case 'looks_seteffectto':
-        label = `Встановити ефект [${readField(b, 'EFFECT', 'COLOR').toLowerCase()}] в (${readInput(b, 'VALUE')})`;
+        label = tr('blk_set_effect', { effect: readField(b, 'EFFECT', 'COLOR').toLowerCase(), value: readInput(b, 'VALUE') });
         break;
       case 'looks_changeeffectby':
-        label = `Змінити ефект [${readField(b, 'EFFECT', 'COLOR').toLowerCase()}] на (${readInput(b, 'CHANGE')})`;
+        label = tr('blk_change_effect', { effect: readField(b, 'EFFECT', 'COLOR').toLowerCase(), change: readInput(b, 'CHANGE') });
         break;
       case 'looks_cleargraphiceffects':
-        label = 'Очистити графічні ефекти';
+        label = tr('blk_clear_effects');
         break;
       case 'sound_play':
-        label = `Відтворити звук [${readMenuOrExpr(b, 'SOUND_MENU', 'SOUND_MENU', 'pop')}]`;
+        label = tr('blk_play_sound', { sound: readMenuOrExpr(b, 'SOUND_MENU', 'SOUND_MENU', 'pop') });
         break;
       case 'sound_playuntildone':
-        label = `Відтворити звук [${readMenuOrExpr(b, 'SOUND_MENU', 'SOUND_MENU', 'pop')}] до кінця`;
+        label = tr('blk_play_sound_wait', { sound: readMenuOrExpr(b, 'SOUND_MENU', 'SOUND_MENU', 'pop') });
         break;
       case 'sound_stopallsounds':
-        label = 'Зупинити всі звуки';
+        label = tr('blk_stop_sounds');
         break;
       case 'sound_setvolumeto':
-        label = `Встановити гучність (${readInput(b, 'VOLUME')}) %`;
+        label = tr('blk_set_volume', { volume: readInput(b, 'VOLUME') });
         break;
       case 'sound_changevolumeby':
-        label = `Змінити гучність на (${readInput(b, 'VOLUME')})`;
+        label = tr('blk_change_volume', { volume: readInput(b, 'VOLUME') });
         break;
       case 'sound_seteffectto':
-        label = `Встановити звуковий ефект [${readField(b, 'EFFECT', 'PITCH').toLowerCase()}] в (${readInput(b, 'VALUE')})`;
+        label = tr('blk_set_sound_effect', { effect: readField(b, 'EFFECT', 'PITCH').toLowerCase(), value: readInput(b, 'VALUE') });
         break;
       case 'sound_changeeffectby':
-        label = `Змінити звуковий ефект [${readField(b, 'EFFECT', 'PITCH').toLowerCase()}] на (${readInput(b, 'VALUE')})`;
+        label = tr('blk_change_sound_effect', { effect: readField(b, 'EFFECT', 'PITCH').toLowerCase(), value: readInput(b, 'VALUE') });
         break;
       case 'sound_cleareffects':
-        label = 'Очистити звукові ефекти';
+        label = tr('blk_clear_sound_effects');
         break;
       case 'pen_clear':
-        label = 'Очистити все (Олівець)';
+        label = tr('blk_pen_clear');
         break;
       case 'pen_stamp':
-        label = 'Штамп (Олівець)';
+        label = tr('blk_pen_stamp');
         break;
       case 'pen_penDown':
-        label = 'Опустити олівець';
+        label = tr('blk_pen_down');
         break;
       case 'pen_penUp':
-        label = 'Підняти олівець';
+        label = tr('blk_pen_up');
         break;
       case 'pen_setPenColorToColor':
-        label = `Надати олівцю колір (${readInput(b, 'COLOR')})`;
+        label = tr('blk_pen_color', { color: readInput(b, 'COLOR') });
         break;
       case 'pen_setPenColorParamTo':
-        label = `Встановити параметр олівця [${readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color')}] в (${readInput(b, 'VALUE')})`;
+        label = tr('blk_set_pen_param', { param: readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color'), value: readInput(b, 'VALUE') });
         break;
       case 'pen_changePenColorParamBy':
-        label = `Змінити параметр олівця [${readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color')}] на (${readInput(b, 'VALUE')})`;
+        label = tr('blk_change_pen_param', { param: readMenuOrExpr(b, 'COLOR_PARAM', 'colorParam', 'color'), value: readInput(b, 'VALUE') });
         break;
       case 'pen_setPenSizeTo':
-        label = `Встановити розмір олівця (${readInput(b, 'SIZE')})`;
+        label = tr('blk_set_pen_size', { size: readInput(b, 'SIZE') });
         break;
       case 'pen_changePenSizeBy':
-        label = `Змінити розмір олівця на (${readInput(b, 'SIZE')})`;
+        label = tr('blk_change_pen_size', { size: readInput(b, 'SIZE') });
         break;
       case 'control_wait':
-        label = `Чекати (${readInput(b, 'DURATION')}) сек`;
+        label = tr('blk_wait', { secs: readInput(b, 'DURATION') });
         break;
       case 'control_wait_until':
-        label = `Чекати до <${readInput(b, 'CONDITION')}>`;
+        label = tr('blk_wait_until', { condition: readInput(b, 'CONDITION') });
         break;
       case 'control_repeat':
-        label = `Повторити (${readInput(b, 'TIMES')}) разів`;
+        label = tr('blk_repeat', { times: readInput(b, 'TIMES') });
         break;
       case 'control_forever':
-        label = 'Повторювати завжди';
+        label = tr('blk_forever');
         break;
       case 'control_repeat_until':
-        label = `Повторювати до <${readInput(b, 'CONDITION')}>`;
+        label = tr('blk_repeat_until', { condition: readInput(b, 'CONDITION') });
         break;
       case 'control_if':
-        label = `Якщо <${readInput(b, 'CONDITION')}> то`;
+        label = tr('blk_if', { condition: readInput(b, 'CONDITION') });
         break;
       case 'control_if_else':
-        label = `Якщо <${readInput(b, 'CONDITION')}> то ... інакше`;
+        label = tr('blk_if_else', { condition: readInput(b, 'CONDITION') });
         break;
       case 'control_stop':
-        label = `Зупинити [${readField(b, 'STOP_OPTION', 'all')}]`;
+        label = tr('blk_stop', { option: readField(b, 'STOP_OPTION', 'all') });
         break;
       case 'control_create_clone_of':
-        label = `Створити клон з [${readMenuOrExpr(b, 'CLONE_OPTION', 'CLONE_OPTION', 'myself')}]`;
+        label = tr('blk_create_clone', { target: readMenuOrExpr(b, 'CLONE_OPTION', 'CLONE_OPTION', 'myself') });
         break;
       case 'control_delete_this_clone':
-        label = 'Вилучити цей клон';
+        label = tr('blk_delete_clone');
         break;
       case 'sensing_askandwait':
-        label = `Запитати (${readInput(b, 'QUESTION')}) і чекати`;
+        label = tr('blk_ask', { question: readInput(b, 'QUESTION') });
         break;
       case 'sensing_setdragmode': {
         const mode = readField(b, 'DRAG_MODE', 'draggable');
-        label = `Встановити режим перетягування [${mode === 'not draggable' ? 'не перетягується' : 'перетягується'}]`;
+        label = tr('blk_drag_mode', { mode: mode === 'not draggable' ? tr('blk_not_draggable') : tr('blk_draggable') });
         break;
       }
       case 'sensing_resettimer':
-        label = 'Перезапустити таймер';
+        label = tr('blk_reset_timer');
         break;
       case 'data_setvariableto':
-        label = `Надати [${readField(b, 'VARIABLE', 'var')}] значення (${readInput(b, 'VALUE')})`;
+        label = tr('blk_set_var', { var: readField(b, 'VARIABLE', 'var'), value: readInput(b, 'VALUE') });
         break;
       case 'data_changevariableby':
-        label = `Змінити [${readField(b, 'VARIABLE', 'var')}] на (${readInput(b, 'VALUE')})`;
+        label = tr('blk_change_var', { var: readField(b, 'VARIABLE', 'var'), value: readInput(b, 'VALUE') });
         break;
       case 'data_showvariable':
-        label = `Показати змінну [${readField(b, 'VARIABLE', 'var')}]`;
+        label = tr('blk_show_var', { var: readField(b, 'VARIABLE', 'var') });
         break;
       case 'data_hidevariable':
-        label = `Сховати змінну [${readField(b, 'VARIABLE', 'var')}]`;
+        label = tr('blk_hide_var', { var: readField(b, 'VARIABLE', 'var') });
         break;
       case 'data_showlist':
-        label = `Показати список [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_show_list', { list: readField(b, 'LIST', 'list') });
         break;
       case 'data_hidelist':
-        label = `Сховати список [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_hide_list', { list: readField(b, 'LIST', 'list') });
         break;
       case 'data_addtolist':
-        label = `Додати (${readInput(b, 'ITEM')}) до [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_list_add', { item: readInput(b, 'ITEM'), list: readField(b, 'LIST', 'list') });
         break;
       case 'data_deleteoflist':
-        label = `Вилучити (${readInput(b, 'INDEX')}) з [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_list_delete', { index: readInput(b, 'INDEX'), list: readField(b, 'LIST', 'list') });
         break;
       case 'data_deletealloflist':
-        label = `Вилучити все з [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_list_clear', { list: readField(b, 'LIST', 'list') });
         break;
       case 'data_insertatlist':
-        label = `Вставити (${readInput(b, 'ITEM')}) у позицію (${readInput(b, 'INDEX')}) списку [${readField(b, 'LIST', 'list')}]`;
+        label = tr('blk_list_insert', { item: readInput(b, 'ITEM'), index: readInput(b, 'INDEX'), list: readField(b, 'LIST', 'list') });
         break;
       case 'data_replaceitemoflist':
-        label = `Замінити елемент (${readInput(b, 'INDEX')}) списку [${readField(b, 'LIST', 'list')}] на (${readInput(b, 'ITEM')})`;
+        label = tr('blk_list_replace', { index: readInput(b, 'INDEX'), list: readField(b, 'LIST', 'list'), item: readInput(b, 'ITEM') });
         break;
     }
 
     return { label, opcode: b.opcode, category, line: b._line || null };
   }
 
-  const api = { decompileTarget, formatBlockUk, extractProcName };
+  const api = { decompileTarget, formatBlockUk, formatBlock: formatBlockUk, extractProcName };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {

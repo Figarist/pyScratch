@@ -144,6 +144,7 @@
       share_copied: 'Посилання на код скопійовано! Можете надіслати його учню або другу.',
       share_updated: 'Посилання оновлено в адресному рядку (доступ до буфера обмежено).',
       err_share: 'Помилка створення посилання: {msg}',
+      starter_sprite_code: `# === СКРИПТ ГРАВЦЯ ({name}) ===\n\n@when_flag_clicked\ndef main():\n    goto({x}, 0)\n    say("Привіт від {name}!", 2)\n`,
       lang_switch_unsaved: 'Зміни в проєкті не збережено. Перемкнути мову? Збережіть .sb3 або натисніть «Поділитися», щоб не втратити код.',
       share_too_long: 'Код надто великий для посилання (ліміт {max} символів у посиланні). Збережіть проєкт як .sb3.',
       cat_events: 'Події',
@@ -361,6 +362,7 @@
       share_copied: 'Link copied! You can send it to a student or a friend.',
       share_updated: 'Link updated in the address bar (clipboard access is restricted).',
       err_share: 'Failed to create the link: {msg}',
+      starter_sprite_code: `# === PLAYER SCRIPT ({name}) ===\n\n@when_flag_clicked\ndef main():\n    goto({x}, 0)\n    say("Hello from {name}!", 2)\n`,
       lang_switch_unsaved: 'Your project has unsaved changes. Switch language anyway? Save as .sb3 or use Share to keep your code.',
       share_too_long: 'The code is too long to share as a link (limit {max} characters). Save the project as .sb3 instead.',
       cat_events: 'Events',
@@ -578,6 +580,7 @@
       share_copied: 'Ссылка на код скопирована! Можете отправить её ученику или другу.',
       share_updated: 'Ссылка обновлена в адресной строке (доступ к буферу ограничен).',
       err_share: 'Ошибка создания ссылки: {msg}',
+      starter_sprite_code: `# === СКРИПТ ИГРОКА ({name}) ===\n\n@when_flag_clicked\ndef main():\n    goto({x}, 0)\n    say("Привет от {name}!", 2)\n`,
       lang_switch_unsaved: 'Изменения в проекте не сохранены. Переключить язык? Сохраните .sb3 или нажмите «Поделиться», чтобы не потерять код.',
       share_too_long: 'Код слишком большой для ссылки (лимит {max} символов). Сохраните проект как .sb3.',
       cat_events: 'События',
@@ -914,9 +917,8 @@
     const table = DICT[currentLang] || DICT.uk;
     let str = table[key] != null ? table[key] : (DICT.uk[key] != null ? DICT.uk[key] : key);
     if (params) {
-      for (const [k, v] of Object.entries(params)) {
-        str = str.split(`{${k}}`).join(String(v));
-      }
+      // Single pass, so a value that itself contains "{x}" is never expanded again.
+      str = str.replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(params, k) ? String(params[k]) : m));
     }
     return str;
   }

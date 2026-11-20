@@ -1657,7 +1657,122 @@ def main():
     }
   }
 
-  console.log('ALL 15 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 16. Testing Localized Core Messages (compiler, block tree, .sb3 bridge, lesson templates) ---');
+  {
+    const Messages = require('../js/messages.js');
+    const langs = ['uk', 'en', 'ru'];
+    const CYRILLIC = /[А-Яа-яІіЇїЄєҐґЁё]/;
+    const UK_ONLY = /[ІіЇїЄєҐґ]/;
+
+    // 16.1 Same keys and the same placeholders in every language
+    const ukKeys = Object.keys(Messages.MESSAGES.uk);
+    const placeholders = (t) => (String(t).match(/\{\w+\}/g) || []).sort().join(',');
+    for (const lang of ['en', 'ru']) {
+      assert.deepStrictEqual(Object.keys(Messages.MESSAGES[lang]).sort(), ukKeys.slice().sort(), `${lang} message keys must match uk`);
+      for (const key of ukKeys) {
+        assert.strictEqual(placeholders(Messages.MESSAGES[lang][key]), placeholders(Messages.MESSAGES.uk[key]), `${lang}.${key} placeholders must match uk`);
+      }
+      for (const key of ukKeys) {
+        const text = Messages.MESSAGES[lang][key];
+        if (lang === 'en') assert(!CYRILLIC.test(text), `en.${key} must not contain Cyrillic: ${text}`);
+        if (lang === 'ru') assert(!UK_ONLY.test(text), `ru.${key} must not contain Ukrainian-only letters: ${text}`);
+      }
+    }
+
+    // 16.2 Every key used by the core modules exists, and the modules hold no hard-coded Cyrillic text
+    for (const file of ['compiler.js', 'decompiler.js', 'sb3Bridge.js']) {
+      const src = fs.readFileSync(path.join(__dirname, '..', 'js', file), 'utf8');
+      for (const m of src.matchAll(/\btr\('([a-zA-Z0-9_]+)'/g)) {
+        assert(Object.prototype.hasOwnProperty.call(Messages.MESSAGES.uk, m[1]), `${file} uses unknown message key ${m[1]}`);
+      }
+      const codeLines = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l));
+      const leaking = codeLines.filter((l) => CYRILLIC.test(l.replace(/\/\/.*$/, '')));
+      assert.deepStrictEqual(leaking, [], `${file} must not contain hard-coded Cyrillic strings`);
+    }
+    // Single-pass formatting: a value that contains "{line}" is not expanded again
+    assert.strictEqual(Messages.format('err_unknown_char', { ch: '{line}', line: 7 }, 'en'), 'Unknown character "{line}" on line 7.');
+
+    // 16.3 Diagnostics, block labels and generated comments follow the page language
+    global.PyScratchI18n = I18n;
+    try {
+      const cases = {
+        uk: { colon: 'двокрапку', header: 'СКРИПТ ГРАВЦЯ', flag: 'Коли натиснуто зелений прапорець', stage: 'Неможливо видалити Сцену' },
+        en: { colon: 'colon', header: 'PLAYER SCRIPT', flag: 'When green flag clicked', stage: 'The Stage cannot be deleted' },
+        ru: { colon: 'двоеточие', header: 'СКРИПТ ИГРОКА', flag: 'Когда щёлкнут по зелёному флагу', stage: 'Невозможно удалить Сцену' }
+      };
+      for (const lang of langs) {
+        I18n.setLang(lang, false);
+        const c = cases[lang];
+        const lp = createDefaultProject();
+        const lStage = lp.projectJson.targets[0];
+        const lSprite = lp.projectJson.targets[1];
+        assert.throws(
+          () => compileToScratch('@when_flag_clicked\ndef main()\n    move(10)\n', lSprite, lStage, lp.projectJson),
+          (err) => err instanceof CompileError && err.line === 2 && err.message.includes(c.colon),
+          `${lang}: missing-colon diagnostic`
+        );
+        assert.throws(
+          () => compileToScratch('@when_flag_clicked\ndef main():\n    break\n', lSprite, lStage, lp.projectJson),
+          (err) => err instanceof CompileError && err.message.startsWith('break') && (lang !== 'en' || !CYRILLIC.test(err.message)),
+          `${lang}: unsupported-statement hint`
+        );
+        assert.throws(
+          () => compileToScratch('@when_flag_clicked\ndef main():\n    set_effect("rainbow", 5)\n', lSprite, lStage, lp.projectJson),
+          (err) => err instanceof CompileError && err.message.includes('"rainbow"') && err.message.includes('"GHOST"') && (lang !== 'en' || !CYRILLIC.test(err.message)),
+          `${lang}: whitelist diagnostic`
+        );
+        assert.throws(() => deleteSprite(lp.projectJson, 0), (err) => err.message.includes(c.stage), `${lang}: .sb3 bridge error`);
+
+        compileToScratch('@when_flag_clicked\ndef main():\n    move(10)\n', lSprite, lStage, lp.projectJson);
+        const dec = decompileTarget(lSprite, lStage);
+        assert(dec.startsWith(`# === ${c.header} (Sprite1) ===`), `${lang}: decompiled header, got ${dec.split('\n')[0]}`);
+        const hatId = Object.keys(lSprite.blocks).find((id) => lSprite.blocks[id].opcode === 'event_whenflagclicked');
+        assert.strictEqual(formatBlockUk(hatId, lSprite.blocks).label, c.flag, `${lang}: block tree label`);
+        const moveId = Object.keys(lSprite.blocks).find((id) => lSprite.blocks[id].opcode === 'motion_movesteps');
+        const moveLabel = formatBlockUk(moveId, lSprite.blocks).label;
+        assert(moveLabel.includes('10') && (lang !== 'en' || !CYRILLIC.test(moveLabel)), `${lang}: move label ${moveLabel}`);
+        // The decompiled code recompiles to the same blocks in every language
+        const again = compileToScratch(dec, lSprite, lStage, lp.projectJson);
+        assert(Object.values(again.blocks).some((b) => b.opcode === 'motion_movesteps'), `${lang}: recompiles`);
+      }
+    } finally {
+      I18n.setLang('uk', false);
+      delete global.PyScratchI18n;
+    }
+
+    // 16.4 Lesson templates and the new-sprite starter code compile in every language
+    const appSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+    const l10nMatch = appSrc.match(/const SNIPPET_L10N = (\{[\s\S]*?\n  \});/);
+    assert(l10nMatch, 'SNIPPET_L10N must exist in js/app.js');
+    const SNIPPET_L10N = new Function(`return ${l10nMatch[1]};`)();
+    const localize = (code, lang) => (SNIPPET_L10N[lang] || []).reduce((acc, [from, to]) => acc.split(from).join(to), code);
+    for (const lang of langs) {
+      for (const [key, code] of Object.entries(SNIPPETS)) {
+        const text = localize(code, lang);
+        if (lang === 'en') assert(!CYRILLIC.test(text), `en snippet ${key} must be fully English`);
+        if (lang === 'ru') assert(!UK_ONLY.test(text), `ru snippet ${key} must not keep Ukrainian text`);
+        const sp = createDefaultProject();
+        const res = compileToScratch(text, sp.projectJson.targets[1], sp.projectJson.targets[0], sp.projectJson);
+        assert(Object.keys(res.blocks).length > 3, `${lang} snippet ${key} must compile`);
+      }
+      const starter = I18n.DICT[lang].starter_sprite_code.split('{name}').join('Sprite2').split('{x}').join('60');
+      const sp = createDefaultProject();
+      compileToScratch(starter, sp.projectJson.targets[1], sp.projectJson.targets[0], sp.projectJson);
+      if (lang === 'en') assert(!CYRILLIC.test(starter), 'en starter code must be English');
+    }
+    for (const [from] of SNIPPET_L10N.en) {
+      assert(Object.values(SNIPPETS).some((c) => c.includes(from)) || /Текст|Думка|Питання|ключ/.test(from), `SNIPPET_L10N fragment ${from} is not used`);
+    }
+
+    // 16.5 Every page loads the message catalog before the core modules
+    for (const page of ['index.html', 'en/index.html', 'ru/index.html']) {
+      const html = fs.readFileSync(path.join(__dirname, '..', page), 'utf8');
+      const iMsg = html.indexOf('js/messages.js');
+      assert(iMsg > 0 && iMsg < html.indexOf('js/sb3Bridge.js') && iMsg < html.indexOf('js/compiler.js'), `${page} must load js/messages.js before the core modules`);
+    }
+  }
+
+  console.log('ALL 16 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {

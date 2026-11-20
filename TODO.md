@@ -10,7 +10,7 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 
 ## 1. Core Architecture & `.sb3` Serialization (`js/sb3Bridge.js`, `js/compiler.js`, `js/decompiler.js`)
 
-- [x] **Tokenizer & AST Parser with line & column tracking and Ukrainian syntax error diagnostics** (`tokenize`, `parse`, `CompileError` with `line` and `col` in `js/compiler.js`; non-enumerable `block._line` metadata for block-to-line navigation; editor cursor line/column telemetry `Ряд / Стовп` in `js/app.js`).
+- [x] **Tokenizer & AST Parser with line & column tracking and localized (`uk`/`en`/`ru`, `v1.4.0`) syntax error diagnostics** (`tokenize`, `parse`, `CompileError` with `line` and `col` in `js/compiler.js`; non-enumerable `block._line` metadata for block-to-line navigation; editor cursor line/column telemetry `Ряд / Стовп` in `js/app.js`).
 - [x] **Lossless round-trip compilation & decompilation for supported DSL blocks** (`compileToScratch` <-> `decompileTarget`, verified idempotent across second compilation and `.sb3` ZIP round-trip in `test/test_roundtrip.js`).
 - [x] **Negative number literal folding** (`parseUnary` in `js/compiler.js` folds `-150` directly into `Number(-150)` / `[1, [4, "-150"]]` without an `operator_subtract(0, 150)` wrapper; `decompileReporter` & `readInput` in `js/decompiler.js` preserve negative numbers).
 - [x] **RFC 1321 MD5 calculation for SVG and binary WAV assets** (`md5Bytes` / `md5` in `js/sb3Bridge.js`, verified against Node `crypto` on UTF-8 strings and binary WAV buffers).
@@ -215,7 +215,9 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 
 - [x] **Multi-target tabs & sprite creation**: Stage + Sprite tabs (`#target-tabs`), `+ Спрайт` (`#btn-add-sprite` -> `Sb3Bridge.addSpriteToProject`).
 - [x] **Python DSL syntax highlighting, Undo safety & autosave (`v1.3.0`)**: `highlightPython`, line numbers, syntax error / active block line markers, scroll sync, `Tab` 4-space insert & auto-indent preserving native `Ctrl+Z` Undo, `localStorage` autosave (`pyscratch_autosave_v1`) + `beforeunload` guard, and `Ctrl/Cmd+Enter` run shortcut.
-- [x] **Interactive Scratch block tree inspector**: `#view-blocks` (`renderBlocksTree` using `formatBlockUk`) with click-to-jump to Python source line.
+- [x] **Interactive Scratch block tree inspector**: `#view-blocks` (`renderBlocksTree` using `formatBlock`) with click-to-jump to Python source line; labels follow the page language (`v1.4.0`).
+- [x] **Three-language core messages (`v1.4.0`)**: `js/messages.js` catalog (`uk`/`en`/`ru`) for compiler diagnostics, block tree labels, generated code comments and `.sb3` errors; templates, starter code and docs examples are localized through `SNIPPET_L10N`; switching the page language carries the unsaved draft over.
+- [x] **Full-project IndexedDB autosave & smart palette insertion (`v1.3.0`)**: sprites, costumes, sounds and an opened `.sb3` survive a reload; palette chips land on their own line with the right indentation.
 - [x] **Asset viewer, localized palette tooltips (`v1.3.0`), API docs, and 9 templates**: `#view-assets`, `#quick-palette` (all 13 categories with `uk/en/ru` `title` tooltips), `#view-docs`, and 9 snippets (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`).
 - [x] **Upload custom SVG/PNG/JPG costumes and backdrops**:
   - File pickers (`#upload-backdrop-input`, `#upload-costume-input` in `index.html`) + `handleCostumeUpload` (`js/app.js`) + `Sb3Bridge.addCostumeAsset` (`js/sb3Bridge.js`).
@@ -234,7 +236,6 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 ## 12. Remaining Open Parity & UX Items
 
 - **Open Items**:
-  - Localized `CompileError` diagnostics for `en`/`ru` (currently Ukrainian-only in `js/compiler.js`) and localized starter snippets (`SNIPPETS`).
   - `target.comments` <-> `#` round-trip on recompiled DSL blocks (workspace & raw-script comments already survive).
   - Pythonic `list[i]` / `item in list` / `len(list)` sugar.
   - `fisheye` and `whirl` Canvas 2D pixel-warping shaders.

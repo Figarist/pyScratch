@@ -7,6 +7,15 @@
 (function (global) {
   'use strict';
 
+  // Localized message from js/messages.js (browser global or Node require); the bare key if the catalog is not loaded.
+  function tr(key, params) {
+    let catalog = global.PyScratchMessages;
+    if (!catalog && typeof module !== 'undefined' && module.exports && typeof require === 'function') {
+      try { catalog = require('./messages.js'); } catch (_) { catalog = null; }
+    }
+    return catalog ? catalog.format(key, params) : key;
+  }
+
   // RFC 1321 compliant MD5 implementation for Scratch assetId calculation (supports strings and Uint8Array)
   function md5Bytes(bytes) {
     function add32(a, b) {
@@ -280,7 +289,7 @@
       meta: {
         semver: '3.0.0',
         vm: '2.3.0',
-        agent: 'pyScratch-1.3.0'
+        agent: 'pyScratch-1.4.0'
       }
     };
 
@@ -332,7 +341,7 @@
     if (ArrayBuffer.isView(data)) {
       return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     }
-    throw new Error('Очікувались бінарні дані (Uint8Array або ArrayBuffer).');
+    throw new Error(tr('sb3_binary_expected'));
   }
 
   function makeUniqueName(existingNames, rawName, fallback) {
@@ -469,10 +478,10 @@
 
   function validateTargetIndex(projectJson, targetIdx) {
     if (!projectJson || !Array.isArray(projectJson.targets)) {
-      throw new Error('Некоректний об’єкт projectJson.');
+      throw new Error(tr('sb3_bad_project'));
     }
     if (!Number.isInteger(targetIdx) || targetIdx < 0 || targetIdx >= projectJson.targets.length) {
-      throw new Error('Некоректний індекс об’єкта у проєкті.');
+      throw new Error(tr('sb3_bad_index'));
     }
     return projectJson.targets[targetIdx];
   }
@@ -497,18 +506,18 @@
   function renameSprite(projectJson, targetIdx, newName) {
     const target = validateTargetIndex(projectJson, targetIdx);
     if (target.isStage) {
-      throw new Error('Неможливо перейменувати Сцену (Stage).');
+      throw new Error(tr('sb3_rename_stage'));
     }
     const trimmed = String(newName ?? '').trim();
     if (!trimmed) {
-      throw new Error('Назва спрайта не може бути порожньою.');
+      throw new Error(tr('sb3_empty_name'));
     }
     if (trimmed === 'Stage') {
-      throw new Error('Назва "Stage" зарезервована для Сцени.');
+      throw new Error(tr('sb3_reserved_stage'));
     }
     const duplicate = projectJson.targets.some((t, i) => i !== targetIdx && t.name === trimmed);
     if (duplicate) {
-      throw new Error(`Спрайт з назвою "${trimmed}" вже існує.`);
+      throw new Error(tr('sb3_name_exists', { name: trimmed }));
     }
     const oldName = target.name;
     target.name = trimmed;
@@ -528,11 +537,11 @@
   function deleteSprite(projectJson, targetIdx) {
     const target = validateTargetIndex(projectJson, targetIdx);
     if (target.isStage) {
-      throw new Error('Неможливо видалити Сцену (Stage).');
+      throw new Error(tr('sb3_delete_stage'));
     }
     const spriteCount = projectJson.targets.filter((t) => !t.isStage).length;
     if (spriteCount <= 1) {
-      throw new Error('Неможливо видалити останній спрайт у проєкті.');
+      throw new Error(tr('sb3_delete_last'));
     }
     const [removed] = projectJson.targets.splice(targetIdx, 1);
     if (removed && removed.name) {
@@ -551,7 +560,7 @@
   function updateSpriteProps(projectJson, targetIdx, props) {
     const target = validateTargetIndex(projectJson, targetIdx);
     if (target.isStage) {
-      throw new Error('Властивості координат та вигляду доступні лише для спрайтів.');
+      throw new Error(tr('sb3_sprite_only_props'));
     }
     if (!props || typeof props !== 'object') {
       return target;
@@ -591,7 +600,7 @@
     let fmt = String(dataFormat || '').trim().toLowerCase().replace(/^\./, '');
     if (fmt === 'jpeg') fmt = 'jpg';
     if (!['svg', 'png', 'jpg'].includes(fmt)) {
-      throw new Error(`Непідтримуваний формат костюма: "${dataFormat}". Використовуйте svg, png або jpg.`);
+      throw new Error(tr('sb3_bad_costume_format', { format: dataFormat }));
     }
 
     let storedContent;
@@ -599,7 +608,7 @@
     if (fmt === 'svg') {
       const svgText = typeof content === 'string' ? content : utf8BytesToString(toUint8Array(content));
       if (!svgText.trim()) {
-        throw new Error('SVG-файл порожній.');
+        throw new Error(tr('sb3_empty_svg'));
       }
       dims = parseSvgDimensions(svgText);
       // Keep raw bytes so the md5 always matches the stored file.
@@ -607,7 +616,7 @@
     } else {
       storedContent = toUint8Array(content);
       if (storedContent.length === 0) {
-        throw new Error('Файл зображення порожній.');
+        throw new Error(tr('sb3_empty_image'));
       }
       dims = parseRasterDimensions(storedContent, fmt);
     }
@@ -665,12 +674,12 @@
 
     const fmt = String(dataFormat || '').trim().toLowerCase().replace(/^\./, '');
     if (!['wav', 'mp3'].includes(fmt)) {
-      throw new Error(`Непідтримуваний формат звуку: "${dataFormat}". Використовуйте wav або mp3.`);
+      throw new Error(tr('sb3_bad_sound_format', { format: dataFormat }));
     }
 
     const bytes = toUint8Array(uint8Bytes);
     if (bytes.length === 0) {
-      throw new Error('Аудіофайл порожній.');
+      throw new Error(tr('sb3_empty_audio'));
     }
 
     const existingNames = new Set(target.sounds.map((s) => s.name));
@@ -710,17 +719,17 @@
 
   async function loadSb3(arrayBuffer) {
     if (typeof JSZip === 'undefined') {
-      throw new Error('Бібліотеку JSZip не завантажено.');
+      throw new Error(tr('sb3_no_jszip'));
     }
     const zip = await JSZip.loadAsync(arrayBuffer);
     const projectFile = zip.file('project.json');
     if (!projectFile) {
-      throw new Error('У файлі .sb3 відсутній project.json');
+      throw new Error(tr('sb3_no_project_json'));
     }
     const projectText = await projectFile.async('string');
     const projectJson = JSON.parse(projectText);
     if (!projectJson || !Array.isArray(projectJson.targets) || projectJson.targets.length === 0) {
-      throw new Error('Некоректна структура project.json у файлі .sb3');
+      throw new Error(tr('sb3_bad_project_json'));
     }
 
     const assetsMap = new Map();
@@ -736,7 +745,7 @@
 
   async function saveSb3(projectJson, assetsMap, outputType = 'blob') {
     if (typeof JSZip === 'undefined') {
-      throw new Error('Бібліотеку JSZip не завантажено.');
+      throw new Error(tr('sb3_no_jszip'));
     }
     const zip = new JSZip();
     zip.file('project.json', JSON.stringify(projectJson));
