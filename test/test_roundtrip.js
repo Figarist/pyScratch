@@ -1521,7 +1521,131 @@ def main():
     }
   }
 
-  console.log('ALL 14 TEST SUITES PASSED SUCCESSFULLY!');
+  console.log('--- 15. Testing v1.3.0 UX Safety, Palette Tooltips & Scratch 3.0 Runtime Parity ---');
+  {
+    // 15.1 Scratch-compatible random(a, b): integer, inverted, equal, float, and 0.0/1.0 literal preservation
+    for (let i = 0; i < 40; i++) {
+      const iv = StagePreview.scratchRandom(1, 10);
+      assert(Number.isInteger(iv) && iv >= 1 && iv <= 10, `integer random out of bounds: ${iv}`);
+      const rev = StagePreview.scratchRandom(10, 1);
+      assert(Number.isInteger(rev) && rev >= 1 && rev <= 10, `inverted random out of bounds: ${rev}`);
+      assert.strictEqual(StagePreview.scratchRandom(5, 5), 5, 'equal integer bounds must return 5');
+    }
+    let sawFractional = false;
+    for (let i = 0; i < 40; i++) {
+      const fv = StagePreview.scratchRandom(0.1, 0.9);
+      assert(fv >= 0.1 && fv <= 0.9, `float random out of bounds: ${fv}`);
+      if (!Number.isInteger(fv)) sawFractional = true;
+    }
+    assert(sawFractional, 'random(0.1, 0.9) must produce non-integer floats');
+
+    // Compiler preserves raw float literal "0.0" / "1.0" so random(0.0, 1.0) stays float in .sb3 & preview
+    const rProj = createDefaultProject();
+    const rStage = rProj.projectJson.targets[0];
+    const rSprite = rProj.projectJson.targets[1];
+    const rCompiled = compileToScratch('@when_flag_clicked\ndef main():\n    r = random(0.0, 1.0)\n', rSprite, rStage, rProj.projectJson);
+    const rndBlock = Object.values(rCompiled.blocks).find((b) => b.opcode === 'operator_random');
+    assert(rndBlock, 'operator_random block must exist');
+    assert.strictEqual(rndBlock.inputs.FROM[1][1], '0.0', 'float literal 0.0 must keep decimal point in .sb3');
+    assert.strictEqual(rndBlock.inputs.TO[1][1], '1.0', 'float literal 1.0 must keep decimal point in .sb3');
+
+    let sawZeroOneFloat = false;
+    for (let i = 0; i < 40; i++) {
+      const v = StagePreview.scratchRandom('0.0', '1.0');
+      assert(v >= 0 && v <= 1, `scratchRandom("0.0", "1.0") out of bounds: ${v}`);
+      if (v > 0 && v < 1) sawZeroOneFloat = true;
+    }
+    assert(sawZeroOneFloat, 'scratchRandom("0.0", "1.0") must return fractional values');
+
+    // 15.2 bitmapResolution scaling in getCostumeMetrics & _getActorHalfSize
+    const m2 = StagePreview.getCostumeMetrics({ bitmapResolution: 2 }, { naturalWidth: 96, naturalHeight: 64 });
+    assert.strictEqual(m2.drawW, 48, 'bitmapResolution=2 must halve rendered width');
+    assert.strictEqual(m2.drawH, 32, 'bitmapResolution=2 must halve rendered height');
+    const m1 = StagePreview.getCostumeMetrics({ bitmapResolution: 1 }, { naturalWidth: 96, naturalHeight: 64 });
+    assert.strictEqual(m1.drawW, 96);
+    assert.strictEqual(m1.drawH, 64);
+
+    const simRes = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+    simRes.imageCache.set('hi_res.png', { complete: true, naturalWidth: 96, naturalHeight: 64 });
+    const half = simRes._getActorHalfSize({
+      size: 100,
+      currentCostume: 0,
+      costumes: [{ md5ext: 'hi_res.png', bitmapResolution: 2 }]
+    });
+    assert.strictEqual(half.halfW, 24, '_getActorHalfSize must account for bitmapResolution=2');
+    assert.strictEqual(half.halfH, 16, '_getActorHalfSize height must account for bitmapResolution=2');
+
+    // 15.3 Scratch 3.0 stage fencing (15px visible margin)
+    const fenced = StagePreview.computeFencedPos(1000, -1000, 24, 24);
+    assert.strictEqual(fenced.x, 249, 'fencing x for halfW=24 must clamp to 240 + 24 - 15 = 249');
+    assert.strictEqual(fenced.y, -189, 'fencing y for halfH=24 must clamp to -(180 + 24 - 15) = -189');
+    const tinyFenced = StagePreview.computeFencedPos(1000, 1000, 4, 4);
+    assert.strictEqual(tinyFenced.x, 240, 'tiny sprite fencing must not exceed stage edge 240');
+    assert.strictEqual(tinyFenced.y, 180, 'tiny sprite fencing must not exceed stage edge 180');
+
+    const simFence = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+    await simFence.runAst(parse(tokenize('@when_flag_clicked\ndef main():\n    pen_down()\n    goto(999, 999)\n')));
+    assert.strictEqual(simFence.sprite.x, 249, 'runtime goto(999, 999) must fence to x=249');
+    assert.strictEqual(simFence.sprite.y, 189, 'runtime goto(999, 999) must fence to y=189');
+    simFence.reset();
+
+    // 15.4 On-stage monitor layout & setMonitorValue
+    const laid = StagePreview.layoutMonitors([
+      { id: 'm1', mode: 'default', x: null, y: null },
+      { id: 'm2', mode: 'default', x: null, y: null },
+      { id: 'm3', mode: 'list', x: null, y: null }
+    ]);
+    assert.strictEqual(laid.length, 3);
+    const overlaps = (a, b) =>
+      a.resolvedX < b.resolvedX + b.resolvedW &&
+      a.resolvedX + a.resolvedW > b.resolvedX &&
+      a.resolvedY < b.resolvedY + b.resolvedH &&
+      a.resolvedY + a.resolvedH > b.resolvedY;
+    assert(!overlaps(laid[0], laid[1]), 'auto-placed monitors m1 and m2 must not overlap');
+    assert(!overlaps(laid[0], laid[2]) && !overlaps(laid[1], laid[2]), 'auto-placed list monitor m3 must not overlap');
+    for (const m of laid) {
+      assert(m.resolvedX >= 0 && m.resolvedX + m.resolvedW <= 480, 'monitor must fit horizontally in 480px stage');
+      assert(m.resolvedY >= 0 && m.resolvedY + m.resolvedH <= 360, 'monitor must fit vertically in 360px stage');
+    }
+
+    const simMon = new StagePreview({ width: 480, height: 360, getContext: () => mockCtx });
+    simMon.vars.score = 0;
+    simMon.sprite.name = 'Sprite1';
+    simMon.sprite.localVars.hp = 10;
+    simMon.setMonitorValue('score', null, 42);
+    simMon.setMonitorValue('hp', 'Sprite1', 77);
+    assert.strictEqual(simMon.vars.score, 42, 'setMonitorValue must update global variable');
+    assert.strictEqual(simMon.sprite.localVars.hp, 77, 'setMonitorValue must update sprite-local variable');
+
+    // 15.5 3-locale HTML contract & 100% palette chip tooltip coverage
+    const htmlFiles = [
+      path.join(__dirname, '..', 'index.html'),
+      path.join(__dirname, '..', 'en', 'index.html'),
+      path.join(__dirname, '..', 'ru', 'index.html')
+    ];
+    for (const filePath of htmlFiles) {
+      const html = fs.readFileSync(filePath, 'utf8');
+      assert(html.includes('id="btn-stage-fullscreen"'), `${filePath} must have #btn-stage-fullscreen`);
+      assert(html.includes('id="stage-monitors-layer"'), `${filePath} must have #stage-monitors-layer`);
+      for (const teleId of ['tele-x', 'tele-y', 'tele-size', 'tele-dir']) {
+        assert(
+          new RegExp(`<input[^>]*id="${teleId}"`).test(html),
+          `${filePath} must render #${teleId} as an editable <input>`
+        );
+      }
+      const chipMatches = [...html.matchAll(/class="palette-chip"[^>]*data-insert="([^"]+)"/g)];
+      assert(chipMatches.length >= 80, `${filePath} must have at least 80 palette chips (found ${chipMatches.length})`);
+      for (const match of chipMatches) {
+        const ins = match[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        for (const lang of ['uk', 'en', 'ru']) {
+          const tip = I18n.getPaletteTip(ins, lang);
+          assert(tip && tip.length > 3, `Missing ${lang} palette tooltip for data-insert="${ins}"`);
+        }
+      }
+    }
+  }
+
+  console.log('ALL 15 TEST SUITES PASSED SUCCESSFULLY!');
 }
 
 runAllTests().catch((err) => {

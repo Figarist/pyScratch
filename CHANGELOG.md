@@ -5,6 +5,23 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.3.0] - 2026-11-20
+
+### Added
+- **LocalStorage Autosave & Unsaved Guard (`js/app.js`, `js/i18n.js`)**: Automatically saves active project scripts to `localStorage` (`pyscratch_autosave_v1`, 500 ms debounce + `pagehide`/`beforeunload` flush), restores drafts on reload (unless `?embed=1`, `?code=`, or `?snippet=` is specified), and prompts before leaving with unsaved edits or resetting a dirty template.
+- **Delete Sprite Confirmation (`js/app.js`, `js/i18n.js`)**: Deleting a sprite now requires explicit confirmation via localized `confirm()` in `uk`, `en`, and `ru`.
+- **Editable Stage Telemetry (`index.html`, `en/`, `ru/`, `style.css`, `js/app.js`, `js/layout.js`)**: `X`, `Y`, `Size`, and `Direction` under the stage are now directly editable `<input type="number">` fields with focus-guard during 60 FPS playback, `Enter`/`Escape` handling, and automatic disabling when the Stage is selected.
+- **Localized Palette Tooltips (`js/i18n.js`)**: Every command chip across all 13 palette categories now displays a localized `title` tooltip explaining what the command does in `uk`, `en`, and `ru`.
+- **Stage Fullscreen Mode (`index.html`, `en/`, `ru/`, `style.css`, `js/layout.js`)**: Added a fullscreen stage toggle button (`#btn-stage-fullscreen`) with `Esc` exit and responsive stage scaling.
+- **Live On-Stage Monitors & Sliders (`index.html`, `en/`, `ru/`, `style.css`, `js/preview.js`, `js/app.js`)**: Renders visible `projectJson.monitors` and runtime `show_variable` / `show_list` overlays directly over the 480×360 stage (`default`, `large`, interactive `slider`, and scrollable `list` modes) with collision-free auto-placement (`layoutMonitors`) and diffed DOM updates.
+- **Tests (`test/test_roundtrip.js`)**: Added Suite 15 covering float/int `random()`, `bitmapResolution` scaling, 15 px Scratch stage fencing, on-stage monitor layout & slider updates, and 3-locale HTML + palette tooltip coverage. The test suite now has 15 sections.
+
+### Fixed
+- **Native Undo (`Ctrl+Z`) After Palette Clicks (`js/app.js`, `js/layout.js`)**: Palette chip insertions, `Tab`, and auto-indented `Enter` now go through `replaceEditorRange` (`execCommand('insertText')` with `setRangeText` fallback) while preserving cursor selection on `mousedown`, keeping the browser's native Undo stack intact.
+- **Floating-Point `random(a, b)` (`js/compiler.js`, `js/preview.js`)**: Preserves decimal literals (`0.0`, `1.0`) in AST and `.sb3` output and matches `scratch-vm` float vs. integer random semantics.
+- **HiDPI `bitmapResolution` Scaling (`js/preview.js`)**: Costumes with `bitmapResolution > 1` are now scaled by `1 / bitmapResolution` in both rendering and bounding-box sizing.
+- **Scratch 3.0 Stage Fencing (`js/preview.js`)**: `moveActorTo()` now keeps at least a 15 px visible margin of the sprite costume inside the 480×360 stage instead of hard-clamping sprite centers to ±240/±180.
+
 ## [1.2.3] - 2026-11-18
 
 ### Fixed

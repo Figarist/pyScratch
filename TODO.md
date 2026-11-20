@@ -10,21 +10,19 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 
 ## 1. Core Architecture & `.sb3` Serialization (`js/sb3Bridge.js`, `js/compiler.js`, `js/decompiler.js`)
 
-- [x] **Tokenizer & AST Parser with line tracking and Ukrainian syntax error diagnostics** (`tokenize`, `parse`, `CompileError` in `js/compiler.js`; non-enumerable `block._line` metadata for block-to-line navigation; editor cursor line/column telemetry `Ряд / Стовп` in `js/app.js`).
-  - *Note:* `CompileError` and AST tokens currently store `line` only (no column `col` offset).
+- [x] **Tokenizer & AST Parser with line & column tracking and Ukrainian syntax error diagnostics** (`tokenize`, `parse`, `CompileError` with `line` and `col` in `js/compiler.js`; non-enumerable `block._line` metadata for block-to-line navigation; editor cursor line/column telemetry `Ряд / Стовп` in `js/app.js`).
 - [x] **Lossless round-trip compilation & decompilation for supported DSL blocks** (`compileToScratch` <-> `decompileTarget`, verified idempotent across second compilation and `.sb3` ZIP round-trip in `test/test_roundtrip.js`).
 - [x] **Negative number literal folding** (`parseUnary` in `js/compiler.js` folds `-150` directly into `Number(-150)` / `[1, [4, "-150"]]` without an `operator_subtract(0, 150)` wrapper; `decompileReporter` & `readInput` in `js/decompiler.js` preserve negative numbers).
 - [x] **RFC 1321 MD5 calculation for SVG and binary WAV assets** (`md5Bytes` / `md5` in `js/sb3Bridge.js`, verified against Node `crypto` on UTF-8 strings and binary WAV buffers).
 - [x] **`.sb3` ZIP unpacking and DEFLATE packing via `JSZip`** (`loadSb3` / `saveSb3` in `js/sb3Bridge.js`).
-- [ ] **Preserve and generate `projectJson.monitors`**:
-  - `createDefaultProject` initializes `monitors: []`; `compiler.js` and `decompiler.js` do not create or serialize variable/list stage monitors (`mode`: `"default"`, `"large"`, `"slider"`, `sliderMin`, `sliderMax`, `isDiscrete`, `x`, `y`, `width`, `height`, `visible`). (`StagePreview` tracks `visibleMonitors`/`hiddenMonitors` sets from `show_variable`/`hide_variable`/`show_list`/`hide_list` and reads initial `projectJson.monitors` visibility, but does not render on-stage monitor overlays.)
-- [ ] **Preserve Scratch block comments (`target.comments`) as Python `#` comments and vice versa**:
-  - `tokenize()` in `js/compiler.js` discards `#` comments; `createBlock()` checks `extra.comment` (unused); `compileToScratch()` overwrites `target.blocks` without building `target.comments`; `decompileTarget()` in `js/decompiler.js` ignores `target.comments`.
+- [x] **Preserve, generate, and render `projectJson.monitors` (`v1.2.0` + `v1.3.0`)**:
+  - `show_variable` / `hide_variable` / `show_list` / `hide_list` generate and preserve `projectJson.monitors` entries, and `StagePreview` + `#stage-monitors-layer` render live `default`, `large`, interactive `slider`, and scrollable `list` monitors over the 480×360 stage.
+- [ ] **Preserve Scratch block comments (`target.comments`) on recompiled blocks as Python `#` comments and vice versa**:
+  - Workspace comments (`blockId: null`) and comments attached to preserved raw scripts survive recompilation (`compiler.js`), while comments attached to recompiled DSL blocks are still dropped.
 - [x] **Reporter expressions in single-argument menu blocks**:
   - `compileMenuOrExpr` and `compileBroadcastInput` in `js/compiler.js` (plus `readMenuOrExpr` in `js/decompiler.js`) support both literal menu shadows and dynamic variable/reporter expressions across `goto`, `glide_to`, `point_towards`, `switch_costume`, `switch_backdrop`, `switch_backdrop_and_wait`, `play_sound`, `play_sound_until_done`, `touching`, `distance_to`, `attribute_of`, `key_pressed`, `create_clone`, `broadcast`, `broadcast_and_wait`, `set_pen_param`, and `change_pen_param`.
-- [ ] **Column (`col`) tracking on tokens & `CompileError`** for precise character-range diagnostics in the editor.
-- [ ] **Graceful round-trip preservation of unrecognized external `.sb3` blocks**:
-  - `decompileChain` emits `# невідомий блок: <opcode>`, and `compileToScratch` replaces `target.blocks = blocks`, which drops unsupported hats/blocks when saving an imported `.sb3`.
+- [x] **Column (`col`) tracking on tokens & `CompileError`** (`tokenize` and `CompileError` in `js/compiler.js`).
+- [x] **Graceful round-trip preservation of unrecognized external `.sb3` scripts** (`compiler.js` and `decompiler.js` preserve unsupported top-level scripts and raw custom procedures across recompilation).
 
 ---
 
@@ -42,8 +40,8 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
   - `js/preview.js` enforces Scratch 3.0 VM's exact global 300-clone limit (`this.actors.filter((a) => a.isClone).length >= 300`).
 - [x] **Scoped thread stopping (`stop("other scripts in sprite")`)**:
   - `js/preview.js` tracks per-actor `_scriptGen` tokens in `_createScriptCtx` so `"other scripts in sprite"` / `"other scripts in stage"` cancels sibling threads on that specific actor/clone while allowing the calling script to continue.
-- [ ] **Loop counter variable access (`for i in range(n):`)**:
-  - `StagePreview` (`js/preview.js`) now binds `stmt.loopVar` in `localScope` (`0..count-1`), and `compiler.js` calls `ensureVar(stmt.loopVar, false)` when referenced in the body; however, `compiler.js` still emits `control_repeat` without generating `data_setvariableto` (`0`) / `data_changevariableby` (`1`) counter blocks for `.sb3` execution inside Scratch 3.0.
+- [x] **Loop counter variable access (`for i in range(n):`)**:
+  - `compiler.js` generates `data_setvariableto` (`0`) and `data_changevariableby` (`1`) counter blocks when `i` is referenced inside the loop body, and `decompiler.js` folds them back into `for i in range(n):`.
 
 ---
 
@@ -68,10 +66,10 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 
 ### Remaining Motion Parity Gaps
 - [x] **`glide_to(secs, "random" | "mouse" | sprite)`** (`motion_glideto` + `motion_glideto_menu`) in `compiler.js`, `decompiler.js` (including `formatBlockUk`), and `preview.js`.
+- [x] **Scratch 3.0 stage fencing (`v1.3.0`)**:
+  - `moveActorTo()` (`js/preview.js`) uses `computeFencedPos()` to keep at least a 15 px visible margin of the sprite costume inside `[-240, 240] × [-180, 180]`.
 - [ ] **Accurate rotated/scaled costume bounding-box edge collision in `if_on_edge_bounce()`**:
-  - `js/preview.js` (`_getActorHalfSize` + `if_on_edge_bounce`) now uses unrotated costume dimensions (`naturalWidth/2 * scale`, `naturalHeight/2 * scale`, falling back to `24 * scale`) rather than calculating the rotated & pivot-offset bounding box against `[-240, 240] × [-180, 180]`.
-- [ ] **Stage fencing & floating-point motion reporters**:
-  - `moveActorTo()` (`js/preview.js`) clamps sprite centers strictly to `[-240, 240]` / `[-180, 180]` rather than Scratch's fencing rule (keeping at least a visible margin of the costume inside the stage), and `x_position()`/`y_position()`/`direction()` round via `Math.round`.
+  - `js/preview.js` (`_getActorHalfSize` + `if_on_edge_bounce`) uses unrotated costume dimensions (scaled by `1 / bitmapResolution` and `size / 100`) rather than calculating the rotated & pivot-offset bounding box against `[-240, 240] × [-180, 180]`.
 
 ---
 
@@ -98,10 +96,10 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 ### Remaining Looks Parity Gaps
 - [x] **`switch_backdrop_and_wait(backdrop)`** (`looks_switchbackdroptoandwait`) across `compiler.js`, `decompiler.js` (including `formatBlockUk`), and `preview.js` (awaiting `triggerBackdrop(bg)` completion).
 - [x] **`go_to_layer("front" | "back")`** (`looks_gotofrontback`) and **`change_layer("forward" | "backward", num)`** (`looks_goforwardbackwardlayers`) with dynamic `layerOrder` sorting in `StagePreview.render()` and `_handleCanvasClick()`.
+- [x] **`bitmapResolution` scaling (`1 / bitmapResolution`) for imported PNG/JPG costumes (`v1.3.0`)**:
+  - `getCostumeMetrics()`, `_drawActor()`, and `_getActorHalfSize()` in `js/preview.js` divide raster dimensions and rotation centers by `bitmapResolution`.
 - [ ] **Canvas 2D rendering for all 7 graphic effects**:
-  - `StagePreview` (`js/preview.js`) now stores all 7 effects and renders `color` (`hue-rotate`), `ghost` (`globalAlpha`), `brightness` (`brightness()` filter), `pixelate` (offscreen downscaled canvas), and `mosaic` (tiled draw), plus applies effects to the Stage backdrop; **however**, pixel-warping shaders for `fisheye` and `whirl` remain unimplemented.
-- [ ] **`bitmapResolution` scaling (`1 / bitmapResolution`) for imported PNG/JPG costumes**:
-  - 1-based numeric costume/backdrop lookup and `"previous backdrop"` / `"random backdrop"` / `"next backdrop"` options are implemented in `StagePreview`, while `_drawActor()` still draws raster costumes at `naturalWidth × naturalHeight` without dividing by `costumeObj.bitmapResolution`.
+  - `StagePreview` (`js/preview.js`) stores all 7 effects and renders `color` (`hue-rotate`), `ghost` (`globalAlpha`), `brightness` (`brightness()` filter), `pixelate` (offscreen downscaled canvas), and `mosaic` (tiled draw), plus applies effects to the Stage backdrop; **however**, pixel-warping shaders for `fisheye` and `whirl` remain unimplemented.
 
 ---
 
@@ -137,9 +135,11 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 | `event_whenbroadcastreceived` | `@when_message_received(msg)` | Yes | Yes (restart semantics) | `[x]` |
 | `event_broadcast` / `event_broadcastandwait` | `broadcast(msg)` / `broadcast_and_wait(msg)` | Yes (menu or expr) | Yes | `[x]` |
 | `event_whengreaterthan` | `@when_greater_than("timer" \| "loudness", value)` | Yes | Edge-triggered `"timer"` (`"loudness"` stub `0`) | `[x]` |
+| `event_whentouchingobject` | `@when_touching("Sprite2" \| "edge" \| "mouse")` | Yes | Rising-edge watcher | `[x]` |
 
 ### Remaining Events Parity Gaps
 - [x] **`@when_greater_than("timer" | "loudness", value)`** (`event_whengreaterthan`) in `compiler.js`, `decompiler.js` (including `formatBlockUk`), and `StagePreview` (`_startGreaterThanWatcher` 50ms edge-triggered polling loop).
+- [x] **`@when_touching("Sprite2" | "edge" | "mouse")`** (`event_whentouchingobject`, `v1.2.0`) across `compiler.js`, `decompiler.js`, and `preview.js`.
 - [x] **Scratch broadcast restart semantics**:
   - `StagePreview._triggerBroadcastOnActor()` cancels any still-running `when_message_received(msg)` `scriptCtx` instances on that actor before restarting.
 
@@ -179,8 +179,8 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 - [x] **Arithmetic, comparisons, and boolean logic**: `+`, `-`, `*`, `/`, `%`, `//` (compiles to `floor(a / b)`), `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `not`.
 - [x] **String, random & rounding reporters**: `random(a, b)` (`operator_random`), `join(s1, s2)` (`operator_join`), `letter_of(i, s)` (`operator_letter_of`), `length_of(s)` / `len(s)` (`operator_length`), `contains(s1, s2)` (`operator_contains`), `round(x)` / `round_num(x)` (`operator_round`).
 - [x] **Full `operator_mathop` round-trip & `StagePreview` support**: `abs`, `floor`, `ceil`/`ceiling`, `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `ln`, `log`, `exp` (`"e ^"`), `pow10` (`"10 ^"`), and `math_op(op, num)` across `compiler.js`, `decompiler.js`, and `preview.js`.
-- [ ] **Floating-point `random(a, b)`**:
-  - Scratch's `operator_random` returns floating-point values when either bound has a decimal point, whereas `StagePreview.evalExpr` (`js/preview.js`) currently truncates with `Math.floor`.
+- [x] **Floating-point `random(a, b)` (`v1.3.0`)**:
+  - `compiler.js` preserves decimal literals (`0.0`, `1.0`) and `StagePreview.scratchRandom()` returns floats whenever either bound has a decimal point, matching `scratch-vm`.
 - [ ] **Pythonic list/string sugar**:
   - `len(x)` currently aliases `operator_length` (string length) rather than dispatching to `data_lengthoflist` for known list names.
   - `list_name[i]` indexing (`data_itemoflist`) / indexed assignment (`data_replaceitemoflist`) and `item in list_name` (`data_listcontainsitem`) / `substr in str` (`operator_contains`) are not yet parsed.
@@ -192,20 +192,18 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 - [x] **Variable assignment & mutation**: `var = val` / `self.var = val` (`data_setvariableto`), `+=`, `-=` (`data_changevariableby`), `*=`, `/=`.
 - [x] **Core list operations (global & sprite-local)**: `list_add` / `local_list_add` (`data_addtolist`), `list_delete` / `local_list_delete` (`data_deleteoflist`), `list_clear` / `local_list_clear` (`data_deletealloflist`), `list_insert` / `local_list_insert` (`data_insertatlist`), `list_replace` / `local_list_replace` (`data_replaceitemoflist`), `list_item` / `local_list_item` (`data_itemoflist`), `list_length` / `local_list_length` (`data_lengthoflist`), `list_contains` / `local_list_contains` (`data_listcontainsitem`).
 - [x] **`list_index_of(list, item)` / `local_list_index_of(list, item)`** (`data_itemnumoflist`): returns 1-based index of matching item (or `0` if absent) across `compiler.js`, `decompiler.js`, and `preview.js`.
-- [ ] **`show_variable(var)` (`data_showvariable`), `hide_variable(var)` (`data_hidevariable`), `show_list(list)` (`data_showlist`), `hide_list(list)` (`data_hidelist`)**:
-  - Compilation, decompilation, `formatBlockUk`, and `StagePreview` monitor visibility sets (`visibleMonitors`/`hiddenMonitors`) are implemented, while `projectJson.monitors` generation and live on-stage monitor rendering remain unimplemented.
+- [x] **`show_variable(var)` (`data_showvariable`), `hide_variable(var)` (`data_hidevariable`), `show_list(list)` (`data_showlist`), `hide_list(list)` (`data_hidelist`)**:
+  - Full compilation, decompilation, `projectJson.monitors` bookkeeping (`v1.2.0`), and live on-stage monitor/slider/list overlays (`v1.3.0`).
 - [x] **Scratch special list index keywords (`"last"`, `"random"`, `"all"`)** in `_listItem`, `_listDelete`, `_listInsert`, and `_listReplace` inside `StagePreview` (`js/preview.js`).
 
 ---
 
-## 10. Custom Procedures (`procedures_*`) & Extensions (`pen_*`)
+## 10. Custom Procedures (`procedures_*`) & Extensions (`pen_*`, `music_*`, `text2speech_*`, `translate_*`)
 
-- [x] **Custom procedures (`def name(params):` and procedure calls)**: `procedures_definition`, `procedures_prototype`, `procedures_call`, and `argument_reporter_string_number` (`%s`) across `compiler.js`, `decompiler.js`, and `preview.js`.
-- [x] **Pen extension compilation, decompilation & runtime (`pen_*`)**: `pen_clear`, `pen_stamp`, `pen_penDown`, `pen_penUp`, `pen_setPenColorToColor`, `pen_setPenColorParamTo`, `pen_changePenColorParamBy`, `pen_setPenSizeTo`, `pen_changePenSizeBy` in `compiler.js` & `decompiler.js` (auto-enables `"pen"` in `projectJson.extensions`).
+- [x] **Custom procedures (`def name(params):` and procedure calls)**: `procedures_definition`, `procedures_prototype`, `procedures_call`, `argument_reporter_string_number` (`%s`), and typed boolean parameters (`flag: bool` -> `argument_reporter_boolean`, `%b`, `v1.2.0`) across `compiler.js`, `decompiler.js`, and `preview.js`.
+- [x] **Pen, Music, Text to Speech & Translate extensions**: `pen_*`, `music_*`, `text2speech_*`, and `translate_*` across `compiler.js`, `decompiler.js`, and `preview.js` with automatic `projectJson.extensions` bookkeeping (`v1.2.0`; offline `translate()` returns original text without network calls).
 - [x] **`@warp` decorator on `def` for "Run without screen refresh"**:
   - `@warp` in `js/compiler.js` sets `mutation.warp = "true"` on `procedures_prototype` and `procedures_call`; `decompileTarget` in `js/decompiler.js` emits `@warp`; `StagePreview` (`js/preview.js`) executes `@warp` bodies synchronously without 16ms frame yields (with a 500ms cooperative safety yield).
-- [ ] **Boolean parameter reporters (`argument_reporter_boolean`, `%b`) in custom procedures**:
-  - `decompileReporter` (`js/decompiler.js`) reads `argument_reporter_boolean`, while `compiler.js` currently only generates untyped `%s` slots (`argument_reporter_string_number`) and does not parse typed boolean parameters (`flag: bool`) or multi-segment `proccode` templates.
 - [x] **Full HSV/transparency simulation for `set_pen_param` / `change_pen_param` on the Canvas 2D Pen layer**:
   - `StagePreview` (`js/preview.js`) tracks `actor.penHsl` (`color`, `saturation`, `brightness`, `transparency`), synchronizes `set_pen_color("#rrggbb")` via `_rgbToHsl`, and strokes paths with computed HSLA color.
 - [x] **`stop("this script")` propagation inside custom procedures**:
@@ -216,27 +214,34 @@ Comprehensive parity checklist auditing the current codebase (`js/sb3Bridge.js`,
 ## 11. Web IDE & Asset Management (`index.html`, `js/app.js`, `js/sb3Bridge.js`)
 
 - [x] **Multi-target tabs & sprite creation**: Stage + Sprite tabs (`#target-tabs`), `+ Спрайт` (`#btn-add-sprite` -> `Sb3Bridge.addSpriteToProject`).
-- [x] **Python DSL syntax highlighting & editor ergonomics**: `highlightPython` (updated `apiRe` & `self` keyword), line numbers, syntax error / active block line markers, scroll sync, `Tab` 4-space insert, auto-indent on `:`, `Ctrl/Cmd+Enter` run shortcut.
-- [x] **Interactive Scratch block tree inspector**: `#view-blocks` (`renderBlocksTree` using `formatBlockUk` covering all new Motion, Looks, Sound, Events, Sensing, and Data statement/hat blocks) with click-to-jump to Python source line.
-- [x] **Asset viewer, quick palette, API docs, and 6 templates**: `#view-assets`, `#quick-palette`, `#view-docs` (`API_DOCS` updated with all new DSL functions), and 6 snippets (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`).
+- [x] **Python DSL syntax highlighting, Undo safety & autosave (`v1.3.0`)**: `highlightPython`, line numbers, syntax error / active block line markers, scroll sync, `Tab` 4-space insert & auto-indent preserving native `Ctrl+Z` Undo, `localStorage` autosave (`pyscratch_autosave_v1`) + `beforeunload` guard, and `Ctrl/Cmd+Enter` run shortcut.
+- [x] **Interactive Scratch block tree inspector**: `#view-blocks` (`renderBlocksTree` using `formatBlockUk`) with click-to-jump to Python source line.
+- [x] **Asset viewer, localized palette tooltips (`v1.3.0`), API docs, and 9 templates**: `#view-assets`, `#quick-palette` (all 13 categories with `uk/en/ru` `title` tooltips), `#view-docs`, and 9 snippets (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`).
 - [x] **Upload custom SVG/PNG/JPG costumes and backdrops**:
-  - File pickers (`#upload-backdrop-input`, `#upload-costume-input` in `index.html`) + `handleCostumeUpload` (`js/app.js`) + `Sb3Bridge.addCostumeAsset` (`js/sb3Bridge.js`, parsing SVG/PNG/JPG dimensions for `rotationCenterX`/`rotationCenterY` and MD5 `assetId`/`md5ext`) refreshing `StagePreview.syncProjectAssets`.
+  - File pickers (`#upload-backdrop-input`, `#upload-costume-input` in `index.html`) + `handleCostumeUpload` (`js/app.js`) + `Sb3Bridge.addCostumeAsset` (`js/sb3Bridge.js`).
 - [x] **Upload WAV/MP3 sounds**:
-  - File picker (`#upload-sound-input`) + `handleSoundUpload` (`js/app.js`) + `Sb3Bridge.addSoundAsset` (`js/sb3Bridge.js`, parsing WAV `rate` & `sampleCount` headers and MD5 `assetId`/`md5ext`). *(Note: per-sound preview/delete UI buttons remain open below.)*
-- [x] **Rename / delete sprites**:
-  - UI controls (`#btn-rename-sprite`, `#btn-delete-sprite` in `js/app.js`) + `Sb3Bridge.renameSprite` and `Sb3Bridge.deleteSprite` (`js/sb3Bridge.js`).
+  - File picker (`#upload-sound-input`) + `handleSoundUpload` (`js/app.js`) + `Sb3Bridge.addSoundAsset` (`js/sb3Bridge.js`).
+- [x] **Rename / delete sprites with confirmation (`v1.3.0`)**:
+  - UI controls (`#btn-rename-sprite`, `#btn-delete-sprite` with `confirm()` guard in `js/app.js`) + `Sb3Bridge.renameSprite` and `Sb3Bridge.deleteSprite` (`js/sb3Bridge.js`).
 - [ ] **Delete, preview, or reorder individual costumes, backdrops, and sounds** in `#view-assets`.
-- [x] **Edit sprite properties in the UI**:
-  - Editable inspector inputs for `x`, `y`, `size`, `direction`, `rotationStyle`, `visible`, and `draggable` (`js/app.js` + `Sb3Bridge.updateSpriteProps`) synced directly to `projectJson.targets[activeTargetIdx]` and `StagePreview`.
-- [ ] **On-stage variable/list monitor overlay over `#stage-canvas`**:
-  - Render `projectJson.monitors` directly over `#stage-canvas` (supporting default, large, and draggable slider modes). *(Note: `formatBlockUk` translations for all statement/hat opcodes and `apiRe` syntax highlighting are already completed.)*
+- [x] **Edit sprite properties directly under Stage & in Assets tab (`v1.3.0`)**:
+  - Directly editable `X`, `Y`, `Size`, `Direction` inputs under Stage (`#tele-x/y/size/dir`) plus full sprite properties in `#view-assets`.
+- [x] **Fullscreen stage mode & live on-stage variable/list/slider monitors (`v1.3.0`)**:
+  - `#btn-stage-fullscreen` (`Esc` to exit) and `#stage-monitors-layer` rendering `default`, `large`, interactive `slider`, and scrollable `list` monitors over `#stage-canvas`.
 
 ---
 
-## 12. Open Parity Items (Stage 2)
+## 12. Remaining Open Parity & UX Items
 
-- **Remaining Open Parity Items**:
-  - `projectJson.monitors` serialization & live Canvas monitor/slider overlay, `target.comments` <-> `#` round-trip, unrecognized `.sb3` block preservation, `control_repeat` counter blocks in `.sb3` output, `%b` boolean procedure parameters, Pythonic `list[i]`/`in`/`len(list)` sugar, float `random()`, `fisheye`/`whirl` shaders, `bitmapResolution` scaling, rotated bounding-box `if_on_edge_bounce()`, stage fencing, pixel costume hit-testing, live mic `loudness()`, per-asset delete/reorder UI, `og:image`/JSON-LD SEO tags, and `sivochka.com` Part B landing page.
+- **Open Items**:
+  - Localized `CompileError` diagnostics for `en`/`ru` (currently Ukrainian-only in `js/compiler.js`) and localized starter snippets (`SNIPPETS`).
+  - `target.comments` <-> `#` round-trip on recompiled DSL blocks (workspace & raw-script comments already survive).
+  - Pythonic `list[i]` / `item in list` / `len(list)` sugar.
+  - `fisheye` and `whirl` Canvas 2D pixel-warping shaders.
+  - Rotated bounding-box `if_on_edge_bounce()` and pixel-accurate costume hit-testing in `touching()` / `_handleCanvasClick()`.
+  - Live microphone `AnalyserNode` for `loudness()`.
+  - Per-asset delete, sound preview, and reorder controls in `#view-assets`.
+  - Code autocomplete / IntelliSense in the editor.
 
 ---
 

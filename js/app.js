@@ -378,6 +378,19 @@ def catch_target():
   const teleSize = document.getElementById('tele-size');
   const teleMouse = document.getElementById('tele-mouse');
   const teleTimer = document.getElementById('tele-timer');
+  const stageMonitorsLayer = document.getElementById('stage-monitors-layer');
+  const stageMonitorDomCache = new Map();
+
+  function updateTelemetryInput(el, value) {
+    if (!el || el.disabled) return;
+    if (typeof document !== 'undefined' && document.activeElement === el) return;
+    const next = String(Math.round(Number(value) || 0));
+    if ('value' in el) {
+      if (el.value !== next) el.value = next;
+    } else {
+      el.textContent = next;
+    }
+  }
 
   let currentAskCallback = null;
 
@@ -389,10 +402,10 @@ def catch_target():
             if (backdropIndicator) backdropIndicator.textContent = i18nT('backdrop_label', { name: bg });
           },
           onTelemetry: (t) => {
-            if (teleX) teleX.textContent = t.x;
-            if (teleY) teleY.textContent = t.y;
-            if (teleDir) teleDir.textContent = `${t.direction}°`;
-            if (teleSize) teleSize.textContent = `${t.size}%`;
+            updateTelemetryInput(teleX, t.x);
+            updateTelemetryInput(teleY, t.y);
+            updateTelemetryInput(teleDir, t.direction);
+            updateTelemetryInput(teleSize, t.size);
             if (teleMouse) teleMouse.textContent = `${t.mouseX}, ${t.mouseY}`;
             if (teleTimer) teleTimer.textContent = `${t.timer}s`;
             const activeTarget = state.projectJson && state.projectJson.targets[state.activeTargetIdx];
@@ -403,7 +416,9 @@ def catch_target():
                 : sprites.length === 1
                 ? sprites[0].name
                 : null;
-            renderVarsWatch(t.vars, t.lists, t.localVars, t.localLists, t.actorName || t.spriteName || fallbackActor, t.hiddenMonitors);
+            const actorName = t.actorName || t.spriteName || fallbackActor;
+            renderVarsWatch(t.vars, t.lists, t.localVars, t.localLists, actorName, t.hiddenMonitors);
+            renderStageMonitors(t.vars, t.lists, t.localVars, t.localLists, actorName, t.visibleMonitors, t.hiddenMonitors);
           },
           onAsk: (question, submitFn) => {
             if (!askOverlay || !askInput) return;
@@ -507,6 +522,195 @@ def catch_target():
       );
     }
     varsWatch.innerHTML = pills.join('');
+  }
+
+  function renderStageMonitors(vars, lists, localVars, localLists, actorName, visibleMonitors, hiddenMonitors) {
+    if (!stageMonitorsLayer || typeof StagePreview === 'undefined' || typeof StagePreview.layoutMonitors !== 'function') return;
+    const hidden = new Set(Array.isArray(hiddenMonitors) ? hiddenMonitors : []);
+    const shownRuntime = new Set(Array.isArray(visibleMonitors) ? visibleMonitors : []);
+    const specs = [];
+    const seenKeys = new Set();
+
+    const readVal = (isList, varName, spriteName) => {
+      if (isList) {
+        if (spriteName && localLists && Array.isArray(localLists[varName])) return localLists[varName];
+        if (lists && Array.isArray(lists[varName])) return lists[varName];
+        return [];
+      }
+      if (spriteName && localVars && Object.prototype.hasOwnProperty.call(localVars, varName)) return localVars[varName];
+      if (vars && Object.prototype.hasOwnProperty.call(vars, varName)) return vars[varName];
+      return 0;
+    };
+
+    const projMonitors = state.projectJson && Array.isArray(state.projectJson.monitors) ? state.projectJson.monitors : [];
+    for (const m of projMonitors) {
+      if (!m || (m.opcode !== 'data_variable' && m.opcode !== 'data_listcontents')) continue;
+      const isList = m.opcode === 'data_listcontents';
+      const varName = m.params && (isList ? m.params.LIST : m.params.VARIABLE);
+      if (!varName) continue;
+      const isVisible = (m.visible !== false || shownRuntime.has(varName)) && !hidden.has(varName);
+      const key = `${m.spriteName || '__global__'}::${m.opcode}::${varName}`;
+      seenKeys.add(key);
+      if (!isVisible) continue;
+      specs.push({
+        id: m.id || key,
+        opcode: m.opcode,
+        mode: isList ? 'list' : (m.mode || 'default'),
+        spriteName: m.spriteName || null,
+        varName,
+        visible: true,
+        x: m.x,
+        y: m.y,
+        width: m.width,
+        height: m.height,
+        sliderMin: m.sliderMin !== undefined ? Number(m.sliderMin) : 0,
+        sliderMax: m.sliderMax !== undefined ? Number(m.sliderMax) : 100,
+        isDiscrete: m.isDiscrete !== false,
+        value: readVal(isList, varName, m.spriteName || null)
+      });
+    }
+
+    for (const name of shownRuntime) {
+      if (hidden.has(name)) continue;
+      const isList = Boolean(
+        (lists && Object.prototype.hasOwnProperty.call(lists, name)) ||
+        (localLists && Object.prototype.hasOwnProperty.call(localLists, name))
+      );
+      const isLocal = isList
+        ? Boolean(localLists && Object.prototype.hasOwnProperty.call(localLists, name))
+        : Boolean(localVars && Object.prototype.hasOwnProperty.call(localVars, name));
+      const spriteName = isLocal ? actorName : null;
+      const opcode = isList ? 'data_listcontents' : 'data_variable';
+      const key = `${spriteName || '__global__'}::${opcode}::${name}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      specs.push({
+        id: key,
+        opcode,
+        mode: isList ? 'list' : 'default',
+        spriteName,
+        varName: name,
+        visible: true,
+        x: null,
+        y: null,
+        sliderMin: 0,
+        sliderMax: 100,
+        isDiscrete: true,
+        value: readVal(isList, name, spriteName)
+      });
+    }
+
+    const laid = StagePreview.layoutMonitors(specs);
+    const activeIds = new Set(laid.map((m) => m.id));
+    for (const [id, entry] of Array.from(stageMonitorDomCache.entries())) {
+      if (!activeIds.has(id)) {
+        if (entry.root && entry.root.parentNode) entry.root.parentNode.removeChild(entry.root);
+        stageMonitorDomCache.delete(id);
+      }
+    }
+
+    for (const m of laid) {
+      let entry = stageMonitorDomCache.get(m.id);
+      const label = m.spriteName ? `${m.spriteName}: ${m.varName}` : m.varName;
+      if (!entry || entry.mode !== m.mode) {
+        if (entry && entry.root && entry.root.parentNode) entry.root.parentNode.removeChild(entry.root);
+        const root = document.createElement('div');
+        root.className = 'stage-monitor';
+        if (m.mode === 'list') {
+          root.classList.add('stage-monitor-list');
+          const head = document.createElement('div');
+          head.className = 'stage-monitor-list-head';
+          const body = document.createElement('div');
+          body.className = 'stage-monitor-list-body';
+          const foot = document.createElement('div');
+          foot.className = 'stage-monitor-list-foot';
+          root.appendChild(head);
+          root.appendChild(body);
+          root.appendChild(foot);
+          entry = { root, mode: m.mode, head, body, foot, lastSig: '' };
+        } else if (m.mode === 'large') {
+          root.classList.add('stage-monitor-large');
+          entry = { root, mode: m.mode, valEl: root, lastSig: '' };
+        } else {
+          root.classList.add('stage-monitor-var');
+          const row = document.createElement('div');
+          row.className = 'stage-monitor-row';
+          const lblEl = document.createElement('span');
+          lblEl.className = 'stage-monitor-label';
+          const valEl = document.createElement('span');
+          valEl.className = 'stage-monitor-val';
+          row.appendChild(lblEl);
+          row.appendChild(valEl);
+          root.appendChild(row);
+          let sliderEl = null;
+          if (m.mode === 'slider') {
+            sliderEl = document.createElement('input');
+            sliderEl.type = 'range';
+            sliderEl.className = 'stage-monitor-slider';
+            sliderEl.min = String(m.sliderMin);
+            sliderEl.max = String(m.sliderMax);
+            sliderEl.step = m.isDiscrete ? '1' : '0.01';
+            sliderEl.addEventListener('input', (e) => {
+              const num = Number(e.target.value);
+              if (preview && typeof preview.setMonitorValue === 'function') {
+                preview.setMonitorValue(m.varName, m.spriteName, num);
+              }
+            });
+            root.appendChild(sliderEl);
+          }
+          entry = { root, mode: m.mode, lblEl, valEl, sliderEl, lastSig: '' };
+        }
+        stageMonitorsLayer.appendChild(root);
+        stageMonitorDomCache.set(m.id, entry);
+      }
+
+      entry.root.style.left = `${Math.round(m.resolvedX)}px`;
+      entry.root.style.top = `${Math.round(m.resolvedY)}px`;
+      if (m.mode === 'list') {
+        entry.root.style.width = `${Math.round(m.resolvedW)}px`;
+        entry.root.style.height = `${Math.round(m.resolvedH)}px`;
+        const arr = Array.isArray(m.value) ? m.value : [];
+        const sig = `${label}|${arr.length}|${arr.slice(0, 500).join('\x01')}`;
+        if (entry.lastSig !== sig) {
+          entry.lastSig = sig;
+          entry.head.textContent = label;
+          entry.foot.textContent = arr.length === 0 ? i18nT('monitor_empty_list') : i18nT('monitor_length', { n: arr.length });
+          entry.body.textContent = '';
+          const limit = Math.min(arr.length, 500);
+          for (let i = 0; i < limit; i++) {
+            const r = document.createElement('div');
+            r.className = 'stage-monitor-list-row';
+            const idxEl = document.createElement('span');
+            idxEl.className = 'stage-monitor-list-idx';
+            idxEl.textContent = String(i + 1);
+            const itemEl = document.createElement('span');
+            itemEl.className = 'stage-monitor-list-item';
+            itemEl.textContent = String(arr[i]);
+            r.appendChild(idxEl);
+            r.appendChild(itemEl);
+            entry.body.appendChild(r);
+          }
+          if (arr.length > 500) {
+            const more = document.createElement('div');
+            more.className = 'stage-monitor-list-foot';
+            more.textContent = `… (+${arr.length - 500})`;
+            entry.body.appendChild(more);
+          }
+        }
+      } else {
+        const strVal = String(m.value !== undefined ? m.value : 0);
+        const sig = `${label}|${strVal}`;
+        if (entry.lastSig !== sig) {
+          entry.lastSig = sig;
+          if (entry.lblEl) entry.lblEl.textContent = label;
+          if (entry.valEl) entry.valEl.textContent = strVal;
+        }
+        if (entry.sliderEl && document.activeElement !== entry.sliderEl) {
+          const num = Number(m.value);
+          if (Number.isFinite(num)) entry.sliderEl.value = String(Math.max(m.sliderMin, Math.min(m.sliderMax, num)));
+        }
+      }
+    }
   }
 
   function escapeHtml(str) {
@@ -615,17 +819,65 @@ def catch_target():
     cursorPos.textContent = i18nT('cursor_pos', { ln, col });
   }
 
+  let lastEditorSel = { start: 0, end: 0 };
+
+  function captureEditorSelection() {
+    if (!editor) return;
+    lastEditorSel = { start: editor.selectionStart || 0, end: editor.selectionEnd || 0 };
+  }
+
+  function replaceEditorRange(text, start, end, showCompiledStatus = false) {
+    if (!editor) return;
+    const scrollTop = editor.scrollTop;
+    const scrollLeft = editor.scrollLeft;
+    const s = Math.max(0, Math.min(editor.value.length, start));
+    const e = Math.max(s, Math.min(editor.value.length, end));
+    if (typeof document !== 'undefined' && document.activeElement !== editor) {
+      try { editor.focus({ preventScroll: true }); } catch (_) { editor.focus(); }
+    }
+    editor.setSelectionRange(s, e);
+    const prevVal = editor.value;
+    const prevSel = prevVal.slice(s, e);
+    let usedExec = false;
+    if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+      try {
+        const ok = document.execCommand('insertText', false, text);
+        usedExec = Boolean(ok) && (editor.value !== prevVal || text === prevSel);
+      } catch (_) {
+        usedExec = false;
+      }
+    }
+    if (!usedExec) {
+      if (typeof editor.setRangeText === 'function') {
+        editor.setRangeText(text, s, e, 'end');
+      } else {
+        editor.value = editor.value.substring(0, s) + text + editor.value.substring(e);
+        editor.selectionStart = editor.selectionEnd = s + text.length;
+      }
+    }
+    const caret = s + text.length;
+    editor.setSelectionRange(caret, caret);
+    editor.scrollTop = scrollTop;
+    editor.scrollLeft = scrollLeft;
+    captureEditorSelection();
+    if (!usedExec) {
+      projectDirty = true;
+      scheduleAutosave();
+      updateEditorDecorations();
+      updateCursorTelemetry();
+      compileCurrent(showCompiledStatus);
+    } else if (showCompiledStatus) {
+      compileCurrent(true);
+    }
+  }
+
   function insertAtCursor(snippetText) {
     if (!editor) return;
     const text = String(snippetText || '').replace(/\\n/g, '\n');
-    const start = editor.selectionStart || 0;
-    const end = editor.selectionEnd || 0;
-    editor.value = editor.value.substring(0, start) + text + editor.value.substring(end);
-    editor.selectionStart = editor.selectionEnd = start + text.length;
-    editor.focus();
-    updateEditorDecorations();
-    updateCursorTelemetry();
-    compileCurrent(true);
+    const hasFocus = typeof document !== 'undefined' && document.activeElement === editor;
+    const start = hasFocus ? (editor.selectionStart || 0) : lastEditorSel.start;
+    const end = hasFocus ? (editor.selectionEnd || 0) : lastEditorSel.end;
+    replaceEditorRange(text, start, end, true);
   }
 
   function selectTarget(idx) {
@@ -1039,6 +1291,8 @@ def catch_target():
           preview.syncProjectAssets(state.projectJson, state.assetsMap);
           preview.render();
         }
+        projectDirty = true;
+        scheduleAutosave();
         setStatus(i18nT('rename_ok', { name: updated.name }));
       } catch (err) {
         setStatus(err && err.message ? err.message : i18nT('rename_fail'), true);
@@ -1058,6 +1312,9 @@ def catch_target():
     const btnDelete = document.getElementById('btn-delete-sprite');
     if (btnDelete) {
       btnDelete.onclick = () => {
+        if (typeof confirm === 'function' && !confirm(i18nT('confirm_delete_sprite', { name: activeTarget.name }))) {
+          return;
+        }
         try {
           const delIdx = state.activeTargetIdx;
           const removed = Sb3Bridge.deleteSprite(state.projectJson, delIdx);
@@ -1085,6 +1342,8 @@ def catch_target():
             preview.reset();
           }
           compileCurrent(false);
+          projectDirty = true;
+          scheduleAutosave();
           setStatus(i18nT('delete_ok', { name: removed.name }));
         } catch (err) {
           setStatus(err && err.message ? err.message : i18nT('delete_fail'), true);
@@ -1114,6 +1373,8 @@ def catch_target():
         });
         if (propSize) propSize.value = updated.size;
         syncActorPropsInPreview(updated);
+        projectDirty = true;
+        scheduleAutosave();
         setStatus(i18nT('props_ok', { name: updated.name }));
       } catch (err) {
         setStatus(err && err.message ? err.message : i18nT('props_fail'), true);
@@ -1582,21 +1843,98 @@ def catch_target():
       ? new URLSearchParams(window.location.search || '')
       : null;
 
-  if (urlParams && (urlParams.get('embed') === '1' || urlParams.get('embed') === 'true')) {
-    if (document.body) document.body.classList.add('embed-mode');
+  const isEmbedMode = Boolean(urlParams && (urlParams.get('embed') === '1' || urlParams.get('embed') === 'true'));
+  if (isEmbedMode && document.body) {
+    document.body.classList.add('embed-mode');
+  }
+
+  const AUTOSAVE_KEY = 'pyscratch_autosave_v1';
+  const AUTOSAVE_DEBOUNCE_MS = 500;
+  let autosaveTimer = null;
+  let autosaveQuotaWarned = false;
+
+  function saveAutosaveNow() {
+    if (isEmbedMode || !state.projectJson || typeof localStorage === 'undefined') return false;
+    try {
+      if (editor) state.codeByTarget.set(state.activeTargetIdx, editor.value);
+      const payload = {
+        v: 1,
+        savedAt: Date.now(),
+        activeTargetIdx: state.activeTargetIdx,
+        targets: state.projectJson.targets.map((t, idx) => ({
+          name: t.name,
+          isStage: !!t.isStage,
+          code: state.codeByTarget.get(idx) || ''
+        }))
+      };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+      return true;
+    } catch (_) {
+      if (!autosaveQuotaWarned) {
+        autosaveQuotaWarned = true;
+        setStatus(i18nT('autosave_quota'), true);
+      }
+      return false;
+    }
+  }
+
+  function scheduleAutosave() {
+    if (isEmbedMode) return;
+    if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      autosaveTimer = null;
+      saveAutosaveNow();
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function flushAutosave() {
+    if (autosaveTimer !== null) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+      saveAutosaveNow();
+    } else if (projectDirty) {
+      saveAutosaveNow();
+    }
+  }
+
+  function clearAutosave() {
+    if (autosaveTimer !== null) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.removeItem(AUTOSAVE_KEY);
+    } catch (_) {}
+  }
+
+  function loadAutosaveDraft() {
+    if (isEmbedMode || typeof localStorage === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.targets) || parsed.targets.length === 0) return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
   }
 
   let startupCode = SNIPPETS.hexagon;
   let codeDecodeError = null;
   let loadedFromCodeParam = false;
+  let hasExplicitUrlProject = false;
 
   if (urlParams) {
     const snippetParam = urlParams.get('snippet');
     if (snippetParam && Object.prototype.hasOwnProperty.call(SNIPPETS, snippetParam)) {
       startupCode = SNIPPETS[snippetParam];
+      hasExplicitUrlProject = true;
     }
     const codeParam = urlParams.get('code');
     if (codeParam !== null && codeParam !== '') {
+      hasExplicitUrlProject = true;
       try {
         if (codeParam.length > MAX_SHARE_CODE_LEN) throw new Error('code param too long');
         startupCode = decodeBase64Url(codeParam);
@@ -1614,25 +1952,135 @@ def catch_target():
 
   // Initialize default project
   const def = Sb3Bridge.createDefaultProject();
-  loadProject(def.projectJson, def.assetsMap, startupCode);
+  let restoredFromAutosave = false;
+  const savedDraft = !isEmbedMode && !hasExplicitUrlProject ? loadAutosaveDraft() : null;
+  if (savedDraft) {
+    const draftSprites = savedDraft.targets.filter((t) => t && !t.isStage && typeof t.code === 'string');
+    const firstDraftSprite = draftSprites[0];
+    if (firstDraftSprite && firstDraftSprite.name && def.projectJson.targets[1]) {
+      def.projectJson.targets[1].name = String(firstDraftSprite.name);
+    }
+    for (let i = 1; i < draftSprites.length; i++) {
+      Sb3Bridge.addSpriteToProject(def.projectJson, def.assetsMap, draftSprites[i].name || undefined);
+    }
+    loadProject(def.projectJson, def.assetsMap, firstDraftSprite ? firstDraftSprite.code : startupCode);
+    const stageEntry = savedDraft.targets.find((t) => t && t.isStage && typeof t.code === 'string');
+    if (stageEntry) state.codeByTarget.set(0, stageEntry.code);
+    for (let i = 1; i < draftSprites.length; i++) {
+      const targetIdx = i + 1;
+      if (state.projectJson.targets[targetIdx]) {
+        state.codeByTarget.set(targetIdx, draftSprites[i].code);
+      }
+    }
+    if (Number.isInteger(savedDraft.activeTargetIdx) && state.projectJson.targets[savedDraft.activeTargetIdx]) {
+      selectTarget(savedDraft.activeTargetIdx);
+    }
+    restoredFromAutosave = true;
+  } else {
+    loadProject(def.projectJson, def.assetsMap, startupCode);
+  }
+
   if (codeDecodeError) {
     setStatus(codeDecodeError, true);
   } else if (loadedFromCodeParam && state.errorLine === null) {
     setStatus(i18nT('code_loaded'));
+  } else if (restoredFromAutosave && state.errorLine === null) {
+    setStatus(i18nT('autosave_restored'));
   }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushAutosave);
+    window.addEventListener('beforeunload', (e) => {
+      flushAutosave();
+      if (projectDirty && !isEmbedMode) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  }
+
+  // Editable sprite telemetry inputs (X, Y, Size, Direction) under Stage
+  function normalizeTeleProp(prop, rawVal) {
+    const num = Number(rawVal);
+    if (!Number.isFinite(num)) return null;
+    if (prop === 'size') return Math.max(5, Math.min(500, Math.round(num)));
+    return Math.round(num);
+  }
+
+  function getTargetPropValue(target, prop) {
+    if (!target) return 0;
+    if (prop === 'size') return target.size !== undefined ? Number(target.size) : 100;
+    if (prop === 'direction') return target.direction !== undefined ? Number(target.direction) : 90;
+    return Number(target[prop]) || 0;
+  }
+
+  function commitTeleProp(el) {
+    if (!el || el.disabled || !state.projectJson) return;
+    const prop = el.getAttribute('data-prop');
+    const activeTarget = state.projectJson.targets[state.activeTargetIdx];
+    if (!prop || !activeTarget || activeTarget.isStage) return;
+    const val = normalizeTeleProp(prop, el.value);
+    if (val === null) {
+      el.value = String(Math.round(getTargetPropValue(activeTarget, prop)));
+      return;
+    }
+    try {
+      const updated = Sb3Bridge.updateSpriteProps(state.projectJson, state.activeTargetIdx, { [prop]: val });
+      el.value = String(Math.round(getTargetPropValue(updated, prop)));
+      const assetPropId = prop === 'direction' ? 'sprite-prop-dir' : `sprite-prop-${prop}`;
+      const assetInput = document.getElementById(assetPropId);
+      if (assetInput) assetInput.value = el.value;
+      syncActorPropsInPreview(updated);
+      projectDirty = true;
+      scheduleAutosave();
+    } catch (_) {
+      el.value = String(Math.round(getTargetPropValue(activeTarget, prop)));
+    }
+  }
+
+  [teleX, teleY, teleSize, teleDir].forEach((el) => {
+    if (!el || el.tagName !== 'INPUT') return;
+    el.addEventListener('focus', () => {
+      try { el.select(); } catch (_) {}
+    });
+    el.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitTeleProp(el);
+        el.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        const activeTarget = state.projectJson && state.projectJson.targets[state.activeTargetIdx];
+        const prop = el.getAttribute('data-prop');
+        if (activeTarget && prop) el.value = String(Math.round(getTargetPropValue(activeTarget, prop)));
+        el.blur();
+      }
+    });
+    el.addEventListener('change', () => commitTeleProp(el));
+    el.addEventListener('blur', () => commitTeleProp(el));
+  });
 
   // Editor events
   if (editor) {
     editor.addEventListener('input', () => {
       projectDirty = true;
+      scheduleAutosave();
+      captureEditorSelection();
       state.highlightedLine = null;
       updateEditorDecorations();
       updateCursorTelemetry();
       compileCurrent(false);
     });
 
-    editor.addEventListener('click', updateCursorTelemetry);
-    editor.addEventListener('keyup', updateCursorTelemetry);
+    const onCursorMove = () => {
+      captureEditorSelection();
+      updateCursorTelemetry();
+    };
+    editor.addEventListener('click', onCursorMove);
+    editor.addEventListener('keyup', onCursorMove);
+    editor.addEventListener('mouseup', onCursorMove);
+    editor.addEventListener('blur', captureEditorSelection);
 
     editor.addEventListener('scroll', () => {
       if (lineNumbers) lineNumbers.scrollTop = editor.scrollTop;
@@ -1685,6 +2133,8 @@ def catch_target():
           if (firstSpriteIdx >= 0) selectTarget(firstSpriteIdx);
         }
         editor.value = SNIPPETS[key];
+        projectDirty = true;
+        scheduleAutosave();
         state.highlightedLine = null;
         updateEditorDecorations();
         compileCurrent(true);
@@ -1738,6 +2188,8 @@ def catch_target():
         preview.reset();
       }
       compileCurrent(true);
+      projectDirty = true;
+      scheduleAutosave();
     };
   }
 
@@ -1815,6 +2267,8 @@ def catch_target():
       const buf = await file.arrayBuffer();
       const { projectJson, assetsMap } = await Sb3Bridge.loadSb3(buf);
       loadProject(projectJson, assetsMap);
+      clearAutosave();
+      projectDirty = false;
       setStatus(i18nT('loaded_file', { name: file.name, count: projectJson.targets.length }));
     } catch (err) {
       setStatus(i18nT('err_open', { msg: err && err.message ? err.message : String(err) }), true);
@@ -1881,6 +2335,11 @@ def catch_target():
   const btnTemplate = document.getElementById('btn-template');
   if (btnTemplate) {
     btnTemplate.onclick = () => {
+      if (projectDirty && typeof confirm === 'function' && !confirm(i18nT('confirm_reset_template'))) {
+        return;
+      }
+      clearAutosave();
+      projectDirty = false;
       const d = Sb3Bridge.createDefaultProject();
       loadProject(d.projectJson, d.assetsMap, SNIPPETS.hexagon);
       setStatus(i18nT('template_reset'));
@@ -1900,6 +2359,8 @@ def catch_target():
         a.download = 'pyscratch_project.sb3';
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        projectDirty = false;
+        flushAutosave();
         setStatus(i18nT('saved_sb3'));
       } catch (err) {
         setStatus(i18nT('err_save', { msg: err && err.message ? err.message : String(err) }), true);

@@ -608,7 +608,7 @@
           if (op === '-=') {
             const negVal =
               value.type === 'Number'
-                ? { type: 'Number', value: -value.value, line: tok.line }
+                ? { type: 'Number', value: -value.value, raw: value.raw ? '-' + value.raw : undefined, isFloat: !!value.isFloat, line: tok.line }
                 : { type: 'UnaryOp', op: '-', expr: value, line: tok.line };
             return { type: 'ChangeVar', name: targetName, ...localProp, value: negVal, line: tok.line };
           }
@@ -733,7 +733,7 @@
         const operand = parseUnary();
         // Constant-fold negative number literals (-150 -> Number(-150)) for clean Scratch inputs
         if (operand.type === 'Number') {
-          return { type: 'Number', value: -operand.value, line: tok.line };
+          return { type: 'Number', value: -operand.value, raw: operand.raw ? '-' + operand.raw : undefined, isFloat: !!operand.isFloat, line: tok.line };
         }
         return { type: 'UnaryOp', op: '-', expr: operand, line: tok.line };
       }
@@ -748,7 +748,7 @@
       const tok = peek();
       if (tok.type === 'NUMBER') {
         next();
-        return { type: 'Number', value: tok.value, line: tok.line };
+        return { type: 'Number', value: tok.value, raw: tok.raw, isFloat: String(tok.raw || '').includes('.'), line: tok.line };
       }
       if (tok.type === 'STRING') {
         next();
@@ -1137,7 +1137,8 @@
       if (!expr) return [1, [defaultShadowType, '']];
 
       if (expr.type === 'Number') {
-        return [1, [defaultShadowType === 10 ? 10 : 4, String(expr.value)]];
+        const numText = expr.isFloat && expr.raw ? String(expr.raw) : String(expr.value);
+        return [1, [defaultShadowType === 10 ? 10 : 4, numText]];
       }
       if (expr.type === 'String') {
         if (defaultShadowType === 9 && /^#[0-9a-fA-F]{6}$/.test(expr.value)) {

@@ -480,12 +480,14 @@
         <div class="stage-header-end" role="group" data-l10n-aria="stage" aria-label="Сцена">
           <button type="button" class="size-btn" data-stage-size="small" data-l10n-aria="stage_small" data-l10n-title="stage_small" aria-label="Мала сцена" title="Мала сцена" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="10" height="8" rx="1.5"/></svg></button>
           <button type="button" class="size-btn active" data-stage-size="large" data-l10n-aria="stage_large" data-l10n-title="stage_large" aria-label="Велика сцена" title="Велика сцена" aria-pressed="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/></svg></button>
+          <button type="button" class="size-btn fs-btn" id="btn-stage-fullscreen" data-l10n-aria="stage_fullscreen" data-l10n-title="stage_fullscreen" aria-label="Повноекранний режим" title="Повноекранний режим (Esc — вихід)" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg></button>
         </div>
       </div>
 
       <div id="view-preview" class="stage-wrap">
         <div class="canvas-frame">
           <canvas id="stage-canvas" width="480" height="360"></canvas>
+          <div id="stage-monitors" class="stage-monitors" aria-live="off"><div class="stage-monitors-layer" id="stage-monitors-layer"></div></div>
           <div id="ask-overlay" class="ask-overlay hidden">
             <input type="text" id="ask-input" data-i18n-placeholder="ask_placeholder" placeholder="Введіть відповідь..." aria-label="Введіть відповідь..." />
             <button type="button" id="ask-submit" class="primary">OK</button>
@@ -507,8 +509,8 @@
         <div class="sprite-info" id="sprite-info">
           <div class="info-row">
             <label class="info-field"><span data-l10n="sprite">Спрайт</span><input type="text" id="sprite-info-name" class="info-name" data-l10n-aria="sprite_name" aria-label="Назва спрайта" autocomplete="off" /></label>
-            <span class="info-field"><span>x</span><span class="info-val" id="tele-x">0</span></span>
-            <span class="info-field"><span>y</span><span class="info-val" id="tele-y">0</span></span>
+            <label class="info-field"><span>x</span><input type="number" class="info-val tele-input" id="tele-x" data-prop="x" min="-480" max="480" step="1" value="0" inputmode="numeric" data-l10n-aria="tele_x_aria" aria-label="Координата X спрайта" /></label>
+            <label class="info-field"><span>y</span><input type="number" class="info-val tele-input" id="tele-y" data-prop="y" min="-360" max="360" step="1" value="0" inputmode="numeric" data-l10n-aria="tele_y_aria" aria-label="Координата Y спрайта" /></label>
           </div>
           <div class="info-row">
             <span class="info-field"><span data-l10n="show">Показати</span>
@@ -517,8 +519,8 @@
                 <button type="button" class="eye-btn" id="sprite-info-hide" data-l10n-aria="sprite_hide" data-l10n-title="sprite_hide" aria-label="Сховати спрайт" title="Сховати спрайт" aria-pressed="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.500 8 14.500 8 12 12.500 8 12.500 1.500 8 1.500 8z"/><path d="M2.5 13.500l11-11"/></svg></button>
               </span>
             </span>
-            <span class="info-field"><span data-i18n="tele_size">Розмір</span><span class="info-val" id="tele-size">100%</span></span>
-            <span class="info-field"><span data-l10n="direction">Напрям</span><span class="info-val" id="tele-dir">90°</span></span>
+            <label class="info-field"><span data-i18n="tele_size">Розмір</span><input type="number" class="info-val tele-input" id="tele-size" data-prop="size" min="5" max="500" step="1" value="100" inputmode="numeric" data-l10n-aria="tele_size_aria" aria-label="Розмір спрайта у відсотках" /></label>
+            <label class="info-field"><span data-l10n="direction">Напрям</span><input type="number" class="info-val tele-input" id="tele-dir" data-prop="direction" min="-180" max="360" step="1" value="90" inputmode="numeric" data-l10n-aria="tele_dir_aria" aria-label="Напрям спрайта в градусах" /></label>
           </div>
         </div>
 

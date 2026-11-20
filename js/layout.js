@@ -30,6 +30,9 @@
       cat_variables: 'Змінні',
       cat_myblocks: 'Мої блоки',
       cat_pen: 'Олівець',
+      cat_music: 'Музика',
+      cat_text2speech: 'Озвучення тексту',
+      cat_translate: 'Переклад',
       categories: 'Категорії блоків',
       stage: 'Сцена',
       sprite: 'Спрайт',
@@ -40,6 +43,12 @@
       stop: 'Стоп',
       stage_small: 'Мала сцена',
       stage_large: 'Велика сцена',
+      stage_fullscreen: 'Повноекранний режим (Esc — вихід)',
+      stage_fullscreen_exit: 'Вийти з повноекранного режиму (Esc)',
+      tele_x_aria: 'Координата X спрайта',
+      tele_y_aria: 'Координата Y спрайта',
+      tele_size_aria: 'Розмір спрайта у відсотках',
+      tele_dir_aria: 'Напрям спрайта в градусах',
       add_sprite: 'Додати спрайт',
       sprite_show: 'Показати спрайт',
       sprite_hide: 'Сховати спрайт',
@@ -63,6 +72,9 @@
       cat_variables: 'Variables',
       cat_myblocks: 'My Blocks',
       cat_pen: 'Pen',
+      cat_music: 'Music',
+      cat_text2speech: 'Text to Speech',
+      cat_translate: 'Translate',
       categories: 'Block categories',
       stage: 'Stage',
       sprite: 'Sprite',
@@ -73,6 +85,12 @@
       stop: 'Stop',
       stage_small: 'Small stage',
       stage_large: 'Large stage',
+      stage_fullscreen: 'Full screen (Esc to exit)',
+      stage_fullscreen_exit: 'Exit full screen (Esc)',
+      tele_x_aria: 'Sprite X position',
+      tele_y_aria: 'Sprite Y position',
+      tele_size_aria: 'Sprite size in percent',
+      tele_dir_aria: 'Sprite direction in degrees',
       add_sprite: 'Add sprite',
       sprite_show: 'Show sprite',
       sprite_hide: 'Hide sprite',
@@ -96,6 +114,9 @@
       cat_variables: 'Переменные',
       cat_myblocks: 'Мои блоки',
       cat_pen: 'Перо',
+      cat_music: 'Музыка',
+      cat_text2speech: 'Озвучивание текста',
+      cat_translate: 'Перевод',
       categories: 'Категории блоков',
       stage: 'Сцена',
       sprite: 'Спрайт',
@@ -106,6 +127,12 @@
       stop: 'Стоп',
       stage_small: 'Маленькая сцена',
       stage_large: 'Большая сцена',
+      stage_fullscreen: 'Полноэкранный режим (Esc — выход)',
+      stage_fullscreen_exit: 'Выйти из полноэкранного режима (Esc)',
+      tele_x_aria: 'Координата X спрайта',
+      tele_y_aria: 'Координата Y спрайта',
+      tele_size_aria: 'Размер спрайта в процентах',
+      tele_dir_aria: 'Направление спрайта в градусах',
       add_sprite: 'Добавить спрайт',
       sprite_show: 'Показать спрайт',
       sprite_hide: 'Скрыть спрайт',
@@ -320,9 +347,35 @@
   });
   if (categoryButtons.length) showCategory(categoryButtons[0].getAttribute('data-category'));
 
+  // Keep editor focus/selection intact when clicking a palette chip
+  const quickPalette = $('quick-palette');
+  if (quickPalette) {
+    quickPalette.addEventListener('mousedown', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.palette-chip[data-insert]')) {
+        e.preventDefault();
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------------
-  // Stage size toggle (small / large)
+  // Stage size toggle (small / large) + Fullscreen mode + Monitor scaling
   // ---------------------------------------------------------------------------
+  function syncStageMonitorScale() {
+    const frame = document.querySelector('.canvas-frame');
+    const layer = $('stage-monitors-layer');
+    if (!frame || !layer) return;
+    const w = frame.clientWidth || 480;
+    layer.style.setProperty('--stage-scale', String(w / 480));
+  }
+
+  const canvasFrameEl = document.querySelector('.canvas-frame');
+  if (canvasFrameEl && typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncStageMonitorScale).observe(canvasFrameEl);
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('resize', syncStageMonitorScale);
+  }
+
   const sizeButtons = Array.from(document.querySelectorAll('[data-stage-size]'));
   function setStageSize(size, persist) {
     const small = size === 'small';
@@ -337,6 +390,7 @@
         global.localStorage.setItem('pyscratch.stageSize', small ? 'small' : 'large');
       } catch (_) {}
     }
+    syncStageMonitorScale();
   }
   sizeButtons.forEach((b) => {
     b.addEventListener('click', () => setStageSize(b.getAttribute('data-stage-size'), true));
@@ -346,6 +400,31 @@
     savedSize = global.localStorage.getItem('pyscratch.stageSize') === 'small' ? 'small' : 'large';
   } catch (_) {}
   setStageSize(savedSize, false);
+
+  const fsBtn = $('btn-stage-fullscreen');
+  function setStageFullscreen(active) {
+    const on = Boolean(active);
+    document.body.classList.toggle('stage-fullscreen', on);
+    if (fsBtn) {
+      fsBtn.classList.toggle('active', on);
+      fsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const tip = t(on ? 'stage_fullscreen_exit' : 'stage_fullscreen');
+      fsBtn.setAttribute('title', tip);
+      fsBtn.setAttribute('aria-label', tip);
+    }
+    syncStageMonitorScale();
+  }
+  if (fsBtn) {
+    fsBtn.addEventListener('click', () => {
+      setStageFullscreen(!document.body.classList.contains('stage-fullscreen'));
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('stage-fullscreen')) {
+      e.preventDefault();
+      setStageFullscreen(false);
+    }
+  });
 
   // ---------------------------------------------------------------------------
   // Sprite list cards + sprite info pane
@@ -424,6 +503,18 @@
       hideBtn.setAttribute('aria-pressed', !isStage && !visible ? 'true' : 'false');
       hideBtn.classList.toggle('active', !isStage && !visible);
     }
+    const teleFields = [
+      [$('tele-x'), isStage ? '' : Math.round(Number(target.x) || 0)],
+      [$('tele-y'), isStage ? '' : Math.round(Number(target.y) || 0)],
+      [$('tele-size'), isStage ? '' : Math.round(target.size !== undefined ? Number(target.size) : 100)],
+      [$('tele-dir'), isStage ? '' : Math.round(target.direction !== undefined ? Number(target.direction) : 90)]
+    ];
+    for (const [el, val] of teleFields) {
+      if (!el) continue;
+      el.disabled = isStage;
+      el.placeholder = isStage ? '—' : '';
+      if (document.activeElement !== el) { el.value = String(val); }
+    }
     const pane = $('sprite-info');
     if (pane) pane.classList.toggle('is-stage', isStage);
   }
@@ -501,5 +592,6 @@
   }
   showTab('code');
 
-  global.PyScratchLayout = { t, renderTargets, showTab, showCategory, setStageSize };
+  syncStageMonitorScale();
+  global.PyScratchLayout = { t, renderTargets, showTab, showCategory, setStageSize, setStageFullscreen, syncStageMonitorScale };
 })(typeof window !== 'undefined' ? window : globalThis);

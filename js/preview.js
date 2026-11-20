@@ -9,6 +9,119 @@
 (function (global) {
   'use strict';
 
+  function toScratchNumber(val) {
+    if (typeof val === 'number') return Number.isNaN(val) ? 0 : val;
+    if (typeof val === 'boolean') return val ? 1 : 0;
+    if (val === null || val === undefined || val === '') return 0;
+    const n = Number(val);
+    return Number.isNaN(n) ? 0 : n;
+  }
+
+  function isScratchInt(rawVal, nodeMeta = null) {
+    if (nodeMeta && nodeMeta.isFloat) return false;
+    if (typeof rawVal === 'string') {
+      if (rawVal.includes('.')) return false;
+      const n = Number(rawVal);
+      return Number.isNaN(n) ? true : Number.isInteger(n);
+    }
+    if (typeof rawVal === 'number') {
+      return Number.isNaN(rawVal) ? true : Number.isInteger(rawVal);
+    }
+    return true;
+  }
+
+  function scratchRandom(rawA, rawB, metaA = null, metaB = null) {
+    const nFrom = toScratchNumber(rawA);
+    const nTo = toScratchNumber(rawB);
+    const low = nFrom <= nTo ? nFrom : nTo;
+    const high = nFrom <= nTo ? nTo : nFrom;
+    if (low === high) return low;
+    if (isScratchInt(rawA, metaA) && isScratchInt(rawB, metaB)) {
+      return low + Math.floor(Math.random() * ((high + 1) - low));
+    }
+    return Math.random() * (high - low) + low;
+  }
+
+  function getCostumeMetrics(costumeObj, img) {
+    const rawW = (img && (img.naturalWidth || img.width)) || 48;
+    const rawH = (img && (img.naturalHeight || img.height)) || 48;
+    const isSvg = costumeObj && String(costumeObj.dataFormat || '').toLowerCase() === 'svg';
+    const rawRes = costumeObj ? Number(costumeObj.bitmapResolution) : 1;
+    const res = !isSvg && Number.isFinite(rawRes) && rawRes > 0 ? rawRes : 1;
+    const rcx = costumeObj && Number.isFinite(Number(costumeObj.rotationCenterX)) ? Number(costumeObj.rotationCenterX) : rawW / 2;
+    const rcy = costumeObj && Number.isFinite(Number(costumeObj.rotationCenterY)) ? Number(costumeObj.rotationCenterY) : rawH / 2;
+    return {
+      res,
+      drawW: rawW / res,
+      drawH: rawH / res,
+      drawRx: rcx / res,
+      drawRy: rcy / res
+    };
+  }
+
+  function computeFencedPos(nx, ny, halfW, halfH) {
+    const FENCE_PX = 15;
+    const safeHalfW = Number.isFinite(Number(halfW)) && Number(halfW) > 0 ? Number(halfW) : 0;
+    const safeHalfH = Number.isFinite(Number(halfH)) && Number(halfH) > 0 ? Number(halfH) : 0;
+    const marginX = Math.max(0, safeHalfW - FENCE_PX);
+    const marginY = Math.max(0, safeHalfH - FENCE_PX);
+    const safeX = Number.isFinite(Number(nx)) ? Number(nx) : 0;
+    const safeY = Number.isFinite(Number(ny)) ? Number(ny) : 0;
+    return {
+      x: Math.max(-240 - marginX, Math.min(240 + marginX, safeX)),
+      y: Math.max(-180 - marginY, Math.min(180 + marginY, safeY))
+    };
+  }
+
+  function layoutMonitors(monitors) {
+    const placed = [];
+    const rectsOverlap = (a, b) => !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+    const estSize = (m) => {
+      if (m.mode === 'list') {
+        return { w: Math.max(100, Number(m.width) || 120), h: Math.max(80, Number(m.height) || 132) };
+      }
+      if (m.mode === 'slider') return { w: 124, h: 44 };
+      if (m.mode === 'large') return { w: 72, h: 30 };
+      return { w: 124, h: 26 };
+    };
+    const out = [];
+    const pending = [];
+    for (const m of monitors || []) {
+      if (!m || m.visible === false) continue;
+      const { w, h } = estSize(m);
+      const hasExplicit = Number.isFinite(m.x) && Number.isFinite(m.y) && !(m.x === 0 && m.y === 0);
+      if (hasExplicit) {
+        const rect = { x: Math.max(0, Math.min(480 - w, m.x)), y: Math.max(0, Math.min(360 - h, m.y)), w, h };
+        if (!placed.some((p) => rectsOverlap(p, rect))) {
+          placed.push(rect);
+          out.push({ ...m, resolvedX: rect.x, resolvedY: rect.y, resolvedW: w, resolvedH: h });
+          continue;
+        }
+      }
+      pending.push({ m, w, h });
+    }
+    for (const { m, w, h } of pending) {
+      let curX = 8;
+      let curY = 8;
+      let safety = 0;
+      while (safety++ < 60) {
+        const cand = { x: curX, y: curY, w, h };
+        const blocker = placed.find((p) => rectsOverlap(p, cand));
+        if (!blocker) break;
+        curY = blocker.y + blocker.h + 6;
+        if (curY + h > 352) {
+          curY = 8;
+          curX += Math.max(w, 124) + 8;
+          if (curX + w > 476) { curX = 8; break; }
+        }
+      }
+      const rect = { x: curX, y: curY, w, h };
+      placed.push(rect);
+      out.push({ ...m, resolvedX: rect.x, resolvedY: rect.y, resolvedW: w, resolvedH: h });
+    }
+    return out;
+  }
+
   class StagePreview {
     constructor(canvas, callbacks = {}) {
       if (typeof callbacks === 'function') {
@@ -111,12 +224,13 @@
       const costumeObj = actor && actor.costumes && actor.costumes[actor.currentCostume];
       const cachedImg = costumeObj && costumeObj.md5ext ? this.imageCache.get(costumeObj.md5ext) : null;
       if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-        halfW = (cachedImg.naturalWidth / 2) * scale;
-        halfH = (cachedImg.naturalHeight / 2) * scale;
+        const { drawW, drawH } = getCostumeMetrics(costumeObj, cachedImg);
+        halfW = (drawW / 2) * scale;
+        halfH = (drawH / 2) * scale;
       }
       return {
-        halfW: Math.min(halfW, 239),
-        halfH: Math.min(halfH, 179)
+        halfW: Math.min(halfW, 1000),
+        halfH: Math.min(halfH, 1000)
       };
     }
 
@@ -758,8 +872,22 @@
         localVars: actor && actor.localVars ? { ...actor.localVars } : {},
         localLists: actor && actor.localLists ? { ...actor.localLists } : {},
         hiddenMonitors: Array.from(this.hiddenMonitors),
+        visibleMonitors: Array.from(this.visibleMonitors),
         isRunning: this.isRunning
       });
+    }
+
+    setMonitorValue(varName, spriteName, value) {
+      if (spriteName) {
+        const actor = this.actors.find((a) => !a.isClone && !a.isStage && a.name === spriteName);
+        if (actor) {
+          if (!actor.localVars) actor.localVars = {};
+          actor.localVars[varName] = value;
+        }
+      } else {
+        this.vars[varName] = value;
+      }
+      this._emitTelemetry();
     }
 
     _applyGraphicEffects(ctx, actor) {
@@ -815,10 +943,7 @@
       const cachedImg = costumeObj && costumeObj.md5ext ? this.imageCache.get(costumeObj.md5ext) : null;
 
       if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-        const w = cachedImg.naturalWidth;
-        const h = cachedImg.naturalHeight;
-        const rx = costumeObj.rotationCenterX !== undefined ? costumeObj.rotationCenterX : w / 2;
-        const ry = costumeObj.rotationCenterY !== undefined ? costumeObj.rotationCenterY : h / 2;
+        const { drawW: w, drawH: h, drawRx: rx, drawRy: ry } = getCostumeMetrics(costumeObj, cachedImg);
 
         let drawable = cachedImg;
         if (Math.abs(pixelateVal) > 0 && typeof document !== 'undefined' && typeof document.createElement === 'function') {
@@ -1597,11 +1722,7 @@
               return Object.prototype.hasOwnProperty.call(this.vars, attr) ? this.vars[attr] : 0;
             }
             case 'random': {
-              const a = Number(evalArg(0));
-              const b = Number(evalArg(1));
-              const min = Math.min(a, b);
-              const max = Math.max(a, b);
-              return Math.floor(Math.random() * (max - min + 1)) + min;
+              return scratchRandom(evalArg(0), evalArg(1), expr.args && expr.args[0], expr.args && expr.args[1]);
             }
             case 'join': return String(evalArg(0)) + String(evalArg(1));
             case 'letter_of': {
@@ -1787,11 +1908,11 @@
     }
 
     moveActorTo(actor, nx, ny) {
-      const safeX = Number.isFinite(Number(nx)) ? Number(nx) : 0;
-      const safeY = Number.isFinite(Number(ny)) ? Number(ny) : 0;
-      const clampedX = Math.max(-240, Math.min(240, safeX));
-      const clampedY = Math.max(-180, Math.min(180, safeY));
-      if (actor.penDown) {
+      const { halfW, halfH } = this._getActorHalfSize(actor);
+      const fenced = computeFencedPos(nx, ny, halfW, halfH);
+      const clampedX = fenced.x;
+      const clampedY = fenced.y;
+      if (actor.penDown && (clampedX !== actor.x || clampedY !== actor.y)) {
         this.penCtx.strokeStyle = actor.penColor;
         this.penCtx.lineWidth = actor.penSize;
         this.penCtx.lineCap = 'round';
@@ -2545,8 +2666,23 @@
     }
   }
 
+  StagePreview.toScratchNumber = toScratchNumber;
+  StagePreview.isScratchInt = isScratchInt;
+  StagePreview.scratchRandom = scratchRandom;
+  StagePreview.getCostumeMetrics = getCostumeMetrics;
+  StagePreview.computeFencedPos = computeFencedPos;
+  StagePreview.layoutMonitors = layoutMonitors;
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { StagePreview };
+    module.exports = {
+      StagePreview,
+      toScratchNumber,
+      isScratchInt,
+      scratchRandom,
+      getCostumeMetrics,
+      computeFencedPos,
+      layoutMonitors
+    };
   } else {
     global.StagePreview = StagePreview;
   }
