@@ -7,6 +7,12 @@
 (function (global) {
   'use strict';
 
+  // Negate a numeric literal's source text without producing "--2.0" (which Scratch would read as NaN -> 0).
+  function negateRaw(raw) {
+    const t = String(raw);
+    return t.startsWith('-') ? t.slice(1) : '-' + t;
+  }
+
   class CompileError extends Error {
     constructor(message, line, col) {
       super(message);
@@ -608,7 +614,7 @@
           if (op === '-=') {
             const negVal =
               value.type === 'Number'
-                ? { type: 'Number', value: -value.value, raw: value.raw ? '-' + value.raw : undefined, isFloat: !!value.isFloat, line: tok.line }
+                ? { type: 'Number', value: -value.value, raw: value.raw ? negateRaw(value.raw) : undefined, isFloat: !!value.isFloat, line: tok.line }
                 : { type: 'UnaryOp', op: '-', expr: value, line: tok.line };
             return { type: 'ChangeVar', name: targetName, ...localProp, value: negVal, line: tok.line };
           }
@@ -733,7 +739,7 @@
         const operand = parseUnary();
         // Constant-fold negative number literals (-150 -> Number(-150)) for clean Scratch inputs
         if (operand.type === 'Number') {
-          return { type: 'Number', value: -operand.value, raw: operand.raw ? '-' + operand.raw : undefined, isFloat: !!operand.isFloat, line: tok.line };
+          return { type: 'Number', value: -operand.value, raw: operand.raw ? negateRaw(operand.raw) : undefined, isFloat: !!operand.isFloat, line: tok.line };
         }
         return { type: 'UnaryOp', op: '-', expr: operand, line: tok.line };
       }

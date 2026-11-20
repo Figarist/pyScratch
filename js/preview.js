@@ -871,6 +871,13 @@
         lists: { ...this.lists },
         localVars: actor && actor.localVars ? { ...actor.localVars } : {},
         localLists: actor && actor.localLists ? { ...actor.localLists } : {},
+        // Per-sprite locals (originals only, like Scratch monitors) so on-stage monitors of other sprites show their own values.
+        localsByActor: this.actors.reduce((acc, a) => {
+          if (a && !a.isStage && !a.isClone && !Object.prototype.hasOwnProperty.call(acc, a.name)) {
+            acc[a.name] = { vars: a.localVars ? { ...a.localVars } : {}, lists: a.localLists ? { ...a.localLists } : {} };
+          }
+          return acc;
+        }, {}),
         hiddenMonitors: Array.from(this.hiddenMonitors),
         visibleMonitors: Array.from(this.visibleMonitors),
         isRunning: this.isRunning
@@ -2183,7 +2190,10 @@
           this.moveActorTo(actor, actor.x, actor.y + Number(arg(0)));
           break;
         case 'if_on_edge_bounce': {
-          const { halfW, halfH } = this._getActorHalfSize(actor);
+          // Clamp to the stage size: a sprite larger than the stage would otherwise get minX > maxX and jitter.
+          const half = this._getActorHalfSize(actor);
+          const halfW = Math.min(half.halfW, 240);
+          const halfH = Math.min(half.halfH, 180);
           const minX = -240 + halfW;
           const maxX = 240 - halfW;
           const minY = -180 + halfH;
@@ -2223,6 +2233,18 @@
           break;
         case 'pen_down':
           actor.penDown = true;
+          // Scratch stamps a dot where the pen goes down (moveActorTo no longer draws zero-length segments).
+          if (this.penCtx) {
+            const px = this.toCanvasX(actor.x);
+            const py = this.toCanvasY(actor.y);
+            this.penCtx.strokeStyle = actor.penColor;
+            this.penCtx.lineWidth = actor.penSize;
+            this.penCtx.lineCap = 'round';
+            this.penCtx.beginPath();
+            this.penCtx.moveTo(px, py);
+            this.penCtx.lineTo(px, py);
+            this.penCtx.stroke();
+          }
           break;
         case 'pen_up':
           actor.penDown = false;

@@ -418,7 +418,7 @@ def catch_target():
                 : null;
             const actorName = t.actorName || t.spriteName || fallbackActor;
             renderVarsWatch(t.vars, t.lists, t.localVars, t.localLists, actorName, t.hiddenMonitors);
-            renderStageMonitors(t.vars, t.lists, t.localVars, t.localLists, actorName, t.visibleMonitors, t.hiddenMonitors);
+            renderStageMonitors(t.vars, t.lists, t.localVars, t.localLists, actorName, t.visibleMonitors, t.hiddenMonitors, t.localsByActor);
           },
           onAsk: (question, submitFn) => {
             if (!askOverlay || !askInput) return;
@@ -524,22 +524,28 @@ def catch_target():
     varsWatch.innerHTML = pills.join('');
   }
 
-  function renderStageMonitors(vars, lists, localVars, localLists, actorName, visibleMonitors, hiddenMonitors) {
+  function renderStageMonitors(vars, lists, localVars, localLists, actorName, visibleMonitors, hiddenMonitors, localsByActor) {
     if (!stageMonitorsLayer || typeof StagePreview === 'undefined' || typeof StagePreview.layoutMonitors !== 'function') return;
     const hidden = new Set(Array.isArray(hiddenMonitors) ? hiddenMonitors : []);
     const shownRuntime = new Set(Array.isArray(visibleMonitors) ? visibleMonitors : []);
     const specs = [];
     const seenKeys = new Set();
 
+    const has = (obj, key) => Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
     const readVal = (isList, varName, spriteName) => {
+      // A sprite-local monitor reads that sprite's own locals, not the currently selected sprite's.
+      const own = spriteName
+        ? (localsByActor && localsByActor[spriteName]) ||
+          (spriteName === actorName ? { vars: localVars, lists: localLists } : null)
+        : null;
       if (isList) {
-        if (spriteName && localLists && Array.isArray(localLists[varName])) return localLists[varName];
-        if (lists && Array.isArray(lists[varName])) return lists[varName];
-        return [];
+        if (own && own.lists && Array.isArray(own.lists[varName])) return own.lists[varName];
+        if (spriteName) return [];
+        return lists && Array.isArray(lists[varName]) ? lists[varName] : [];
       }
-      if (spriteName && localVars && Object.prototype.hasOwnProperty.call(localVars, varName)) return localVars[varName];
-      if (vars && Object.prototype.hasOwnProperty.call(vars, varName)) return vars[varName];
-      return 0;
+      if (own && has(own.vars, varName)) return own.vars[varName];
+      if (spriteName) return 0;
+      return has(vars, varName) ? vars[varName] : 0;
     };
 
     const projMonitors = state.projectJson && Array.isArray(state.projectJson.monitors) ? state.projectJson.monitors : [];
@@ -871,13 +877,100 @@ def catch_target():
     }
   }
 
-  function insertAtCursor(snippetText) {
+  // opts.smart: place a palette/doc command like a dropped block (own line, script indentation).
+  // opts.kind: 'reporter' (may go inside an expression), 'command' (never inline) or undefined (guess from context).
+  // Tab / Enter auto-indent call this without opts and get a plain insertion at the caret.
+  function insertAtCursor(snippetText, opts) {
     if (!editor) return;
     const text = String(snippetText || '').replace(/\\n/g, '\n');
     const hasFocus = typeof document !== 'undefined' && document.activeElement === editor;
     const start = hasFocus ? (editor.selectionStart || 0) : lastEditorSel.start;
     const end = hasFocus ? (editor.selectionEnd || 0) : lastEditorSel.end;
-    replaceEditorRange(text, start, end, true);
+    const plan = opts && opts.smart
+      ? planChipInsert(text, start, end, opts.kind)
+      : { text, start, end, caret: null };
+    replaceEditorRange(plan.text, plan.start, plan.end, true);
+    if (plan.caret !== null) {
+      editor.setSelectionRange(plan.caret, plan.caret);
+      captureEditorSelection();
+      updateCursorTelemetry();
+    }
+  }
+
+  // Palette chips land on their own line with the right indentation (like dropping a block into a script),
+  // unless the caret is inside an expression such as goto(|) or a selection is being replaced.
+  function planChipInsert(rawText, selStart, selEnd, kind) {
+    const v = editor.value;
+    const text = rawText.replace(/\n+$/, '');
+    if (selStart !== selEnd) return { text, start: selStart, end: selEnd, caret: null };
+    const multi = text.includes('\n');
+    const topLevel = /^(@|def\s)/.test(text);
+    const lineStart = v.lastIndexOf('\n', selStart - 1) + 1;
+    let lineEnd = v.indexOf('\n', selStart);
+    if (lineEnd < 0) lineEnd = v.length;
+    const line = v.slice(lineStart, lineEnd);
+    const before = v.slice(lineStart, selStart);
+    const after = v.slice(selStart, lineEnd);
+    const indentOf = (l) => (l.match(/^[ \t]*/) || [''])[0];
+    const opensBlock = (l) => !l.trim().startsWith('#') && /:\s*(#.*)?$/.test(l);
+    const lineIndent = indentOf(line);
+    const lineIsBlank = line.trim() === '';
+    const beforeBlank = before.trim() === '';
+
+    if (kind !== 'command' && !multi && !topLevel && !beforeBlank && !before.trimStart().startsWith('#') &&
+        (/[([,=+\-*/%<>]\s*$/.test(before) || /\b(and|or|not|if|elif|while|in|return)\s+$/.test(before))) {
+      // Inside an expression: drop the reporter in place, replacing a plain literal argument under the caret.
+      const lit = /^\s*(-?\d+(?:\.\d+)?|"[^"\n]*"|'[^'\n]*')(?=\s*[,)\]])/.exec(after);
+      const litEnd = lit ? selStart + lit[0].length : selStart;
+      return { text, start: selStart, end: litEnd, caret: null };
+    }
+
+    const indentBody = (indent) => text.split('\n').map((l) => (l ? indent + l : l)).join('\n');
+
+    if (topLevel) {
+      // A new script (@hat / def) goes to column 0 and must never split the current script.
+      const restLines = lineEnd < v.length ? v.slice(lineEnd + 1).split('\n') : [];
+      const nextCode = restLines.find((l) => l.trim() !== '');
+      if (lineIsBlank && (nextCode === undefined || !/^\s/.test(nextCode))) {
+        const prevLine = v.slice(0, lineStart).replace(/\n$/, '').split('\n').pop();
+        const prefix = lineStart > 0 && prevLine !== undefined && prevLine.trim() !== '' ? '\n' : '';
+        return { text: prefix + text, start: lineStart, end: lineEnd, caret: lineStart + prefix.length + text.length };
+      }
+      if (!lineIsBlank && beforeBlank && lineIndent === '' && /^@/.test(line)) {
+        return { text: text + '\n\n', start: lineStart, end: lineStart, caret: lineStart + text.length };
+      }
+      // Otherwise add it after the end of the current script (its decorators, def line and indented body).
+      let seenBody = lineIndent !== '' || lineIsBlank;
+      let pos = lineEnd + 1;
+      for (const l of restLines) {
+        if (l.trim() !== '') {
+          if (/^\s/.test(l)) seenBody = true;
+          else if (seenBody) return { text: text + '\n\n', start: pos, end: pos, caret: pos + text.length };
+        }
+        pos += l.length + 1;
+      }
+      const prefix = v.length === 0 ? '' : v.endsWith('\n\n') ? '' : v.endsWith('\n') ? '\n' : '\n\n';
+      return { text: prefix + text + '\n', start: v.length, end: v.length, caret: v.length + prefix.length + text.length };
+    }
+
+    if (lineIsBlank) {
+      // Empty line: fill it, keeping the indentation the pupil already typed, or inheriting it from the line above.
+      let indent = before;
+      if (indent === '') {
+        const prev = v.slice(0, lineStart).split('\n').reverse().find((l) => l.trim() !== '');
+        if (prev !== undefined) indent = indentOf(prev) + (opensBlock(prev) ? '    ' : '');
+      }
+      const body = indentBody(indent);
+      return { text: body, start: lineStart, end: lineEnd, caret: lineStart + body.length };
+    }
+    if (beforeBlank) {
+      // Caret at the start of a non-empty line: put the chip on its own line above it.
+      const body = indentBody(lineIndent);
+      return { text: body + '\n', start: lineStart, end: lineStart, caret: lineStart + body.length };
+    }
+    // Caret after (or inside) existing code: add the chip on a new line below the current one.
+    const body = indentBody(lineIndent + (opensBlock(line) ? '    ' : ''));
+    return { text: '\n' + body, start: lineEnd, end: lineEnd, caret: lineEnd + 1 + body.length };
   }
 
   function selectTarget(idx) {
@@ -1003,6 +1096,8 @@ def catch_target():
       }
       renderAssetsView();
       renderTargetTabs();
+      projectDirty = true;
+      scheduleAutosave();
       setStatus(
         isBackdrop
           ? i18nT('added_backdrop', { name: added.name, fmt: added.dataFormat })
@@ -1030,6 +1125,8 @@ def catch_target():
       }
       renderAssetsView();
       renderTargetTabs();
+      projectDirty = true;
+      scheduleAutosave();
       setStatus(i18nT('added_sound', { name: added.name, fmt: added.dataFormat, target: target ? target.name : i18nT('fallback_object') }));
     } catch (err) {
       setStatus(i18nT('err_sound_add', { msg: err && err.message ? err.message : String(err) }), true);
@@ -1243,7 +1340,7 @@ def catch_target():
     viewAssets.innerHTML = chunks.join('');
 
     viewAssets.querySelectorAll('[data-insert-code]').forEach((el) => {
-      el.onclick = () => insertAtCursor(el.getAttribute('data-insert-code'));
+      el.onclick = () => insertAtCursor(el.getAttribute('data-insert-code'), { smart: true });
     });
 
     viewAssets.querySelectorAll('[data-select-target]').forEach((el) => {
@@ -1601,7 +1698,7 @@ def catch_target():
     viewDocs.querySelectorAll('[data-doc-insert]').forEach((el) => {
       el.onclick = () => {
         const raw = el.getAttribute('data-doc-insert').split(' / ')[0];
-        insertAtCursor(raw);
+        insertAtCursor(raw, { smart: true });
       };
     });
   }
@@ -1854,10 +1951,11 @@ def catch_target():
   let autosaveQuotaWarned = false;
 
   function saveAutosaveNow() {
-    if (isEmbedMode || !state.projectJson || typeof localStorage === 'undefined') return false;
+    if (isEmbedMode || !state.projectJson) return false;
+    if (editor) state.codeByTarget.set(state.activeTargetIdx, editor.value);
+    let payload;
     try {
-      if (editor) state.codeByTarget.set(state.activeTargetIdx, editor.value);
-      const payload = {
+      payload = {
         v: 1,
         savedAt: Date.now(),
         activeTargetIdx: state.activeTargetIdx,
@@ -1867,6 +1965,13 @@ def catch_target():
           code: state.codeByTarget.get(idx) || ''
         }))
       };
+    } catch (_) {
+      return false;
+    }
+    // IndexedDB first and independently: it must still work where localStorage is blocked or full.
+    idbSaveProjectSnapshot(payload);
+    try {
+      if (typeof localStorage === 'undefined') return false;
       localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
       return true;
     } catch (_) {
@@ -1902,10 +2007,108 @@ def catch_target():
       clearTimeout(autosaveTimer);
       autosaveTimer = null;
     }
+    idbClearProjectSnapshot();
     if (typeof localStorage === 'undefined') return;
     try {
       localStorage.removeItem(AUTOSAVE_KEY);
     } catch (_) {}
+  }
+
+  // Full project snapshot (project.json + costumes/sounds) in IndexedDB, so a reload keeps sprite positions,
+  // uploaded assets and opened .sb3 files, not only the code. localStorage above stays the synchronous fallback.
+  const AUTOSAVE_DB_NAME = 'pyscratch_autosave';
+  const AUTOSAVE_DB_STORE = 'kv';
+  let autosaveDbPromise = null;
+  let autosaveAssetsSig = null;
+  let autosaveGen = 0;
+
+  function openAutosaveDb() {
+    if (autosaveDbPromise) return autosaveDbPromise;
+    autosaveDbPromise = new Promise((resolve) => {
+      try {
+        if (typeof indexedDB === 'undefined' || !indexedDB) return resolve(null);
+        const req = indexedDB.open(AUTOSAVE_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          try { req.result.createObjectStore(AUTOSAVE_DB_STORE); } catch (_) {}
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
+      } catch (_) {
+        resolve(null);
+      }
+    });
+    return autosaveDbPromise;
+  }
+
+  function idbRun(mode, fn) {
+    return openAutosaveDb().then(
+      (db) =>
+        new Promise((resolve) => {
+          if (!db) return resolve(null);
+          try {
+            const tx = db.transaction(AUTOSAVE_DB_STORE, mode);
+            const store = tx.objectStore(AUTOSAVE_DB_STORE);
+            const out = fn(store);
+            tx.oncomplete = () => resolve(out && 'result' in out ? out.result : true);
+            tx.onerror = () => resolve(null);
+            tx.onabort = () => resolve(null);
+          } catch (_) {
+            resolve(null);
+          }
+        })
+    );
+  }
+
+  function idbSaveProjectSnapshot(payload) {
+    if (isEmbedMode || !state.projectJson || !state.assetsMap) return;
+    let projectStr;
+    try {
+      projectStr = JSON.stringify(state.projectJson);
+    } catch (_) {
+      return;
+    }
+    const assetsMap = state.assetsMap;
+    const sig = Array.from(assetsMap.keys()).sort().join('|');
+    const writeAssets = sig !== autosaveAssetsSig;
+    const gen = autosaveGen;
+    idbRun('readwrite', (store) => {
+      store.put({ v: 1, savedAt: payload.savedAt, project: projectStr, draft: payload }, 'project');
+      if (writeAssets) store.put(new Map(assetsMap), 'assets');
+    }).then((ok) => {
+      if (ok && writeAssets && gen === autosaveGen) autosaveAssetsSig = sig;
+    });
+  }
+
+  function idbClearProjectSnapshot() {
+    autosaveGen++;
+    autosaveAssetsSig = null;
+    idbRun('readwrite', (store) => {
+      store.delete('project');
+      store.delete('assets');
+    });
+  }
+
+  function idbLoadProjectSnapshot() {
+    if (isEmbedMode) return Promise.resolve(null);
+    let projectReq = null;
+    let assetsReq = null;
+    return idbRun('readonly', (store) => {
+      projectReq = store.get('project');
+      assetsReq = store.get('assets');
+    }).then((ok) => {
+      if (!ok || !projectReq || !assetsReq) return null;
+      const rec = projectReq.result;
+      const assets = assetsReq.result;
+      if (!rec || rec.v !== 1 || typeof rec.project !== 'string' || !(assets instanceof Map)) return null;
+      try {
+        const projectJson = JSON.parse(rec.project);
+        if (!projectJson || !Array.isArray(projectJson.targets) || projectJson.targets.length === 0) return null;
+        return { savedAt: rec.savedAt, projectJson, assetsMap: assets, draft: rec.draft || null };
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   function loadAutosaveDraft() {
@@ -1988,6 +2191,42 @@ def catch_target():
     setStatus(i18nT('autosave_restored'));
   }
 
+  // Upgrade the code-only restore above to the full project snapshot (assets, positions, opened .sb3) once IndexedDB answers.
+  if (!isEmbedMode && !hasExplicitUrlProject) {
+    const editorAtStartup = editor ? editor.value : '';
+    idbLoadProjectSnapshot().then((snap) => {
+      if (!snap) return;
+      // The pupil already started typing or loaded something else: never overwrite live work.
+      if (projectDirty || (editor && editor.value !== editorAtStartup)) return;
+      const names = snap.projectJson.targets.map((t) => t.name).join('\u0001');
+      const matches = (d) =>
+        d && Array.isArray(d.targets) && d.targets.map((t) => t && t.name).join('\u0001') === names;
+      // A newer localStorage draft for a different sprite set means the snapshot is stale (e.g. the tab closed before
+      // IndexedDB finished): keep the code-only restore rather than bring back an older project.
+      if (savedDraft && !matches(savedDraft) && (savedDraft.savedAt || 0) > (snap.savedAt || 0)) return;
+      const drafts = [savedDraft, snap.draft].filter(matches).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+      const draft = drafts[0] || null;
+      try {
+        loadProject(snap.projectJson, snap.assetsMap);
+        if (draft) {
+          draft.targets.forEach((t, idx) => {
+            if (typeof t.code === 'string' && state.projectJson.targets[idx]) state.codeByTarget.set(idx, t.code);
+          });
+          if (editor) editor.value = state.codeByTarget.get(state.activeTargetIdx) || '';
+          const wanted = Number.isInteger(draft.activeTargetIdx) && state.projectJson.targets[draft.activeTargetIdx]
+            ? draft.activeTargetIdx
+            : state.activeTargetIdx;
+          selectTarget(wanted);
+          compileCurrent(true);
+        }
+        projectDirty = false;
+        if (state.errorLine === null) setStatus(i18nT('autosave_restored'));
+      } catch (_) {
+        // Keep the code-only restore if the snapshot is unusable.
+      }
+    });
+  }
+
   if (typeof window !== 'undefined') {
     window.addEventListener('pagehide', flushAutosave);
     window.addEventListener('beforeunload', (e) => {
@@ -2019,6 +2258,8 @@ def catch_target():
     const prop = el.getAttribute('data-prop');
     const activeTarget = state.projectJson.targets[state.activeTargetIdx];
     if (!prop || !activeTarget || activeTarget.isStage) return;
+    // Only a real edit commits: focusing and leaving the field must not freeze the live runtime position into the project.
+    if (el.dataset.focusValue !== undefined && el.value === el.dataset.focusValue) return;
     const val = normalizeTeleProp(prop, el.value);
     if (val === null) {
       el.value = String(Math.round(getTargetPropValue(activeTarget, prop)));
@@ -2031,6 +2272,7 @@ def catch_target():
       const assetInput = document.getElementById(assetPropId);
       if (assetInput) assetInput.value = el.value;
       syncActorPropsInPreview(updated);
+      el.dataset.focusValue = el.value;
       projectDirty = true;
       scheduleAutosave();
     } catch (_) {
@@ -2041,6 +2283,7 @@ def catch_target():
   [teleX, teleY, teleSize, teleDir].forEach((el) => {
     if (!el || el.tagName !== 'INPUT') return;
     el.addEventListener('focus', () => {
+      el.dataset.focusValue = el.value;
       try { el.select(); } catch (_) {}
     });
     el.addEventListener('keydown', (e) => {
@@ -2058,7 +2301,10 @@ def catch_target():
       }
     });
     el.addEventListener('change', () => commitTeleProp(el));
-    el.addEventListener('blur', () => commitTeleProp(el));
+    el.addEventListener('blur', () => {
+      commitTeleProp(el);
+      delete el.dataset.focusValue;
+    });
   });
 
   // Editor events
@@ -2119,7 +2365,8 @@ def catch_target():
 
   // Quick command chips
   document.querySelectorAll('.palette-chip').forEach((chip) => {
-    chip.onclick = () => insertAtCursor(chip.getAttribute('data-insert'));
+    const kind = chip.classList.contains('reporter') || chip.classList.contains('boolean') ? 'reporter' : 'command';
+    chip.onclick = () => insertAtCursor(chip.getAttribute('data-insert'), { smart: true, kind });
   });
 
   // Snippet buttons
@@ -2269,6 +2516,8 @@ def catch_target():
       loadProject(projectJson, assetsMap);
       clearAutosave();
       projectDirty = false;
+      // Snapshot the freshly opened file right away so a reload brings it back instead of the default template.
+      saveAutosaveNow();
       setStatus(i18nT('loaded_file', { name: file.name, count: projectJson.targets.length }));
     } catch (err) {
       setStatus(i18nT('err_open', { msg: err && err.message ? err.message : String(err) }), true);

@@ -1557,6 +1557,18 @@ def main():
     }
     assert(sawZeroOneFloat, 'scratchRandom("0.0", "1.0") must return fractional values');
 
+    // Negating a float literal twice must not write "--2.0" (Scratch reads it as NaN -> 0)
+    const nProj = createDefaultProject();
+    const nCompiled = compileToScratch(
+      '@when_flag_clicked\ndef main():\n    move(- -2.0)\n    turn_right(-(-2.5))\n    change_x(-3.0)\n',
+      nProj.projectJson.targets[1], nProj.projectJson.targets[0], nProj.projectJson
+    );
+    const numTexts = Object.values(nCompiled.blocks)
+      .filter((b) => b.opcode === 'motion_movesteps' || b.opcode === 'motion_turnright' || b.opcode === 'motion_changexby')
+      .map((b) => Object.values(b.inputs)[0][1][1]);
+    assert.deepStrictEqual(numTexts.sort(), ['-3.0', '2.0', '2.5'].sort(), `double negation must fold cleanly, got ${numTexts}`);
+    for (const t of numTexts) assert(!Number.isNaN(Number(t)), `literal "${t}" must stay numeric in .sb3`);
+
     // 15.2 bitmapResolution scaling in getCostumeMetrics & _getActorHalfSize
     const m2 = StagePreview.getCostumeMetrics({ bitmapResolution: 2 }, { naturalWidth: 96, naturalHeight: 64 });
     assert.strictEqual(m2.drawW, 48, 'bitmapResolution=2 must halve rendered width');
