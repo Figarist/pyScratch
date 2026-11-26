@@ -536,6 +536,7 @@ The web application ([`index.html`](../index.html) / [`js/app.js`](../js/app.js)
 | Query Parameter | Accepted Values | Effect |
 | --- | --- | --- |
 | `embed` | `1` or `true` | Adds `embed-mode` class to `document.body`, hiding the template bar, quick-insert command palette, brand subtitle, and reset button for compact iframe embedding. |
+| `embed` | `stage` | Also adds `embed-stage`: only the stage with its run/stop/sound buttons stays visible, and the page posts `{ type: 'pyscratch:height', height }` to the parent window whenever that block changes size. |
 | `snippet` | `hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker` | Loads the specified built-in template into the active sprite editor on startup, with comments and phrases in the page language (defaults to `hexagon` if omitted or unknown). |
 | `code` | `<base64url>` | Decodes UTF-8 Base64URL-encoded Python DSL code into the active sprite editor (overrides `snippet`). Produced by clicking **Share / Поділитися** (`#btn-share`). |
 | `autorun` | `1` or `true` | Automatically compiles all targets and clicks `#btn-run` on startup (skipped if `code` failed to decode). |

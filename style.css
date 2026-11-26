@@ -2035,6 +2035,36 @@ body.embed-mode .gui {
   gap: 6px;
 }
 
+/* Stage-only embed (?embed=stage): blog cards show the code themselves, the iframe shows the running stage. */
+body.embed-stage {
+  --menu-bar-h: 0px;
+  overflow: hidden;
+  background: transparent;
+}
+
+body.embed-stage .menu-bar,
+body.embed-stage .editor-area,
+body.embed-stage .sprite-pane,
+body.embed-stage .stage-header-end,
+body.embed-stage .stage-footer {
+  display: none;
+}
+
+body.embed-stage .gui {
+  display: block;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body.embed-stage .stage-area,
+body.embed-stage.stage-small .stage-area {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 /* ==========================================================================
    11. Responsive breakpoints, reduced motion
    ========================================================================== */

@@ -5,6 +5,11 @@ All notable changes to **pyScratch** are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 Every update to the repository must bump the version in `package.json` and `js/sb3Bridge.js` (`meta.agent`) and record an entry here so builds are easy to track across lessons and releases.
 
+## [1.4.1] - 2026-11-26
+
+### Added
+- **Stage-only embed (`?embed=stage`)**: shows just the stage with the green flag, stop and sound buttons, without the menu, code editor, sprite pane or stage footer. The page reports the height of the stage block to its parent with `postMessage({ type: 'pyscratch:height', height })`, so a blog card can size the iframe. Like `?embed=1`, it never reads or writes the saved draft. Used by the Python ↔ Scratch cards in sivochka.com blog posts together with `?code=` and `?autorun=1`.
+
 ## [1.4.0] - 2026-11-20
 
 ### Added

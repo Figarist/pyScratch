@@ -59,6 +59,7 @@ The browser IDE accepts URL query parameters for lesson embeds and shareable lin
 | Parameter | Example | Behavior |
 | --- | --- | --- |
 | `?embed=1` | `?embed=1` (or `true`) | Enables compact `embed-mode` layout (hides template subbar, quick palette, brand subtitle, and reset button) for iframes. |
+| `?embed=stage` | `?embed=stage&code=QGd...&autorun=1` | Stage-only iframe: the stage with run/stop/sound buttons, no editor or sprite pane. Posts `{ type: 'pyscratch:height', height }` to the parent page when its height changes. |
 | `?snippet=<name>` | `?snippet=clones` | Preloads one of the 9 built-in templates (`hexagon`, `functions`, `arrows`, `clones`, `quiz`, `levels`, `pong`, `maze`, `clicker`) in the page language. |
 | `?code=<base64url>` | `?code=QGd...` | Decodes a UTF-8 Base64URL-encoded Python DSL script into the active sprite editor (generated automatically by the **Share** button). Overrides `?snippet`. |
 | `?autorun=1` | `?embed=1&snippet=clones&autorun=1` | Automatically compiles and runs the project on the stage when the page loads (unless `?code=` decoding failed). |

@@ -2028,9 +2028,25 @@ def catch_target():
       ? new URLSearchParams(window.location.search || '')
       : null;
 
-  const isEmbedMode = Boolean(urlParams && (urlParams.get('embed') === '1' || urlParams.get('embed') === 'true'));
+  const embedParam = urlParams ? urlParams.get('embed') : null;
+  // ?embed=stage: only the stage and its run/stop buttons (blog cards on sivochka.com show the code next to it).
+  const isStageEmbed = embedParam === 'stage';
+  const isEmbedMode = embedParam === '1' || embedParam === 'true' || isStageEmbed;
   if (isEmbedMode && document.body) {
     document.body.classList.add('embed-mode');
+    if (isStageEmbed) document.body.classList.add('embed-stage');
+  }
+  // The parent page sizes the iframe to the stage: report the height of the visible layout when it changes.
+  if (isStageEmbed && window.parent !== window && typeof ResizeObserver !== 'undefined') {
+    const guiEl = document.querySelector('.gui');
+    if (guiEl) {
+      const reportHeight = () => {
+        try {
+          window.parent.postMessage({ type: 'pyscratch:height', height: Math.ceil(guiEl.getBoundingClientRect().height) }, '*');
+        } catch (_) { /* parent gone */ }
+      };
+      new ResizeObserver(reportHeight).observe(guiEl);
+    }
   }
 
   const AUTOSAVE_KEY = 'pyscratch_autosave_v1';
