@@ -913,6 +913,37 @@
 
   let currentLang = detectInitialLang();
 
+  (function maybeRedirectFromDefaultRoot() {
+    try {
+      if (typeof window === 'undefined' || !window.location) return;
+      if (!/^https?:$/.test(window.location.protocol)) return;
+      var host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') return;
+      if (currentLang !== 'uk') return;
+      var params = new URLSearchParams(window.location.search || '');
+      if (params.has('lang') || params.has('embed') || params.has('code') || params.has('snippet')) return;
+      if (typeof navigator !== 'undefined' && (navigator.webdriver || /bot|crawl|spider|slurp|facebookexternalhit|lighthouse|headless|bingpreview|yandex|baidu|duckduckbot|applebot|semrush|ahrefs/i.test(navigator.userAgent || ''))) return;
+
+      var target = getSavedLang();
+      if (!target && typeof navigator !== 'undefined') {
+        var langs = (navigator.languages && navigator.languages.length)
+          ? navigator.languages
+          : [navigator.language || navigator.userLanguage || ''];
+        for (var i = 0; i < langs.length; i++) {
+          var base = String(langs[i] || '').toLowerCase().split('-')[0];
+          if (SUPPORTED_LANGS.includes(base)) {
+            target = base;
+            break;
+          }
+        }
+      }
+      if (target && target !== 'uk') {
+        var url = getLangUrl(target);
+        if (url) window.location.replace(url);
+      }
+    } catch (_) {}
+  })();
+
   function t(key, params) {
     const table = DICT[currentLang] || DICT.uk;
     let str = table[key] != null ? table[key] : (DICT.uk[key] != null ? DICT.uk[key] : key);
