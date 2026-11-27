@@ -3,6 +3,13 @@
 
   const SUPPORTED_LANGS = ['uk', 'en', 'ru'];
   const STORAGE_KEY = 'pyscratch_lang';
+  // Owner's privacy policy per UI language (plain links, no runtime requests). Read by applyDomTranslations.
+  const PRIVACY_URLS = {
+    uk: 'https://sivochka.com/uk/privacy/',
+    en: 'https://sivochka.com/privacy/',
+    ru: 'https://sivochka.com/ru/privacy/'
+  };
+  const PRIVACY_URL_DEFAULT = 'https://sivochka.com/privacy/';
 
   const DICT = {
     uk: {
@@ -45,6 +52,7 @@
       vars_empty: "Змінні та списки з'являться тут під час виконання.",
       drop_title: 'Відпустіть файл .sb3 сюди',
       drop_sub: 'Проєкт Scratch 3.0 відкриється та перетвориться на Python-код',
+      privacy_policy: 'Політика конфіденційності',
       docs_title: 'Довідник команд Python ↔ Scratch 3.0 (клікніть на код для вставки)',
       docs_col_cat: 'Категорія',
       docs_col_cmd: 'Команда Python',
@@ -263,6 +271,7 @@
       vars_empty: 'Variables and lists will appear here during execution.',
       drop_title: 'Drop .sb3 file here',
       drop_sub: 'Scratch 3.0 project will open and decompile to Python code',
+      privacy_policy: 'Privacy policy',
       docs_title: 'Python ↔ Scratch 3.0 Command Reference (click code to insert)',
       docs_col_cat: 'Category',
       docs_col_cmd: 'Python Command',
@@ -481,6 +490,7 @@
       vars_empty: 'Переменные и списки появятся здесь во время выполнения.',
       drop_title: 'Отпустите файл .sb3 сюда',
       drop_sub: 'Проект Scratch 3.0 откроется и преобразуется в Python-код',
+      privacy_policy: 'Политика конфиденциальности',
       docs_title: 'Справочник команд Python ↔ Scratch 3.0 (нажмите на код для вставки)',
       docs_col_cat: 'Категория',
       docs_col_cmd: 'Команда Python',
@@ -976,6 +986,9 @@
     });
     document.querySelectorAll('.lang-btn[data-lang]').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
+    });
+    document.querySelectorAll('[data-i18n-privacy-href]').forEach((el) => {
+      el.setAttribute('href', PRIVACY_URLS[currentLang] || PRIVACY_URL_DEFAULT);
     });
     applyPaletteTooltips();
   }
