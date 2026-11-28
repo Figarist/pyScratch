@@ -346,6 +346,40 @@ def catch_target():
       // API reference examples (Docs tab)
       ['"Думка"', '"Мысль"'],
       ['"Питання"', '"Вопрос"']
+    ],
+    pl: [
+      ['# === СКРИПТ ГРАВЦЯ (Sprite1) ===', '# === SKRYPT GRACZA (Sprite1) ==='],
+      ['# Налаштування сцени та позиції', '# Ustawienie sceny i pozycji'],
+      ['# Робота з Олівцем (Pen Extension)', '# Rysowanie Piórem (Pen Extension)'],
+      ['# Малюємо геометричну фігуру в циклі', '# Rysujemy figurę geometryczną w pętli'],
+      ['"Готово! Переходимо на новий рівень"', '"Gotowe! Przechodzimy na kolejny poziom"'],
+      ['"Рівень 2 почався!"', '"Poziom 2 rozpoczęty!"'],
+      ['# === ВЛАСНІ ФУНКЦІЇ (Мій Блок у Scratch) ===', '# === WŁASNE FUNKCJE (Moje bloki w Scratch) ==='],
+      ['"Трикутник, квадрат і п\'ятикутник!"', '"Trójkąt, kwadrat i pięciokąt!"'],
+      ['# === КЕРУВАННЯ СТРІЛКАМИ + ВІДБИВАННЯ ===', '# === STEROWANIE STRZAŁKAMI + ODBIJANIE ==='],
+      ['"Керуй стрілками або пробілом!"', '"Steruj strzałkami lub spacją!"'],
+      ['# === КЛОНИ ТА ЗІРКОВИЙ САЛЮТ ===', '# === KLONY I GWIEZDNE FAJERWERKI ==='],
+      ['# === ДІАЛОГ, УМОВИ ELIF ТА СПИСКИ ===', '# === DIALOG, WARUNKI ELIF I LISTY ==='],
+      ['"Скільки буде 7 * 8?"', '"Ile to jest 7 * 8?"'],
+      ['"Мега-Кристал"', '"Mega Kryształ"'],
+      ['"Правильно! Бали: "', '"Dobrze! Punkty: "'],
+      ['"Майже! Це 6 * 9, а не 7 * 8"', '"Prawie! To 6 * 9, a nie 7 * 8"'],
+      ['"Спробуй ще раз!"', '"Spróbuj jeszcze raz!"'],
+      ['# === ЗМІНА РІВНІВ ТА ПОВІДОМЛЕННЯ ===', '# === ZMIANA POZIOMÓW I KOMUNIKATY ==='],
+      ['"Натисни Пробіл для старту місії!"', '"Naciśnij Spację, aby rozpocząć misję!"'],
+      ['"Рівень 2: Хвиля почалась!"', '"Poziom 2: fala się zaczęła!"'],
+      ['# === ПІНГ-ПОНГ (КЛАСИЧНА ГРА) ===', '# === PING-PONG (KLASYCZNA GRA) ==='],
+      ['"Гру завершено! Рахунок: "', '"Koniec gry! Wynik: "'],
+      ['# === ЛАБІРИНТ (СТРІЛКИ + ТОРКАННЯ КОЛЬОРУ) ===', '# === LABIRYNT (STRZAŁKI + DOTKNIĘCIE KOLORU) ==='],
+      ['"Дійди до зеленої цілі стрілками!"', '"Dotrzyj do zielonego celu strzałkami!"'],
+      ['"Перемога!"', '"Wygrana!"'],
+      ['# === ШВИДКИЙ КЛІКЕР (КЛОНИ + ТАЙМЕР) ===', '# === SZYBKI KLIKER (KLONY + STOPER) ==='],
+      ['"Час вийшов! Бали: "', '"Czas minął! Punkty: "'],
+      // API reference examples (Docs tab)
+      ['"Текст"', '"Tekst"'],
+      ['"Думка"', '"Myśl"'],
+      ['"Питання"', '"Pytanie"'],
+      ['"ключ"', '"klucz"']
     ]
   };
 

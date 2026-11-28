@@ -24,6 +24,8 @@ jobs:
           for f in package.json site.webmanifest; do node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$f"; done
       - name: Run Round-Trip & Runtime Test Suite
         run: node test/test_roundtrip.js
+      - name: Run i18n Parity Gate
+        run: node scripts/check-i18n.mjs
 
   notify_failure:
     name: Notify Info on failure

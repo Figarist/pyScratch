@@ -12,6 +12,7 @@
   <link rel="canonical" href="https://sivochka.com/pyScratch/ru/" />
   <link rel="alternate" hreflang="uk" href="https://sivochka.com/pyScratch/" />
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
+  <link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
   <meta property="og:title" content="Scratch в Python онлайн: конвертер и IDE .sb3 | Figarist" />
@@ -19,6 +20,7 @@
   <meta property="og:locale" content="ru_RU" />
   <meta property="og:locale:alternate" content="uk_UA" />
   <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:locale:alternate" content="pl_PL" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/ru/" />
   <meta property="og:image" content="https://sivochka.com/pyScratch/assets/og-card.png" />
@@ -183,6 +185,7 @@
       <div class="menu-list notranslate" id="menu-lang-list" role="menu" translate="no">
           <button type="button" role="menuitemradio" class="lang-btn" data-lang="uk">Українська (UA)</button>
           <button type="button" role="menuitemradio" class="lang-btn" data-lang="en">English (EN)</button>
+          <button type="button" role="menuitemradio" class="lang-btn" data-lang="pl">Polski (PL)</button>
           <button type="button" role="menuitemradio" class="lang-btn active" data-lang="ru">Русский (RU)</button>
       </div>
     </div>
@@ -198,7 +201,7 @@
       </div>
     </div>
 
-    <nav class="menu-links" aria-label="Links">
+    <nav class="menu-links" data-l10n-aria="links" aria-label="Ссылки">
       <a href="https://sivochka.com/ru/?ref=pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-hub" title="Создано sivochka.com — персональный хаб Игоря Сивочки">sivochka.com</a>
       <a href="https://sivochka.com/ru/tutoring/python/?ref=pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-python" title="Индивидуальные занятия по Python">Python-репетитор</a>
       <a href="https://sivochka.com/ru/tutoring/scratch/?ref=pyScratch" target="_blank" rel="noopener noreferrer" class="menu-link" data-goatcounter-click="pyscratch-tutoring-scratch" title="Индивидуальные занятия по Scratch">Scratch-репетитор</a>
@@ -216,7 +219,7 @@
   <main class="gui">
     <section class="editor-area">
       <div class="tab-row">
-      <div class="tab-bar" role="tablist" aria-label="Разделы редактора">
+      <div class="tab-bar" role="tablist" data-l10n-aria="editor_sections" aria-label="Разделы редактора">
         <button type="button" class="editor-tab active" role="tab" id="tab-code" data-tab="code" aria-selected="true" aria-controls="pane-code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg><span data-l10n="tab_code">Код</span></button>
         <button type="button" class="editor-tab" role="tab" id="tab-costumes" data-tab="costumes" aria-selected="false" aria-controls="pane-assets" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><span data-l10n="tab_costumes">Костюмы</span></button>
         <button type="button" class="editor-tab" role="tab" id="tab-sounds" data-tab="sounds" aria-selected="false" aria-controls="pane-assets" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg><span data-l10n="tab_sounds">Звуки</span></button>
@@ -445,7 +448,7 @@
               <div class="line-numbers" id="line-numbers" aria-hidden="true">1</div>
               <div class="code-stage">
                 <pre id="code-highlight" aria-hidden="true"></pre>
-                <textarea id="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Редактор Python-кода"></textarea>
+                <textarea id="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off" data-l10n-aria="code_editor" aria-label="Редактор Python-кода"></textarea>
               </div>
             </div>
 
@@ -490,7 +493,7 @@
           <canvas id="stage-canvas" width="480" height="360"></canvas>
           <div id="stage-monitors" class="stage-monitors" aria-live="off"><div class="stage-monitors-layer" id="stage-monitors-layer"></div></div>
           <div id="ask-overlay" class="ask-overlay hidden">
-            <input type="text" id="ask-input" data-i18n-placeholder="ask_placeholder" placeholder="Введите ответ..." aria-label="Введите ответ..." />
+            <input type="text" id="ask-input" data-i18n-placeholder="ask_placeholder" data-i18n-aria="ask_placeholder" placeholder="Введите ответ..." aria-label="Введите ответ..." />
             <button type="button" id="ask-submit" class="primary">OK</button>
           </div>
         </div>
@@ -556,7 +559,7 @@
         <li>Скрипты с блоками, которых конвертер пока не знает (например, Video Sensing или Makey Makey), остаются в проекте и сохраняются без изменений, но в редакторе виден только комментарий — редактировать их как код нельзя.</li>
         <li>Комментарии, прикреплённые к блокам, которые pyScratch генерирует заново, при сохранении пропадают.</li>
         <li>Встроенная сцена — упрощённый симулятор, а не движок Scratch: касания проверяются приблизительно, эффекты «рыбий глаз» и «вихрь» не отрисовываются, а <code>translate()</code> возвращает текст без изменений, потому что предпросмотр не выходит в интернет. Окончательный результат всегда проверяйте в Scratch.</li>
-        <li>Сообщения об ошибках компилятора и служебные комментарии, которые конвертер добавляет в код, пока только на украинском.</li>
+        <li>Сообщения об ошибках компилятора, подписи дерева блоков и служебные комментарии конвертера переведены на четыре языка: украинский, английский, польский и русский.</li>
       </ul>
       <h2>Приватность: проект не покидает браузер</h2>
       <p>pyScratch работает полностью в вашем браузере. Файл .sb3 распаковывается и упаковывается на вашем устройстве, ничего не загружается на сервер, регистрация не нужна. Страница только считает анонимные посещения без cookie. Кнопка «Поделиться» записывает ваш код прямо в ссылку, поэтому его увидит каждый, у кого есть эта ссылка.</p>

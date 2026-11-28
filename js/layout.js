@@ -53,7 +53,10 @@
       sprite_show: 'Показати спрайт',
       sprite_hide: 'Сховати спрайт',
       sprite_name: 'Назва спрайта',
-      sprites_list: 'Спрайти'
+      sprites_list: 'Спрайти',
+      links: 'Посилання',
+      editor_sections: 'Розділи редактора',
+      code_editor: 'Редактор Python-коду'
     },
     en: {
       tab_code: 'Code',
@@ -95,7 +98,55 @@
       sprite_show: 'Show sprite',
       sprite_hide: 'Hide sprite',
       sprite_name: 'Sprite name',
-      sprites_list: 'Sprites'
+      sprites_list: 'Sprites',
+      links: 'Links',
+      editor_sections: 'Editor sections',
+      code_editor: 'Python code editor'
+    },
+    pl: {
+      tab_code: 'Kod',
+      tab_costumes: 'Kostiumy',
+      tab_sounds: 'Dźwięki',
+      menu_file: 'Plik',
+      menu_lang: 'Język',
+      menu_templates: 'Szablony',
+      cat_motion: 'Ruch',
+      cat_looks: 'Wygląd',
+      cat_sound: 'Dźwięk',
+      cat_events: 'Zdarzenia',
+      cat_control: 'Kontrola',
+      cat_sensing: 'Czujniki',
+      cat_operators: 'Wyrażenia',
+      cat_variables: 'Zmienne',
+      cat_myblocks: 'Moje bloki',
+      cat_pen: 'Pióro',
+      cat_music: 'Muzyka',
+      cat_text2speech: 'Tekst na mowę',
+      cat_translate: 'Tłumacz',
+      categories: 'Kategorie bloków',
+      stage: 'Scena',
+      sprite: 'Duszek',
+      show: 'Pokaż',
+      size: 'Rozmiar',
+      direction: 'Kierunek',
+      run: 'Uruchom (Ctrl+Enter)',
+      stop: 'Zatrzymaj',
+      stage_small: 'Mała scena',
+      stage_large: 'Duża scena',
+      stage_fullscreen: 'Pełny ekran (Esc — wyjście)',
+      stage_fullscreen_exit: 'Wyjdź z pełnego ekranu (Esc)',
+      tele_x_aria: 'Współrzędna X duszka',
+      tele_y_aria: 'Współrzędna Y duszka',
+      tele_size_aria: 'Rozmiar duszka w procentach',
+      tele_dir_aria: 'Kierunek duszka w stopniach',
+      add_sprite: 'Dodaj duszka',
+      sprite_show: 'Pokaż duszka',
+      sprite_hide: 'Ukryj duszka',
+      sprite_name: 'Nazwa duszka',
+      sprites_list: 'Duszki',
+      links: 'Linki',
+      editor_sections: 'Sekcje edytora',
+      code_editor: 'Edytor kodu Python'
     },
     ru: {
       tab_code: 'Код',
@@ -137,7 +188,10 @@
       sprite_show: 'Показать спрайт',
       sprite_hide: 'Скрыть спрайт',
       sprite_name: 'Имя спрайта',
-      sprites_list: 'Спрайты'
+      sprites_list: 'Спрайты',
+      links: 'Ссылки',
+      editor_sections: 'Разделы редактора',
+      code_editor: 'Редактор Python-кода'
     }
   };
 
