@@ -344,6 +344,10 @@ button.danger:hover {
   border-color: transparent;
 }
 
+.menu-list button.lang-btn {
+  min-height: 44px;
+}
+
 .menu-list button.lang-btn.active::after {
   content: "\2713";
   margin-left: auto;

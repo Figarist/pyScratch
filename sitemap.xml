@@ -7,6 +7,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
     <xhtml:link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
     <lastmod>2026-11-28</lastmod>
     <changefreq>weekly</changefreq>
@@ -18,6 +19,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
     <xhtml:link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
     <lastmod>2026-11-28</lastmod>
     <changefreq>weekly</changefreq>
@@ -29,6 +31,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
     <xhtml:link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
     <lastmod>2026-11-28</lastmod>
     <changefreq>weekly</changefreq>
@@ -40,6 +43,19 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
     <xhtml:link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
     <xhtml:link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
+    <lastmod>2026-11-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://sivochka.com/pyScratch/ko/</loc>
+    <xhtml:link rel="alternate" hreflang="uk" href="https://sivochka.com/pyScratch/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
+    <xhtml:link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+    <xhtml:link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
     <lastmod>2026-11-28</lastmod>
     <changefreq>weekly</changefreq>

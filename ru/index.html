@@ -14,6 +14,7 @@
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
   <link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+  <link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
   <meta property="og:title" content="Scratch в Python онлайн: конвертер и IDE .sb3 | Figarist" />
   <meta property="og:description" content="Бесплатный онлайн-конвертер Scratch в Python и IDE для .sb3: редактируйте проекты Scratch 3.0 на Python, собирайте обратно в .sb3 и запускайте в браузере." />
@@ -21,6 +22,7 @@
   <meta property="og:locale:alternate" content="uk_UA" />
   <meta property="og:locale:alternate" content="en_US" />
   <meta property="og:locale:alternate" content="pl_PL" />
+  <meta property="og:locale:alternate" content="ko_KR" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/ru/" />
   <meta property="og:image" content="https://sivochka.com/pyScratch/assets/og-card.png" />
@@ -181,12 +183,13 @@
     </a>
 
     <div class="menu" id="menu-lang">
-      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span data-l10n="menu_lang">Язык</span><span class="caret" aria-hidden="true"></span></button>
+      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list" data-l10n-aria="menu_lang" aria-label="Язык"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="lang-code notranslate" id="lang-current-code" translate="no">RU</span><span class="caret" aria-hidden="true"></span></button>
       <div class="menu-list notranslate" id="menu-lang-list" role="menu" translate="no">
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="uk">Українська (UA)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="en">English (EN)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="pl">Polski (PL)</button>
-          <button type="button" role="menuitemradio" class="lang-btn active" data-lang="ru">Русский (RU)</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="uk">UK · Українська</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="en">EN · English</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="pl">PL · Polski</button>
+          <button type="button" role="menuitemradio" aria-checked="true" class="lang-btn active" data-lang="ru">RU · Русский</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="ko">KO · 한국어</button>
       </div>
     </div>
 
@@ -559,7 +562,7 @@
         <li>Скрипты с блоками, которых конвертер пока не знает (например, Video Sensing или Makey Makey), остаются в проекте и сохраняются без изменений, но в редакторе виден только комментарий — редактировать их как код нельзя.</li>
         <li>Комментарии, прикреплённые к блокам, которые pyScratch генерирует заново, при сохранении пропадают.</li>
         <li>Встроенная сцена — упрощённый симулятор, а не движок Scratch: касания проверяются приблизительно, эффекты «рыбий глаз» и «вихрь» не отрисовываются, а <code>translate()</code> возвращает текст без изменений, потому что предпросмотр не выходит в интернет. Окончательный результат всегда проверяйте в Scratch.</li>
-        <li>Сообщения об ошибках компилятора, подписи дерева блоков и служебные комментарии конвертера переведены на четыре языка: украинский, английский, польский и русский.</li>
+        <li>Сообщения об ошибках компилятора, подписи дерева блоков и служебные комментарии конвертера переведены на пять языков: украинский, английский, польский, русский и корейский.</li>
       </ul>
       <h2>Приватность: проект не покидает браузер</h2>
       <p>pyScratch работает полностью в вашем браузере. Файл .sb3 распаковывается и упаковывается на вашем устройстве, ничего не загружается на сервер, регистрация не нужна. Страница только считает анонимные посещения без cookie. Кнопка «Поделиться» записывает ваш код прямо в ссылку, поэтому его увидит каждый, у кого есть эта ссылка.</p>

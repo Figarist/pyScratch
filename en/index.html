@@ -14,6 +14,7 @@
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
   <link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+  <link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
   <meta property="og:title" content="pyScratch: Scratch to Python Converter Online (.sb3)" />
   <meta property="og:description" content="pyScratch, a free online Scratch to Python converter: open an .sb3 as Python, edit it, compile it back to Scratch 3.0 and run it on a live stage." />
@@ -21,6 +22,7 @@
   <meta property="og:locale:alternate" content="uk_UA" />
   <meta property="og:locale:alternate" content="pl_PL" />
   <meta property="og:locale:alternate" content="ru_RU" />
+  <meta property="og:locale:alternate" content="ko_KR" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/en/" />
   <meta property="og:image" content="https://sivochka.com/pyScratch/assets/og-card.png" />
@@ -181,12 +183,13 @@
     </a>
 
     <div class="menu" id="menu-lang">
-      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span data-l10n="menu_lang">Language</span><span class="caret" aria-hidden="true"></span></button>
+      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list" data-l10n-aria="menu_lang" aria-label="Language"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="lang-code notranslate" id="lang-current-code" translate="no">EN</span><span class="caret" aria-hidden="true"></span></button>
       <div class="menu-list notranslate" id="menu-lang-list" role="menu" translate="no">
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="uk">Українська (UA)</button>
-          <button type="button" role="menuitemradio" class="lang-btn active" data-lang="en">English (EN)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="pl">Polski (PL)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="ru">Русский (RU)</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="uk">UK · Українська</button>
+          <button type="button" role="menuitemradio" aria-checked="true" class="lang-btn active" data-lang="en">EN · English</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="pl">PL · Polski</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="ru">RU · Русский</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="ko">KO · 한국어</button>
       </div>
     </div>
 
@@ -559,7 +562,7 @@
         <li>Scripts that use blocks the converter does not know yet (for example Video Sensing or Makey Makey) stay in the project and are saved unchanged, but the editor shows only a comment for them and you cannot edit them as code.</li>
         <li>Comments attached to blocks that pyScratch regenerates are lost when you save.</li>
         <li>The built-in stage is a simplified simulator, not the Scratch engine: touching checks are approximate, the fisheye and whirl effects are not drawn, and <code>translate()</code> returns the text unchanged because the preview never goes online. Always check the final result in Scratch.</li>
-        <li>Compiler error messages, block tree labels, and converter code comments are localized in four languages: Ukrainian, English, Polish, and Russian.</li>
+        <li>Compiler error messages, block tree labels, and converter code comments are localized in five languages: Ukrainian, English, Polish, Russian, and Korean.</li>
       </ul>
       <h2>Privacy: your project stays in the browser</h2>
       <p>pyScratch runs entirely in your browser. The .sb3 file is unpacked and packed on your device, nothing is uploaded to a server, and there is no account or sign-up. The page only counts anonymous visits without cookies. The “Share” button puts your code into the link itself, so anyone who gets the link can see that code.</p>

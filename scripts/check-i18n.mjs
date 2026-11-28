@@ -7,12 +7,15 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '..');
 
-const LOCALES = ['uk', 'en', 'pl', 'ru'];
+const LOCALES = ['uk', 'en', 'pl', 'ru', 'ko'];
+const NON_UK_LOCALES = ['en', 'pl', 'ru', 'ko'];
+const UK_CYRILLIC_RE = /[єіїґЄІЇҐ]/;
 const HTML_FILES = [
   { file: 'index.html', lang: 'uk' },
   { file: 'en/index.html', lang: 'en' },
   { file: 'pl/index.html', lang: 'pl' },
-  { file: 'ru/index.html', lang: 'ru' }
+  { file: 'ru/index.html', lang: 'ru' },
+  { file: 'ko/index.html', lang: 'ko' }
 ];
 
 const errors = [];
@@ -55,6 +58,9 @@ function checkKeyParity(name, tables) {
       if (pBase !== pLang) {
         fail(`${name}[${lang}].${k} placeholder mismatch: expected [${pBase}], got [${pLang}]`);
       }
+      if (NON_UK_LOCALES.includes(lang) && UK_CYRILLIC_RE.test(tbl[k])) {
+        fail(`${name}[${lang}].${k} contains Ukrainian Cyrillic leak`);
+      }
     }
   }
   console.log(`OK ${name}: ${baseKeys.length} keys x ${LOCALES.length} locales`);
@@ -67,12 +73,18 @@ if (JSON.stringify([...i18n.SUPPORTED_LANGS].sort()) !== JSON.stringify([...LOCA
 }
 checkKeyParity('js/i18n.js DICT', i18n.DICT);
 
-// Check PALETTE_TIPS (4 entries per tip: uk, en, ru, pl)
+// Check PALETTE_TIPS (5 entries per tip: uk, en, ru, pl, ko)
 const tipKeys = Object.keys(i18n.PALETTE_TIPS);
 for (const k of tipKeys) {
   const arr = i18n.PALETTE_TIPS[k];
-  if (!Array.isArray(arr) || arr.length !== 4 || arr.some((s) => typeof s !== 'string' || !s.trim())) {
-    fail(`js/i18n.js PALETTE_TIPS["${k}"] must have 4 non-empty strings [uk, en, ru, pl]`);
+  if (!Array.isArray(arr) || arr.length !== 5 || arr.some((s) => typeof s !== 'string' || !s.trim())) {
+    fail(`js/i18n.js PALETTE_TIPS["${k}"] must have 5 non-empty strings [uk, en, ru, pl, ko]`);
+  } else {
+    for (let idx = 1; idx < 5; idx++) {
+      if (UK_CYRILLIC_RE.test(arr[idx])) {
+        fail(`js/i18n.js PALETTE_TIPS["${k}"][${idx}] contains Ukrainian Cyrillic leak`);
+      }
+    }
   }
 }
 for (const fromLang of LOCALES) {
@@ -85,7 +97,7 @@ for (const fromLang of LOCALES) {
     }
   }
 }
-console.log(`OK js/i18n.js PALETTE_TIPS: ${tipKeys.length} entries x 4 locales`);
+console.log(`OK js/i18n.js PALETTE_TIPS: ${tipKeys.length} entries x 5 locales`);
 
 // 2. Check js/messages.js
 const messages = require(path.join(root, 'js/messages.js'));
@@ -149,9 +161,22 @@ for (const { file, lang } of HTML_FILES) {
     }
   }
 
+  if (!/id="menu-lang"[\s\S]*?aria-expanded="false"[\s\S]*?aria-controls="menu-lang-list"/.test(html)) {
+    fail(`${file}: #menu-lang trigger missing aria-expanded/aria-controls`);
+  }
+
   for (const btnLang of LOCALES) {
     if (!new RegExp(`class="lang-btn[^"]*"[^>]*data-lang="${btnLang}"`).test(html)) {
       fail(`${file}: missing #menu-lang-list button for data-lang="${btnLang}"`);
+    }
+  }
+
+  if (NON_UK_LOCALES.includes(lang)) {
+    const cleanedHtml = html
+      .replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi, '')
+      .replace(/UK · Українська/g, '');
+    if (UK_CYRILLIC_RE.test(cleanedHtml)) {
+      fail(`${file}: contains Ukrainian Cyrillic leak`);
     }
   }
 
@@ -205,11 +230,11 @@ for (const lang of LOCALES) {
     fail(`sitemap.xml: missing hreflang="${lang}"`);
   }
 }
-console.log('OK sitemap.xml: all 4 locales present');
+console.log(`OK sitemap.xml: all ${LOCALES.length} locales present`);
 
 if (errors.length) {
   console.error(`\ni18n gate failed with ${errors.length} error(s):`);
   for (const e of errors) console.error(' - ' + e);
   process.exit(1);
 }
-console.log('\ni18n gate passed (100% parity across uk, en, pl, ru).');
+console.log(`\ni18n gate passed (100% parity across ${LOCALES.join(', ')}).`);

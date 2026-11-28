@@ -13,6 +13,7 @@
   <link rel="alternate" hreflang="en" href="https://sivochka.com/pyScratch/en/" />
   <link rel="alternate" hreflang="pl" href="https://sivochka.com/pyScratch/pl/" />
   <link rel="alternate" hreflang="ru" href="https://sivochka.com/pyScratch/ru/" />
+  <link rel="alternate" hreflang="ko" href="https://sivochka.com/pyScratch/ko/" />
   <link rel="alternate" hreflang="x-default" href="https://sivochka.com/pyScratch/" />
   <meta property="og:title" content="pyScratch — Python ↔ Scratch 3.0 (.sb3) IDE | Figarist" />
   <meta property="og:description" content="pyScratch — безкоштовна онлайн Python ↔ Scratch 3.0 (.sb3) IDE з двостороннім компілятором, декомпілятором блоків та живою сценою у браузері." />
@@ -20,6 +21,7 @@
   <meta property="og:locale:alternate" content="en_US" />
   <meta property="og:locale:alternate" content="pl_PL" />
   <meta property="og:locale:alternate" content="ru_RU" />
+  <meta property="og:locale:alternate" content="ko_KR" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://sivochka.com/pyScratch/" />
   <meta property="og:image" content="https://sivochka.com/pyScratch/assets/og-card.png" />
@@ -180,12 +182,13 @@
     </a>
 
     <div class="menu" id="menu-lang">
-      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span data-l10n="menu_lang">Мова</span><span class="caret" aria-hidden="true"></span></button>
+      <button type="button" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-lang-list" data-l10n-aria="menu_lang" aria-label="Мова"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span class="lang-code notranslate" id="lang-current-code" translate="no">UK</span><span class="caret" aria-hidden="true"></span></button>
       <div class="menu-list notranslate" id="menu-lang-list" role="menu" translate="no">
-          <button type="button" role="menuitemradio" class="lang-btn active" data-lang="uk">Українська (UA)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="en">English (EN)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="pl">Polski (PL)</button>
-          <button type="button" role="menuitemradio" class="lang-btn" data-lang="ru">Русский (RU)</button>
+          <button type="button" role="menuitemradio" aria-checked="true" class="lang-btn active" data-lang="uk">UK · Українська</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="en">EN · English</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="pl">PL · Polski</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="ru">RU · Русский</button>
+          <button type="button" role="menuitemradio" aria-checked="false" class="lang-btn" data-lang="ko">KO · 한국어</button>
       </div>
     </div>
 
